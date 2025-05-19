@@ -79,17 +79,41 @@ async def create_assistant(
     phone_number: str = Form(...),
     description: Optional[str] = Form(None),
     is_active: bool = Form(False),
+    # API Keys
     openai_api_key: Optional[str] = Form(None),
     deepgram_api_key: Optional[str] = Form(None),
     elevenlabs_api_key: Optional[str] = Form(None),
-    elevenlabs_voice_id: Optional[str] = Form(None),
     twilio_account_sid: Optional[str] = Form(None),
     twilio_auth_token: Optional[str] = Form(None),
-    openai_model: Optional[str] = Form(None),
     custom_llm_url: Optional[str] = Form(None),
-    openai_temperature: Optional[float] = Form(None),
-    openai_max_tokens: Optional[int] = Form(None),
-    system_prompt: Optional[str] = Form(None),
+    # LLM Settings
+    llm_model: Optional[str] = Form(None),
+    llm_temperature: Optional[float] = Form(None),
+    llm_max_tokens: Optional[int] = Form(None),
+    llm_system_prompt: Optional[str] = Form(None),
+    # TTS Settings
+    tts_voice_id: Optional[str] = Form(None),
+    tts_model_id: Optional[str] = Form(None),
+    tts_latency: Optional[int] = Form(None),
+    tts_stability: Optional[float] = Form(None),
+    tts_similarity_boost: Optional[float] = Form(None),
+    tts_style: Optional[float] = Form(None),
+    tts_use_speaker_boost: Optional[bool] = Form(False),
+    # STT Settings
+    stt_model: Optional[str] = Form(None),
+    stt_language: Optional[str] = Form(None),
+    stt_punctuate: Optional[bool] = Form(False),
+    stt_interim_results: Optional[bool] = Form(False),
+    stt_silence_threshold: Optional[int] = Form(None),
+    stt_min_silence_duration: Optional[int] = Form(None),
+    stt_utterance_end_ms: Optional[int] = Form(None),
+    stt_vad_turnoff: Optional[int] = Form(None),
+    stt_smart_format: Optional[bool] = Form(False),
+    # Interruption Settings
+    interruption_threshold: Optional[int] = Form(None),
+    min_speaking_time: Optional[float] = Form(None),
+    interruption_cooldown: Optional[float] = Form(None),
+    # Call control settings
     end_call_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
@@ -99,7 +123,6 @@ async def create_assistant(
     # Check if an assistant with this phone number already exists
     existing = await AssistantService.get_assistant_by_phone(db, phone_number)
     if existing:
-        # Get available phone numbers again to repopulate the form
         phone_numbers = TwilioService.get_available_phone_numbers()
         return templates.TemplateResponse("assistants/form.html", {
             "request": request,
@@ -108,41 +131,71 @@ async def create_assistant(
             "error": f"Assistant with phone number {phone_number} already exists"
         }, status_code=400)
     
-    # Create assistant data
+    # Create assistant data with JSON settings
     assistant_data = {
         "name": name,
         "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
+        # API Keys
         "openai_api_key": openai_api_key,
         "deepgram_api_key": deepgram_api_key,
         "elevenlabs_api_key": elevenlabs_api_key,
-        "elevenlabs_voice_id": elevenlabs_voice_id,
         "twilio_account_sid": twilio_account_sid,
         "twilio_auth_token": twilio_auth_token,
-        "openai_model": openai_model,
         "custom_llm_url": custom_llm_url,
-        "openai_temperature": openai_temperature,
-        "openai_max_tokens": openai_max_tokens,
-        "system_prompt": system_prompt,
+        # JSON Settings
+        "llm_settings": {
+            "model": llm_model,
+            "temperature": llm_temperature,
+            "max_tokens": llm_max_tokens,
+            "system_prompt": llm_system_prompt
+        } if any([llm_model, llm_temperature, llm_max_tokens, llm_system_prompt]) else None,
+        "tts_settings": {
+            "voice_id": tts_voice_id,
+            "model_id": tts_model_id,
+            "latency": tts_latency,
+            "stability": tts_stability,
+            "similarity_boost": tts_similarity_boost,
+            "style": tts_style,
+            "use_speaker_boost": tts_use_speaker_boost
+        } if any([tts_voice_id, tts_model_id, tts_latency, tts_stability, 
+                 tts_similarity_boost, tts_style, tts_use_speaker_boost]) else None,
+        "stt_settings": {
+            "model": stt_model,
+            "language": stt_language,
+            "punctuate": stt_punctuate,
+            "interim_results": stt_interim_results,
+            "endpointing": {
+                "silence_threshold": stt_silence_threshold,
+                "min_silence_duration": stt_min_silence_duration
+            } if stt_silence_threshold or stt_min_silence_duration else None,
+            "utterance_end_ms": stt_utterance_end_ms,
+            "vad_turnoff": stt_vad_turnoff,
+            "smart_format": stt_smart_format
+        } if any([stt_model, stt_language, stt_punctuate, stt_interim_results,
+                 stt_silence_threshold, stt_min_silence_duration, stt_utterance_end_ms,
+                 stt_vad_turnoff, stt_smart_format]) else None,
+        "interruption_settings": {
+            "interruption_threshold": interruption_threshold,
+            "min_speaking_time": min_speaking_time,
+            "interruption_cooldown": interruption_cooldown
+        } if any([interruption_threshold, min_speaking_time, interruption_cooldown]) else None,
+        # Call control settings
         "end_call_message": end_call_message,
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout
     }
     
-    # Remove None values
-    assistant_data = {k: v for k, v in assistant_data.items() if v is not None}
+    # Remove None values and empty dictionaries
+    assistant_data = {k: v for k, v in assistant_data.items() if v is not None and v != {}}
     
     # Create the assistant
     try:
         new_assistant = await AssistantService.create_assistant(db, assistant_data)
-        
-        # Reload the assistants cache
         await assistant_manager.load_assistants(db)
-        
         return RedirectResponse(url=f"/assistants/{new_assistant.id}", status_code=302)
     except Exception as e:
-        # Get available phone numbers again to repopulate the form
         phone_numbers = TwilioService.get_available_phone_numbers()
         return templates.TemplateResponse("assistants/form.html", {
             "request": request,
@@ -191,17 +244,41 @@ async def update_assistant(
     phone_number: str = Form(...),
     description: Optional[str] = Form(None),
     is_active: bool = Form(False),
+    # API Keys
     openai_api_key: Optional[str] = Form(None),
     deepgram_api_key: Optional[str] = Form(None),
     elevenlabs_api_key: Optional[str] = Form(None),
-    elevenlabs_voice_id: Optional[str] = Form(None),
     twilio_account_sid: Optional[str] = Form(None),
     twilio_auth_token: Optional[str] = Form(None),
-    openai_model: Optional[str] = Form(None),
     custom_llm_url: Optional[str] = Form(None),
-    openai_temperature: Optional[float] = Form(None),
-    openai_max_tokens: Optional[int] = Form(None),
-    system_prompt: Optional[str] = Form(None),
+    # LLM Settings
+    llm_model: Optional[str] = Form(None),
+    llm_temperature: Optional[float] = Form(None),
+    llm_max_tokens: Optional[int] = Form(None),
+    llm_system_prompt: Optional[str] = Form(None),
+    # TTS Settings
+    tts_voice_id: Optional[str] = Form(None),
+    tts_model_id: Optional[str] = Form(None),
+    tts_latency: Optional[int] = Form(None),
+    tts_stability: Optional[float] = Form(None),
+    tts_similarity_boost: Optional[float] = Form(None),
+    tts_style: Optional[float] = Form(None),
+    tts_use_speaker_boost: Optional[bool] = Form(False),
+    # STT Settings
+    stt_model: Optional[str] = Form(None),
+    stt_language: Optional[str] = Form(None),
+    stt_punctuate: Optional[bool] = Form(False),
+    stt_interim_results: Optional[bool] = Form(False),
+    stt_silence_threshold: Optional[int] = Form(None),
+    stt_min_silence_duration: Optional[int] = Form(None),
+    stt_utterance_end_ms: Optional[int] = Form(None),
+    stt_vad_turnoff: Optional[int] = Form(None),
+    stt_smart_format: Optional[bool] = Form(False),
+    # Interruption Settings
+    interruption_threshold: Optional[int] = Form(None),
+    min_speaking_time: Optional[float] = Form(None),
+    interruption_cooldown: Optional[float] = Form(None),
+    # Call control settings
     end_call_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
@@ -216,7 +293,6 @@ async def update_assistant(
     if phone_number != assistant.phone_number:
         existing = await AssistantService.get_assistant_by_phone(db, phone_number)
         if existing:
-            # Get available phone numbers again to repopulate the form
             phone_numbers = TwilioService.get_available_phone_numbers()
             return templates.TemplateResponse("assistants/form.html", {
                 "request": request,
@@ -225,38 +301,71 @@ async def update_assistant(
                 "error": f"Assistant with phone number {phone_number} already exists"
             }, status_code=400)
     
-    # Create update data
+    # Create update data with JSON settings
     update_data = {
         "name": name,
         "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
-        "openai_api_key": openai_api_key or None,  # Convert empty string to None
+        # API Keys
+        "openai_api_key": openai_api_key or None,
         "deepgram_api_key": deepgram_api_key or None,
         "elevenlabs_api_key": elevenlabs_api_key or None,
-        "elevenlabs_voice_id": elevenlabs_voice_id or None,
         "twilio_account_sid": twilio_account_sid or None,
         "twilio_auth_token": twilio_auth_token or None,
-        "openai_model": openai_model or None,
         "custom_llm_url": custom_llm_url or None,
-        "openai_temperature": openai_temperature,
-        "openai_max_tokens": openai_max_tokens,
-        "system_prompt": system_prompt or None,
+        # JSON Settings
+        "llm_settings": {
+            "model": llm_model,
+            "temperature": llm_temperature,
+            "max_tokens": llm_max_tokens,
+            "system_prompt": llm_system_prompt
+        } if any([llm_model, llm_temperature, llm_max_tokens, llm_system_prompt]) else None,
+        "tts_settings": {
+            "voice_id": tts_voice_id,
+            "model_id": tts_model_id,
+            "latency": tts_latency,
+            "stability": tts_stability,
+            "similarity_boost": tts_similarity_boost,
+            "style": tts_style,
+            "use_speaker_boost": tts_use_speaker_boost
+        } if any([tts_voice_id, tts_model_id, tts_latency, tts_stability, 
+                 tts_similarity_boost, tts_style, tts_use_speaker_boost]) else None,
+        "stt_settings": {
+            "model": stt_model,
+            "language": stt_language,
+            "punctuate": stt_punctuate,
+            "interim_results": stt_interim_results,
+            "endpointing": {
+                "silence_threshold": stt_silence_threshold,
+                "min_silence_duration": stt_min_silence_duration
+            } if stt_silence_threshold or stt_min_silence_duration else None,
+            "utterance_end_ms": stt_utterance_end_ms,
+            "vad_turnoff": stt_vad_turnoff,
+            "smart_format": stt_smart_format
+        } if any([stt_model, stt_language, stt_punctuate, stt_interim_results,
+                 stt_silence_threshold, stt_min_silence_duration, stt_utterance_end_ms,
+                 stt_vad_turnoff, stt_smart_format]) else None,
+        "interruption_settings": {
+            "interruption_threshold": interruption_threshold,
+            "min_speaking_time": min_speaking_time,
+            "interruption_cooldown": interruption_cooldown
+        } if any([interruption_threshold, min_speaking_time, interruption_cooldown]) else None,
+        # Call control settings
         "end_call_message": end_call_message or None,
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout
     }
     
+    # Remove None values and empty dictionaries
+    update_data = {k: v for k, v in update_data.items() if v is not None and v != {}}
+    
     # Update the assistant
     try:
         updated_assistant = await AssistantService.update_assistant(db, assistant_id, update_data)
-        
-        # Reload the assistants cache
         await assistant_manager.load_assistants(db)
-        
         return RedirectResponse(url=f"/assistants/{updated_assistant.id}", status_code=302)
     except Exception as e:
-        # Get available phone numbers again to repopulate the form
         phone_numbers = TwilioService.get_available_phone_numbers()
         return templates.TemplateResponse("assistants/form.html", {
             "request": request,

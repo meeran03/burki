@@ -5,34 +5,55 @@
 {% endblock %}
 
 {% block content %}
-<div class="px-4 sm:px-6 lg:px-8">
+<div class="min-h-screen bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
     <div class="mb-8">
-        <h1 class="text-2xl font-semibold text-gray-900">
+            <div class="md:flex md:items-center md:justify-between">
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
             {% if assistant %}Edit Assistant: {{ assistant.name }}{% else %}Create New Assistant{% endif %}
         </h1>
-        <p class="mt-2 text-sm text-gray-700">
+                    <p class="mt-1 text-sm text-gray-500">
             {% if assistant %}Update assistant details and settings.{% else %}Configure a new voice assistant.{% endif %}
         </p>
+                </div>
+                <div class="mt-4 flex md:mt-0 md:ml-4">
+                    <a href="/assistants" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <svg class="-ml-1 mr-2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Back to Assistants
+                    </a>
+                </div>
+            </div>
     </div>
 
-    <div class="bg-white shadow sm:rounded-lg">
-        <form method="POST" class="p-6 space-y-8">
+        <!-- Form -->
+        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+            <form method="POST" class="divide-y divide-gray-200">
             <!-- Basic Information -->
-            <div>
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="md:grid md:grid-cols-3 md:gap-6">
+                        <div class="md:col-span-1">
                 <h3 class="text-lg font-medium leading-6 text-gray-900">Basic Information</h3>
-                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                    <div class="sm:col-span-3">
+                            <p class="mt-1 text-sm text-gray-500">Core details about your assistant.</p>
+                        </div>
+                        <div class="mt-5 md:mt-0 md:col-span-2">
+                            <div class="grid grid-cols-6 gap-6">
+                                <div class="col-span-6 sm:col-span-3">
                         <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-                        <div class="mt-1">
+                                    <div class="mt-1 relative rounded-md shadow-sm">
                             <input type="text" name="name" id="name" required
                                 value="{{ assistant.name if assistant else '' }}"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="My Assistant">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
+                                <div class="col-span-6 sm:col-span-3">
                         <label for="phone_number" class="block text-sm font-medium text-gray-700">Phone Number</label>
-                        <div class="mt-1">
+                                    <div class="mt-1 relative rounded-md shadow-sm">
                             {% if phone_numbers %}
                             <select name="phone_number" id="phone_number" required
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
@@ -42,36 +63,20 @@
                                     {{ phone.friendly_name }} ({{ phone.phone_number }})
                                 </option>
                                 {% endfor %}
-                                <option value="custom">Custom phone number (enter below)</option>
+                                            <option value="custom">Custom phone number</option>
                             </select>
-                            <div id="custom_phone_container" class="mt-2" style="display: none;">
+                                        <div id="custom_phone_container" class="mt-2 hidden">
                                 <input type="text" id="custom_phone_number" placeholder="+1234567890"
                                     class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                                 <p class="mt-1 text-xs text-gray-500">Enter in E.164 format (e.g., +1234567890)</p>
                             </div>
-                            <script>
-                                document.getElementById('phone_number').addEventListener('change', function() {
-                                    const customContainer = document.getElementById('custom_phone_container');
-                                    const customPhoneInput = document.getElementById('custom_phone_number');
-                                    
-                                    if (this.value === 'custom') {
-                                        customContainer.style.display = 'block';
-                                        customPhoneInput.name = 'phone_number';
-                                        this.name = '_phone_number_dropdown';
-                                    } else {
-                                        customContainer.style.display = 'none';
-                                        customPhoneInput.name = '_custom_phone_number';
-                                        this.name = 'phone_number';
-                                    }
-                                });
-                            </script>
                             {% else %}
                             <input type="text" name="phone_number" id="phone_number" required
                                 value="{{ assistant.phone_number if assistant else '' }}"
                                 placeholder="+1234567890"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                             <p class="mt-1 text-xs text-gray-500">
-                                No Twilio phone numbers found. Enter in E.164 format (e.g., +1234567890).
+                                            No Twilio phone numbers found. Enter in E.164 format.
                                 {% if not assistant %}
                                 <a href="https://www.twilio.com/console/phone-numbers/search" target="_blank" class="text-blue-600 hover:underline">
                                     Purchase a number from Twilio
@@ -82,15 +87,16 @@
                         </div>
                     </div>
 
-                    <div class="sm:col-span-6">
+                                <div class="col-span-6">
                         <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
                         <div class="mt-1">
                             <textarea id="description" name="description" rows="3"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">{{ assistant.description if assistant else '' }}</textarea>
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="Describe your assistant's purpose and capabilities">{{ assistant.description if assistant else '' }}</textarea>
                         </div>
                     </div>
 
-                    <div class="sm:col-span-6">
+                                <div class="col-span-6">
                         <div class="flex items-center">
                             <input id="is_active" name="is_active" type="checkbox" 
                                 {% if not assistant or assistant.is_active %}checked{% endif %}
@@ -98,168 +104,623 @@
                             <label for="is_active" class="ml-2 block text-sm text-gray-900">
                                 Active
                             </label>
+                                        <div class="ml-2 group relative">
+                                            <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                            </svg>
+                                            <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-sm text-white bg-gray-900 rounded-lg shadow-lg -left-1/2">
+                                                When active, the assistant can receive and handle calls. Inactive assistants will not respond to incoming calls.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- API Keys -->
-            <div>
+                <div class="px-4 py-5 sm:p-6 bg-gray-50">
+                    <div class="md:grid md:grid-cols-3 md:gap-6">
+                        <div class="md:col-span-1">
                 <h3 class="text-lg font-medium leading-6 text-gray-900">API Keys</h3>
-                <p class="mt-1 text-sm text-gray-500">
-                    Optional: Provide API keys for this assistant. If not provided, system defaults will be used.
-                </p>
-                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                    <div class="sm:col-span-3">
+                            <p class="mt-1 text-sm text-gray-500">Optional: Provide API keys for this assistant. If not provided, system defaults will be used.</p>
+                        </div>
+                        <div class="mt-5 md:mt-0 md:col-span-2">
+                            <div class="grid grid-cols-6 gap-6">
+                                <div class="col-span-6 sm:col-span-3">
                         <label for="openai_api_key" class="block text-sm font-medium text-gray-700">OpenAI API Key</label>
-                        <div class="mt-1">
-                            <input type="text" name="openai_api_key" id="openai_api_key"
-                                value="{{ assistant.openai_api_key if assistant else '' }}"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <div class="mt-1 relative rounded-md shadow-sm">
+                                        <input type="password" name="openai_api_key" id="openai_api_key"
+                                            value="{{ assistant.openai_api_key if assistant and assistant.openai_api_key else '' }}"
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="sk-...">
+                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <button type="button" onclick="togglePassword('openai_api_key')" class="text-gray-400 hover:text-gray-500">
+                                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                            </button>
+                                        </div>
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
+                                <div class="col-span-6 sm:col-span-3">
                         <label for="deepgram_api_key" class="block text-sm font-medium text-gray-700">Deepgram API Key</label>
-                        <div class="mt-1">
-                            <input type="text" name="deepgram_api_key" id="deepgram_api_key"
-                                value="{{ assistant.deepgram_api_key if assistant else '' }}"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <div class="mt-1 relative rounded-md shadow-sm">
+                                        <input type="password" name="deepgram_api_key" id="deepgram_api_key"
+                                value="{{ assistant.deepgram_api_key if assistant and assistant.deepgram_api_key else '' }}"
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="sk-...">
+                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <button type="button" onclick="togglePassword('deepgram_api_key')" class="text-gray-400 hover:text-gray-500">
+                                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                            </button>
+                                        </div>
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
+                                <div class="col-span-6 sm:col-span-3">
                         <label for="elevenlabs_api_key" class="block text-sm font-medium text-gray-700">ElevenLabs API Key</label>
-                        <div class="mt-1">
-                            <input type="text" name="elevenlabs_api_key" id="elevenlabs_api_key"
-                                value="{{ assistant.elevenlabs_api_key if assistant else '' }}"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <div class="mt-1 relative rounded-md shadow-sm">
+                                        <input type="password" name="elevenlabs_api_key" id="elevenlabs_api_key"
+                                value="{{ assistant.elevenlabs_api_key if assistant and assistant.elevenlabs_api_key else '' }}"
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="sk-...">
+                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <button type="button" onclick="togglePassword('elevenlabs_api_key')" class="text-gray-400 hover:text-gray-500">
+                                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                            </button>
+                    </div>
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
-                        <label for="elevenlabs_voice_id" class="block text-sm font-medium text-gray-700">ElevenLabs Voice ID</label>
-                        <div class="mt-1">
-                            <input type="text" name="elevenlabs_voice_id" id="elevenlabs_voice_id"
-                                value="{{ assistant.elevenlabs_voice_id if assistant else '' }}"
-                                placeholder="21m00Tcm4TlvDq8ikWAM"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                        </div>
-                    </div>
-
-                    <div class="sm:col-span-3">
+                                <div class="col-span-6 sm:col-span-3">
                         <label for="twilio_account_sid" class="block text-sm font-medium text-gray-700">Twilio Account SID</label>
-                        <div class="mt-1">
-                            <input type="text" name="twilio_account_sid" id="twilio_account_sid"
-                                value="{{ assistant.twilio_account_sid if assistant else '' }}"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <div class="mt-1 relative rounded-md shadow-sm">
+                            <input type="password" name="twilio_account_sid" id="twilio_account_sid"
+                                value="{{ assistant.twilio_account_sid if assistant and assistant.twilio_account_sid else '' }}"
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="AC...">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
+                                <div class="col-span-6 sm:col-span-3">
                         <label for="twilio_auth_token" class="block text-sm font-medium text-gray-700">Twilio Auth Token</label>
-                        <div class="mt-1">
-                            <input type="text" name="twilio_auth_token" id="twilio_auth_token"
-                                value="{{ assistant.twilio_auth_token if assistant else '' }}"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <div class="mt-1 relative rounded-md shadow-sm">
+                                        <input type="password" name="twilio_auth_token" id="twilio_auth_token"
+                                value="{{ assistant.twilio_auth_token if assistant and assistant.twilio_auth_token else '' }}"
+                                            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            placeholder="...">
+                                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <button type="button" onclick="togglePassword('twilio_auth_token')" class="text-gray-400 hover:text-gray-500">
+                                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- AI Settings -->
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="md:grid md:grid-cols-3 md:gap-6">
+                        <div class="md:col-span-1">
+                            <h3 class="text-lg font-medium leading-6 text-gray-900">AI Settings</h3>
+                            <p class="mt-1 text-sm text-gray-500">Configure the AI models and their behavior.</p>
+                        </div>
+                        <div class="mt-5 md:mt-0 md:col-span-2">
+                            <!-- LLM Settings -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-base font-medium text-gray-900">Language Model (LLM)</h4>
+                                    <button type="button" class="text-sm text-blue-600 hover:text-blue-500" onclick="toggleSection('llm-settings')">
+                                        Toggle Settings
+                                    </button>
+                                </div>
+                                <div id="llm-settings" class="grid grid-cols-6 gap-6">
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="llm_model" class="block text-sm font-medium text-gray-700">Model</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <select name="llm_model" id="llm_model"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                <option value="gpt-4-turbo-preview" {% if assistant and assistant.llm_settings and assistant.llm_settings.model == 'gpt-4-turbo-preview' %}selected{% endif %}>GPT-4 Turbo</option>
+                                                <option value="gpt-4" {% if assistant and assistant.llm_settings and assistant.llm_settings.model == 'gpt-4' %}selected{% endif %}>GPT-4</option>
+                                                <option value="gpt-3.5-turbo" {% if assistant and assistant.llm_settings and assistant.llm_settings.model == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5 Turbo</option>
+                                                <option value="custom">Custom Model (enter below)</option>
+                                            </select>
+                                            <div id="custom_llm_model_container" class="mt-2 hidden">
+                                                <input type="text" id="custom_llm_model" placeholder="Enter custom model name"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="custom_llm_url" class="block text-sm font-medium text-gray-700">Custom LLM URL (Optional)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="text" name="custom_llm_url" id="custom_llm_url"
+                                                value="{{ assistant.custom_llm_url if assistant else '' }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="https://api.example.com/v1/chat/completions">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="llm_temperature" class="block text-sm font-medium text-gray-700">Temperature</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" step="0.1" min="0" max="2" name="llm_temperature" id="llm_temperature"
+                                                value="{{ assistant.llm_settings.temperature if assistant and assistant.llm_settings else 0.7 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="llm_max_tokens" class="block text-sm font-medium text-gray-700">Max Tokens</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" step="50" min="50" max="4000" name="llm_max_tokens" id="llm_max_tokens"
+                                                value="{{ assistant.llm_settings.max_tokens if assistant and assistant.llm_settings else 1000 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                </div>
             </div>
 
-            <!-- LLM Configuration -->
-            <div>
-                <h3 class="text-lg font-medium leading-6 text-gray-900">LLM Configuration</h3>
-                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                    <div class="sm:col-span-3">
-                        <label for="openai_model" class="block text-sm font-medium text-gray-700">OpenAI Model</label>
+                                    <div class="col-span-6">
+                                        <label for="llm_system_prompt" class="block text-sm font-medium text-gray-700">System Prompt</label>
                         <div class="mt-1">
-                            <input type="text" name="openai_model" id="openai_model"
-                                value="{{ assistant.openai_model if assistant else 'gpt-4-turbo' }}"
+                                            <textarea id="llm_system_prompt" name="llm_system_prompt" rows="4"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.">{{ assistant.llm_settings.system_prompt if assistant and assistant.llm_settings else 'You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.' }}</textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TTS Settings -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-base font-medium text-gray-900">Text-to-Speech (TTS)</h4>
+                                    <button type="button" class="text-sm text-blue-600 hover:text-blue-500" onclick="toggleSection('tts-settings')">
+                                        Toggle Settings
+                                    </button>
+                                </div>
+                                <div id="tts-settings" class="grid grid-cols-6 gap-6">
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="tts_model_id" class="block text-sm font-medium text-gray-700">Model</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <select name="tts_model_id" id="tts_model_id"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                <option value="eleven_multilingual_v2" {% if assistant and assistant.tts_settings and assistant.tts_settings.model_id == 'eleven_multilingual_v2' %}selected{% endif %}>Eleven Multilingual v2 (Best Quality)</option>
+                                                <option value="eleven_flash_v2_5" {% if assistant and assistant.tts_settings and assistant.tts_settings.model_id == 'eleven_flash_v2_5' %}selected{% endif %}>Eleven Flash v2.5 (Ultra Low Latency)</option>
+                                                <option value="eleven_turbo_v2_5" {% if assistant and assistant.tts_settings and assistant.tts_settings.model_id == 'eleven_turbo_v2_5' %}selected{% endif %}>Eleven Turbo v2.5 (Balanced)</option>
+                                            </select>
+                                            <div class="mt-1 group relative inline-block">
+                                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                                </svg>
+                                                <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-sm text-white bg-gray-900 rounded-lg shadow-lg -left-1/2">
+                                                    <p class="font-medium mb-1">Model Selection Guide:</p>
+                                                    <ul class="list-disc list-inside space-y-1">
+                                                        <li>Multilingual v2: Best quality, rich emotional expression</li>
+                                                        <li>Flash v2.5: Ultra-low latency (~75ms), 32 languages</li>
+                                                        <li>Turbo v2.5: Balanced quality and speed</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="tts_voice_id" class="block text-sm font-medium text-gray-700">Voice</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <select name="tts_voice_id" id="tts_voice_id"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                <option value="rachel" {% if assistant and assistant.tts_settings and assistant.tts_settings.voice_id == 'rachel' %}selected{% endif %}>Rachel (Female)</option>
+                                                <option value="domi" {% if assistant and assistant.tts_settings and assistant.tts_settings.voice_id == 'domi' %}selected{% endif %}>Domi (Female)</option>
+                                                <option value="bella" {% if assistant and assistant.tts_settings and assistant.tts_settings.voice_id == 'bella' %}selected{% endif %}>Bella (Female)</option>
+                                                <option value="antoni" {% if assistant and assistant.tts_settings and assistant.tts_settings.voice_id == 'antoni' %}selected{% endif %}>Antoni (Male)</option>
+                                                <option value="eli" {% if assistant and assistant.tts_settings and assistant.tts_settings.voice_id == 'eli' %}selected{% endif %}>Eli (Male)</option>
+                                                <option value="josh" {% if assistant and assistant.tts_settings and assistant.tts_settings.voice_id == 'josh' %}selected{% endif %}>Josh (Male)</option>
+                                                <option value="custom">Custom Voice ID</option>
+                                            </select>
+                                            <div id="custom_voice_container" class="mt-2 hidden">
+                                                <input type="text" id="custom_voice_id" name="tts_voice_id"
+                                                    value="{{ assistant.tts_settings.voice_id if assistant and assistant.tts_settings and assistant.tts_settings.voice_id not in ['rachel', 'domi', 'bella', 'antoni', 'eli', 'josh'] else '' }}"
+                                                    placeholder="Enter custom voice ID (e.g., 21m00Tcm4TlvDq8ikWAM)"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                <p class="mt-1 text-xs text-gray-500">Enter your custom ElevenLabs voice ID. You can find this in your ElevenLabs dashboard.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="tts_latency" class="block text-sm font-medium text-gray-700">Latency</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <select name="tts_latency" id="tts_latency"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                <option value="0" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 0 %}selected{% endif %}>Ultra Low (Experimental)</option>
+                                                <option value="1" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 1 %}selected{% endif %}>Low</option>
+                                                <option value="2" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 2 %}selected{% endif %}>Medium</option>
+                                                <option value="3" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 3 %}selected{% endif %}>High</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="tts_stability" class="block text-sm font-medium text-gray-700">Stability (0-1)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" step="0.1" min="0" max="1" name="tts_stability" id="tts_stability"
+                                                value="{{ assistant.tts_settings.stability if assistant and assistant.tts_settings else 0.5 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="tts_similarity_boost" class="block text-sm font-medium text-gray-700">Similarity Boost (0-1)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" step="0.1" min="0" max="1" name="tts_similarity_boost" id="tts_similarity_boost"
+                                                value="{{ assistant.tts_settings.similarity_boost if assistant and assistant.tts_settings else 0.75 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="tts_style" class="block text-sm font-medium text-gray-700">Style (0-1)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" step="0.1" min="0" max="1" name="tts_style" id="tts_style"
+                                                value="{{ assistant.tts_settings.style if assistant and assistant.tts_settings else 0.0 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6">
+                                        <div class="flex items-center">
+                                            <input type="checkbox" name="tts_use_speaker_boost" id="tts_use_speaker_boost"
+                                                {% if not assistant or (assistant.tts_settings and assistant.tts_settings.use_speaker_boost) %}checked{% endif %}
+                                                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                            <label for="tts_use_speaker_boost" class="ml-2 block text-sm text-gray-900">
+                                                Use Speaker Boost
+                                            </label>
+                                            <div class="ml-2 group relative">
+                                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                                </svg>
+                                                <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-sm text-white bg-gray-900 rounded-lg shadow-lg -left-1/2">
+                                                    Enhances voice clarity and reduces background noise. Recommended for phone calls.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- STT Settings -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-base font-medium text-gray-900">Speech-to-Text (STT)</h4>
+                                    <button type="button" class="text-sm text-blue-600 hover:text-blue-500" onclick="toggleSection('stt-settings')">
+                                        Toggle Settings
+                                    </button>
+                                </div>
+                                <div id="stt-settings" class="grid grid-cols-6 gap-6">
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="stt_model" class="block text-sm font-medium text-gray-700">Model</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <select name="stt_model" id="stt_model"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                <option value="nova-2" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova-2' %}selected{% endif %}>Nova-2 (Latest)</option>
+                                                <option value="nova" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova' %}selected{% endif %}>Nova</option>
+                                                <option value="enhanced" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'enhanced' %}selected{% endif %}>Enhanced</option>
+                                                <option value="base" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'base' %}selected{% endif %}>Base</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="stt_language" class="block text-sm font-medium text-gray-700">Language</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <select name="stt_language" id="stt_language"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                <option value="en-US" {% if assistant and assistant.stt_settings and assistant.stt_settings.language == 'en-US' %}selected{% endif %}>English (US)</option>
+                                                <option value="en-GB" {% if assistant and assistant.stt_settings and assistant.stt_settings.language == 'en-GB' %}selected{% endif %}>English (UK)</option>
+                                                <option value="en-AU" {% if assistant and assistant.stt_settings and assistant.stt_settings.language == 'en-AU' %}selected{% endif %}>English (Australia)</option>
+                                                <option value="custom">Custom Language Code</option>
+                                            </select>
+                                            <div id="custom_language_container" class="mt-2 hidden">
+                                                <input type="text" id="custom_language" placeholder="Enter language code (e.g., fr-FR)"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="stt_silence_threshold" class="block text-sm font-medium text-gray-700">Silence Threshold (ms)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" name="stt_silence_threshold" id="stt_silence_threshold"
+                                                value="{{ assistant.stt_settings.endpointing.silence_threshold if assistant and assistant.stt_settings and assistant.stt_settings.endpointing else 500 }}"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
-                        <label for="custom_llm_url" class="block text-sm font-medium text-gray-700">Custom LLM URL (Optional)</label>
-                        <div class="mt-1">
-                            <input type="text" name="custom_llm_url" id="custom_llm_url"
-                                value="{{ assistant.custom_llm_url if assistant else '' }}"
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="stt_min_silence_duration" class="block text-sm font-medium text-gray-700">Min Silence Duration (ms)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" name="stt_min_silence_duration" id="stt_min_silence_duration"
+                                                value="{{ assistant.stt_settings.endpointing.min_silence_duration if assistant and assistant.stt_settings and assistant.stt_settings.endpointing else 500 }}"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
-                        <label for="openai_temperature" class="block text-sm font-medium text-gray-700">Temperature</label>
-                        <div class="mt-1">
-                            <input type="number" step="0.1" min="0" max="2" name="openai_temperature" id="openai_temperature"
-                                value="{{ assistant.openai_temperature if assistant else 0.7 }}"
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="stt_utterance_end_ms" class="block text-sm font-medium text-gray-700">Utterance End (ms)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" name="stt_utterance_end_ms" id="stt_utterance_end_ms"
+                                                value="{{ assistant.stt_settings.utterance_end_ms if assistant and assistant.stt_settings else 1000 }}"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
-                        <label for="openai_max_tokens" class="block text-sm font-medium text-gray-700">Max Tokens</label>
-                        <div class="mt-1">
-                            <input type="number" step="50" min="50" max="4000" name="openai_max_tokens" id="openai_max_tokens"
-                                value="{{ assistant.openai_max_tokens if assistant else 500 }}"
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="stt_vad_turnoff" class="block text-sm font-medium text-gray-700">VAD Turnoff (ms)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" name="stt_vad_turnoff" id="stt_vad_turnoff"
+                                                value="{{ assistant.stt_settings.vad_turnoff if assistant and assistant.stt_settings else 500 }}"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-6">
-                        <label for="system_prompt" class="block text-sm font-medium text-gray-700">System Prompt</label>
-                        <div class="mt-1">
-                            <textarea id="system_prompt" name="system_prompt" rows="4"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">{{ assistant.system_prompt if assistant else 'You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.' }}</textarea>
+                                    <div class="col-span-6">
+                                        <div class="flex items-center space-x-6">
+                                            <div class="flex items-center">
+                                                <input type="checkbox" name="stt_punctuate" id="stt_punctuate"
+                                                    {% if not assistant or (assistant.stt_settings and assistant.stt_settings.punctuate) %}checked{% endif %}
+                                                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                                <label for="stt_punctuate" class="ml-2 block text-sm text-gray-900">
+                                                    Add Punctuation
+                                                </label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <input type="checkbox" name="stt_interim_results" id="stt_interim_results"
+                                                    {% if not assistant or (assistant.stt_settings and assistant.stt_settings.interim_results) %}checked{% endif %}
+                                                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                                <label for="stt_interim_results" class="ml-2 block text-sm text-gray-900">
+                                                    Interim Results
+                                                </label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <input type="checkbox" name="stt_smart_format" id="stt_smart_format"
+                                                    {% if not assistant or (assistant.stt_settings and assistant.stt_settings.smart_format) %}checked{% endif %}
+                                                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                                <label for="stt_smart_format" class="ml-2 block text-sm text-gray-900">
+                                                    Smart Format
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Call Settings -->
+                <div class="px-4 py-5 sm:p-6 bg-gray-50">
+                    <div class="md:grid md:grid-cols-3 md:gap-6">
+                        <div class="md:col-span-1">
+                            <h3 class="text-lg font-medium leading-6 text-gray-900">Call Settings</h3>
+                            <p class="mt-1 text-sm text-gray-500">Configure how the assistant handles calls and interruptions.</p>
+                        </div>
+                        <div class="mt-5 md:mt-0 md:col-span-2">
+                            <!-- Interruption Settings -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-base font-medium text-gray-900">Interruption Settings</h4>
+                                    <button type="button" class="text-sm text-blue-600 hover:text-blue-500" onclick="toggleSection('interruption-settings')">
+                                        Toggle Settings
+                                    </button>
+                                </div>
+                                <div id="interruption-settings" class="grid grid-cols-6 gap-6">
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="interruption_threshold" class="block text-sm font-medium text-gray-700">Interruption Threshold (words)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" name="interruption_threshold" id="interruption_threshold"
+                                                value="{{ assistant.interruption_settings.interruption_threshold if assistant and assistant.interruption_settings else 3 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="min_speaking_time" class="block text-sm font-medium text-gray-700">Min Speaking Time (seconds)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" step="0.1" name="min_speaking_time" id="min_speaking_time"
+                                                value="{{ assistant.interruption_settings.min_speaking_time if assistant and assistant.interruption_settings else 0.5 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
+                                        <label for="interruption_cooldown" class="block text-sm font-medium text-gray-700">Interruption Cooldown (seconds)</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="number" step="0.1" name="interruption_cooldown" id="interruption_cooldown"
+                                                value="{{ assistant.interruption_settings.interruption_cooldown if assistant and assistant.interruption_settings else 2.0 }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Call Control Settings -->
-            <div>
-                <h3 class="text-lg font-medium leading-6 text-gray-900">Call Control Settings</h3>
-                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-                    <div class="sm:col-span-6">
+                            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                                <h4 class="text-base font-medium text-gray-900 mb-4">Call Control</h4>
+                                <div class="grid grid-cols-6 gap-6">
+                                    <div class="col-span-6 sm:col-span-3">
                         <label for="end_call_message" class="block text-sm font-medium text-gray-700">End Call Message</label>
-                        <div class="mt-1">
+                                        <div class="mt-1 relative rounded-md shadow-sm">
                             <input type="text" name="end_call_message" id="end_call_message"
                                 value="{{ assistant.end_call_message if assistant else 'Thank you for calling. Goodbye!' }}"
-                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="Thank you for calling. Goodbye!">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
+                                    <div class="col-span-6 sm:col-span-3">
                         <label for="max_idle_messages" class="block text-sm font-medium text-gray-700">Max Idle Messages</label>
-                        <div class="mt-1">
+                                        <div class="mt-1 relative rounded-md shadow-sm">
                             <input type="number" name="max_idle_messages" id="max_idle_messages"
                                 value="{{ assistant.max_idle_messages if assistant else 3 }}"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
                         </div>
                     </div>
 
-                    <div class="sm:col-span-3">
+                                    <div class="col-span-6 sm:col-span-3">
                         <label for="idle_timeout" class="block text-sm font-medium text-gray-700">Idle Timeout (seconds)</label>
-                        <div class="mt-1">
+                                        <div class="mt-1 relative rounded-md shadow-sm">
                             <input type="number" name="idle_timeout" id="idle_timeout"
                                 value="{{ assistant.idle_timeout if assistant else 30 }}"
                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                        </div>
+                                    </div>
+                                </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Form Actions -->
-            <div class="flex justify-end space-x-3 pt-5">
-                <a href="/assistants" class="btn-secondary">
+                <div class="px-4 py-3 bg-gray-50 text-right sm:px-6">
+                    <a href="/assistants" class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     Cancel
                 </a>
-                <button type="submit" class="btn-primary">
+                    <button type="submit" class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     {% if assistant %}Update{% else %}Create{% endif %} Assistant
                 </button>
             </div>
         </form>
     </div>
 </div>
+</div>
+
+<script>
+// Toggle password visibility
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+// Toggle section visibility
+function toggleSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (section.style.display === 'none') {
+        section.style.display = 'grid';
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+// Initialize form
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize sections
+    const sections = ['llm-settings', 'tts-settings', 'stt-settings', 'interruption-settings'];
+    sections.forEach(section => {
+        const element = document.getElementById(section);
+        if (element) {
+            element.style.display = 'grid';
+        }
+    });
+
+    // Handle custom inputs
+    const customInputs = {
+        'llm_model': 'custom_llm_model_container',
+        'tts_voice_id': 'custom_voice_container',
+        'stt_language': 'custom_language_container',
+        'phone_number': 'custom_phone_container'
+    };
+
+    Object.entries(customInputs).forEach(([selectId, containerId]) => {
+        const select = document.getElementById(selectId);
+        const container = document.getElementById(containerId);
+        if (select && container) {
+            // Check if current value is custom
+            const customInput = container.querySelector('input');
+            if (customInput && customInput.value && !select.querySelector(`option[value="${customInput.value}"]`)) {
+                select.value = 'custom';
+                container.classList.remove('hidden');
+                customInput.name = selectId;
+                select.name = `_${selectId}_dropdown`;
+            }
+
+            select.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    container.classList.remove('hidden');
+                    const customInput = container.querySelector('input');
+                    if (customInput) {
+                        customInput.name = selectId;
+                        this.name = `_${selectId}_dropdown`;
+                    }
+                } else {
+                    container.classList.add('hidden');
+                    const customInput = container.querySelector('input');
+                    if (customInput) {
+                        customInput.name = `_custom_${selectId}`;
+                        this.name = selectId;
+                    }
+                }
+            });
+        }
+    });
+});
+</script>
+
+<style>
+/* Custom tooltip styles */
+.tooltip {
+    @apply invisible absolute;
+}
+
+.has-tooltip:hover .tooltip {
+    @apply visible z-50;
+}
+
+/* Custom section styles */
+.section-card {
+    @apply bg-white rounded-lg border border-gray-200 p-4 mb-6;
+}
+
+.section-header {
+    @apply flex items-center justify-between mb-4;
+}
+
+.section-title {
+    @apply text-base font-medium text-gray-900;
+}
+
+/* Custom input styles */
+.input-with-icon {
+    @apply relative rounded-md shadow-sm;
+}
+
+.input-icon {
+    @apply absolute inset-y-0 right-0 pr-3 flex items-center;
+}
+
+/* Custom button styles */
+.btn-primary {
+    @apply inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+}
+
+.btn-secondary {
+    @apply inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+}
+</style>
 {% endblock %} 

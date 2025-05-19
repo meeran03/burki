@@ -17,25 +17,57 @@ class AssistantBase(BaseModel):
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     
-    # Configuration
-    system_prompt: Optional[str] = None
-    elevenlabs_voice_id: Optional[str] = None
-    openai_model: Optional[str] = None
-    openai_temperature: Optional[float] = None
-    openai_max_tokens: Optional[int] = None
+    # LLM Settings
+    llm_settings: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "model": "gpt-4-turbo-preview",
+            "temperature": 0.7,
+            "max_tokens": 1000,
+            "system_prompt": "You are a helpful assistant that can answer questions and help with tasks."
+        }
+    )
+    
+    # Interruption Settings
+    interruption_settings: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "interruption_threshold": 3,
+            "min_speaking_time": 0.5,
+            "interruption_cooldown": 2.0
+        }
+    )
+    
+    # TTS Settings
+    tts_settings: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "voice_id": "rachel",
+            "model_id": "turbo",
+            "latency": 1,
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.0,
+            "use_speaker_boost": True
+        }
+    )
+    
+    # STT Settings
+    stt_settings: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "model": "nova-2",
+            "language": "en-US",
+            "punctuate": True,
+            "interim_results": True,
+            "endpointing": {
+                "silence_threshold": 500,
+                "min_silence_duration": 500
+            },
+            "utterance_end_ms": 1000,
+            "vad_turnoff": 500,
+            "smart_format": True
+        }
+    )
     
     # Webhook settings
     webhook_url: Optional[str] = None
-    
-    # Endpointing settings
-    silence_min_duration_ms: Optional[int] = None
-    energy_threshold: Optional[int] = None
-    wait_after_speech_ms: Optional[int] = None
-    no_punctuation_wait_ms: Optional[int] = None
-    
-    # Interruption settings
-    voice_seconds_threshold: Optional[int] = None
-    word_count_threshold: Optional[int] = None
     
     # Call control settings
     end_call_message: Optional[str] = None
@@ -64,25 +96,20 @@ class AssistantUpdate(BaseModel):
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
     
-    # Configuration
-    system_prompt: Optional[str] = None
-    elevenlabs_voice_id: Optional[str] = None
-    openai_model: Optional[str] = None
-    openai_temperature: Optional[float] = None
-    openai_max_tokens: Optional[int] = None
+    # LLM Settings
+    llm_settings: Optional[Dict[str, Any]] = None
+    
+    # Interruption Settings
+    interruption_settings: Optional[Dict[str, Any]] = None
+    
+    # TTS Settings
+    tts_settings: Optional[Dict[str, Any]] = None
+    
+    # STT Settings
+    stt_settings: Optional[Dict[str, Any]] = None
     
     # Webhook settings
     webhook_url: Optional[str] = None
-    
-    # Endpointing settings
-    silence_min_duration_ms: Optional[int] = None
-    energy_threshold: Optional[int] = None
-    wait_after_speech_ms: Optional[int] = None
-    no_punctuation_wait_ms: Optional[int] = None
-    
-    # Interruption settings
-    voice_seconds_threshold: Optional[int] = None
-    word_count_threshold: Optional[int] = None
     
     # Call control settings
     end_call_message: Optional[str] = None

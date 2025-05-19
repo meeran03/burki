@@ -89,22 +89,17 @@ class AssistantManager:
             "twilio_account_sid": assistant.twilio_account_sid,
             "twilio_auth_token": assistant.twilio_auth_token,
             
-            # Configuration
-            "system_prompt": assistant.system_prompt,
-            "elevenlabs_voice_id": assistant.elevenlabs_voice_id,
-            "openai_model": assistant.openai_model,
-            "openai_temperature": assistant.openai_temperature,
-            "openai_max_tokens": assistant.openai_max_tokens,
+            # LLM Settings
+            "llm_settings": assistant.llm_settings or {},
             
-            # Endpointing settings
-            "silence_min_duration_ms": assistant.silence_min_duration_ms,
-            "energy_threshold": assistant.energy_threshold,
-            "wait_after_speech_ms": assistant.wait_after_speech_ms,
-            "no_punctuation_wait_ms": assistant.no_punctuation_wait_ms,
+            # Interruption Settings
+            "interruption_settings": assistant.interruption_settings or {},
             
-            # Interruption settings
-            "voice_seconds_threshold": assistant.voice_seconds_threshold,
-            "word_count_threshold": assistant.word_count_threshold,
+            # TTS Settings
+            "tts_settings": assistant.tts_settings or {},
+            
+            # STT Settings
+            "stt_settings": assistant.stt_settings or {},
             
             # Call control settings
             "end_call_message": assistant.end_call_message,
@@ -134,15 +129,23 @@ class AssistantManager:
             if key in config and config[key]:
                 os.environ[key.upper()] = config[key]
         
-        # Set other environment variables
-        if "openai_model" in config:
-            os.environ["OPENAI_MODEL"] = config["openai_model"]
-        if "openai_temperature" in config:
-            os.environ["OPENAI_TEMPERATURE"] = str(config["openai_temperature"])
-        if "openai_max_tokens" in config:
-            os.environ["OPENAI_MAX_TOKENS"] = str(config["openai_max_tokens"])
-        if "elevenlabs_voice_id" in config:
-            os.environ["ELEVENLABS_VOICE_ID"] = config["elevenlabs_voice_id"]
+        # Set LLM settings
+        if "llm_settings" in config:
+            llm_settings = config["llm_settings"]
+            if "model" in llm_settings:
+                os.environ["OPENAI_MODEL"] = llm_settings["model"]
+            if "temperature" in llm_settings:
+                os.environ["OPENAI_TEMPERATURE"] = str(llm_settings["temperature"])
+            if "max_tokens" in llm_settings:
+                os.environ["OPENAI_MAX_TOKENS"] = str(llm_settings["max_tokens"])
+            if "system_prompt" in llm_settings:
+                os.environ["SYSTEM_PROMPT"] = llm_settings["system_prompt"]
+        
+        # Set TTS settings
+        if "tts_settings" in config:
+            tts_settings = config["tts_settings"]
+            if "voice_id" in tts_settings:
+                os.environ["ELEVENLABS_VOICE_ID"] = tts_settings["voice_id"]
         
         logger.info(f"Applied configuration for assistant: {assistant.name}")
 
