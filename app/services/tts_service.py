@@ -490,3 +490,49 @@ class TTSService:
             Optional[TTSState]: The session state if it exists
         """
         return self.active_sessions.get(call_sid)
+
+    async def stop_synthesis(self, call_sid: str) -> None:
+        """
+        Stop ongoing TTS synthesis for a call.
+        This is used when an interruption is detected to immediately stop the AI from speaking.
+
+        Args:
+            call_sid: The Twilio call SID
+        """
+        if call_sid not in self.active_sessions:
+            return
+
+        session = self.active_sessions[call_sid]
+        try:
+            # Clear any buffered text
+            session.buffer = ""
+
+            # Send an empty string to stop current synthesis
+            if session.websocket and session.is_connected:
+                try:
+                    # Send a message to stop current synthesis
+                    stop_message = {
+                        "text": "",
+                        "flush": True,  # Force flush any buffered audio
+                        "stop": True,   # Signal to stop synthesis
+                    }
+                    await session.websocket.send(json.dumps(stop_message))
+                except Exception as e:
+                    logger.warning(f"Error sending stop message: {e}")
+
+            # Close and reconnect the WebSocket to ensure clean state
+            if session.websocket:
+                try:
+                    await session.websocket.close()
+                except Exception:
+                    pass  # Ignore errors when closing
+
+            # Reconnect to ensure clean state for future synthesis
+            await self._reconnect_session(call_sid)
+
+            logger.info(f"Stopped TTS synthesis for call {call_sid}")
+
+        except Exception as e:
+            logger.error(f"Error stopping TTS synthesis for call {call_sid}: {e}", exc_info=True)
+            # Attempt to reconnect in case of errors
+            await self._reconnect_session(call_sid)

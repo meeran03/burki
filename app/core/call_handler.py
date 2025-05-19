@@ -33,6 +33,12 @@ class CallState:
     from_number: Optional[str] = None
     is_active: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
+    is_ai_speaking: bool = False  # Track when AI is speaking
+    ai_speaking_start_time: Optional[datetime] = None  # Track when AI started speaking
+    interruption_threshold: int = 3  # Number of words to trigger interruption
+    min_speaking_time: float = (
+        0.5  # Minimum time AI must be speaking before interruption is valid (in seconds)
+    )
 
 
 class CallHandler:
@@ -126,7 +132,7 @@ class CallHandler:
     ) -> None:
         """
         Handle TTS audio data and send it to Twilio.
-        
+
         Args:
             call_sid: The Twilio call SID
             audio_data: The audio data bytes
@@ -135,15 +141,22 @@ class CallHandler:
         """
         if call_sid not in self.active_calls:
             return
-        
+
         try:
             if not audio_data and is_final:
                 logger.info(f"TTS audio stream complete for call {call_sid}")
+                self.active_calls[call_sid].is_ai_speaking = False
+                self.active_calls[call_sid].ai_speaking_start_time = None
                 return
-            
+
+            # Set speaking state when we start sending audio
+            if audio_data and not self.active_calls[call_sid].is_ai_speaking:
+                self.active_calls[call_sid].is_ai_speaking = True
+                self.active_calls[call_sid].ai_speaking_start_time = datetime.now()
+
             # Get the call's WebSocket connection
             websocket = self.active_calls[call_sid].websocket
-            
+
             # Only send non-empty audio data
             if audio_data:
                 # Create a message in Twilio Media Streams format
@@ -151,20 +164,57 @@ class CallHandler:
                     "event": "media",
                     "streamSid": self.active_calls[call_sid].metadata.get("stream_sid"),
                     "media": {
-                        "payload": base64.b64encode(audio_data).decode('utf-8'),  # Base64 encode audio data
+                        "payload": base64.b64encode(audio_data).decode(
+                            "utf-8"
+                        ),  # Base64 encode audio data
                         "track": "outbound",  # This is audio going to the client
                     },
                 }
-                
+
                 # Log audio chunk size for debugging
-                logger.debug(f"Sending audio chunk of size {len(audio_data)} bytes to Twilio")
-                
+                logger.debug(
+                    f"Sending audio chunk of size {len(audio_data)} bytes to Twilio"
+                )
+
                 # Send the audio data through the WebSocket
                 await websocket.send_json(message)
-        
+
         except Exception as e:
             logger.error(
                 f"Error handling TTS audio for call {call_sid}: {e}", exc_info=True
+            )
+            self.active_calls[call_sid].is_ai_speaking = False
+            self.active_calls[call_sid].ai_speaking_start_time = None
+
+    async def _handle_interruption(self, call_sid: str) -> None:
+        """
+        Handle user interruption by stopping AI speech and processing.
+
+        Args:
+            call_sid: The Twilio call SID
+        """
+        if call_sid not in self.active_calls:
+            return
+
+        try:
+            # Send clear message to Twilio to stop buffered audio
+            clear_message = {
+                "event": "clear",
+                "streamSid": self.active_calls[call_sid].metadata.get("stream_sid"),
+            }
+            await self.active_calls[call_sid].websocket.send_json(clear_message)
+
+            # Stop TTS synthesis
+            await self.tts_service.stop_synthesis(call_sid)
+
+            # Reset speaking state
+            self.active_calls[call_sid].is_ai_speaking = False
+
+            logger.info(f"Handled interruption for call {call_sid}")
+
+        except Exception as e:
+            logger.error(
+                f"Error handling interruption for call {call_sid}: {e}", exc_info=True
             )
 
     async def _handle_llm_response(
@@ -219,12 +269,46 @@ class CallHandler:
             logger.warning(f"Received transcript for unknown call {call_sid}")
             return
 
+        # Don't process if call is no longer active
+        if not self.active_calls[call_sid].is_active:
+            logger.debug(f"Ignoring transcript for inactive call {call_sid}")
+            return
+
         if not transcript.strip():
             return
 
         try:
-            # Process with LLM if it's a final transcript
-            if is_final:
+            # Check for interruption if AI is speaking
+            if self.active_calls[call_sid].is_ai_speaking:
+                # Only consider it an interruption if AI has been speaking for minimum time
+                speaking_start = self.active_calls[call_sid].ai_speaking_start_time
+                if speaking_start:
+                    speaking_duration = (
+                        datetime.now() - speaking_start
+                    ).total_seconds()
+                    if (
+                        speaking_duration
+                        >= self.active_calls[call_sid].min_speaking_time
+                    ):
+                        word_count = len(transcript.strip().split())
+                        if (
+                            word_count
+                            >= self.active_calls[call_sid].interruption_threshold
+                        ):
+                            logger.info(
+                                f"Detected interruption in call {call_sid} with {word_count} words "
+                                f"after {speaking_duration:.2f} seconds of AI speaking"
+                            )
+                            await self._handle_interruption(call_sid)
+                            return
+                    else:
+                        logger.debug(
+                            f"Ignoring potential interruption after {speaking_duration:.2f} seconds "
+                            f"(minimum {self.active_calls[call_sid].min_speaking_time} seconds required)"
+                        )
+
+            # Process with LLM if it's a final transcript and call is still active
+            if is_final and self.active_calls[call_sid].is_active:
                 logger.info(f"Processing final transcript for {call_sid}: {transcript}")
 
                 # Process transcript with LLM
@@ -245,13 +329,14 @@ class CallHandler:
             logger.error(
                 f"Error handling transcript for call {call_sid}: {e}", exc_info=True
             )
-            # Send error notification
-            await self._handle_llm_response(
-                call_sid=call_sid,
-                content="I apologize, but I'm having trouble processing that right now.",
-                is_final=True,
-                metadata={"error": str(e)},
-            )
+            # Only send error notification if call is still active
+            if call_sid in self.active_calls and self.active_calls[call_sid].is_active:
+                await self._handle_llm_response(
+                    call_sid=call_sid,
+                    content="I apologize, but I'm having trouble processing that right now.",
+                    is_final=True,
+                    metadata={"error": str(e)},
+                )
 
     async def handle_audio(
         self,
@@ -298,7 +383,10 @@ class CallHandler:
             return
 
         try:
-            # Stop transcription
+            # Mark call as inactive first to prevent new processing
+            self.active_calls[call_sid].is_active = False
+            
+            # Stop transcription first
             await self.deepgram_service.stop_transcription(call_sid)
 
             # End TTS session
@@ -307,9 +395,6 @@ class CallHandler:
             # End LLM conversation
             await self.llm_service.end_conversation(call_sid)
 
-            # Update call state
-            self.active_calls[call_sid].is_active = False
-
             # Clean up call state
             del self.active_calls[call_sid]
 
@@ -317,6 +402,9 @@ class CallHandler:
 
         except Exception as e:
             logger.error(f"Error ending call {call_sid}: {e}", exc_info=True)
+            # Ensure call state is cleaned up even if there's an error
+            if call_sid in self.active_calls:
+                del self.active_calls[call_sid]
 
     def get_call_state(self, call_sid: str) -> Optional[CallState]:
         """
