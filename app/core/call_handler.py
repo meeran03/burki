@@ -36,9 +36,11 @@ class CallState:
     is_ai_speaking: bool = False  # Track when AI is speaking
     ai_speaking_start_time: Optional[datetime] = None  # Track when AI started speaking
     interruption_threshold: int = 3  # Number of words to trigger interruption
-    min_speaking_time: float = (
-        0.5  # Minimum time AI must be speaking before interruption is valid (in seconds)
-    )
+    min_speaking_time: float = 0.5  # Minimum time AI must be speaking before interruption is valid (in seconds)
+    last_interruption_time: Optional[datetime] = None  # Track last interruption
+    interruption_cooldown: float = 2.0  # Cooldown period in seconds between interruptions
+    transcript_buffer: str = ""  # Buffer for accumulating transcripts during cooldown
+    is_in_cooldown: bool = False  # Track if we're in cooldown period
 
 
 class CallHandler:
@@ -186,16 +188,17 @@ class CallHandler:
             self.active_calls[call_sid].is_ai_speaking = False
             self.active_calls[call_sid].ai_speaking_start_time = None
 
-    async def _handle_interruption(self, call_sid: str) -> None:
+    async def _handle_interruption(self, call_sid: str, interrupting_transcript: Optional[str] = None) -> None:
         """
         Handle user interruption by stopping AI speech and processing.
-
+        
         Args:
             call_sid: The Twilio call SID
+            interrupting_transcript: The transcript that caused the interruption
         """
         if call_sid not in self.active_calls:
             return
-
+            
         try:
             # Send clear message to Twilio to stop buffered audio
             clear_message = {
@@ -203,15 +206,32 @@ class CallHandler:
                 "streamSid": self.active_calls[call_sid].metadata.get("stream_sid"),
             }
             await self.active_calls[call_sid].websocket.send_json(clear_message)
-
+            
             # Stop TTS synthesis
             await self.tts_service.stop_synthesis(call_sid)
-
+            
             # Reset speaking state
             self.active_calls[call_sid].is_ai_speaking = False
-
+            self.active_calls[call_sid].ai_speaking_start_time = None
+            
             logger.info(f"Handled interruption for call {call_sid}")
 
+            # Process the interrupting speech if provided
+            if interrupting_transcript and self.active_calls[call_sid].is_active:
+                logger.info(f"Processing interrupting speech: {interrupting_transcript}")
+                await self.llm_service.process_transcript(
+                    call_sid=call_sid,
+                    transcript=interrupting_transcript,
+                    is_final=True,  # Always treat interrupting speech as final
+                    metadata={"interrupted": True},  # Mark as interrupted speech
+                    response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
+                        call_sid=call_sid,
+                        content=content,
+                        is_final=is_final,
+                        metadata=response_metadata,
+                    ),
+                )
+            
         except Exception as e:
             logger.error(
                 f"Error handling interruption for call {call_sid}: {e}", exc_info=True
@@ -278,28 +298,60 @@ class CallHandler:
             return
 
         try:
-            # Check for interruption if AI is speaking
-            if self.active_calls[call_sid].is_ai_speaking:
+            # Check if we're in cooldown period
+            last_interruption = self.active_calls[call_sid].last_interruption_time
+            if last_interruption:
+                cooldown_elapsed = (datetime.now() - last_interruption).total_seconds()
+                if cooldown_elapsed < self.active_calls[call_sid].interruption_cooldown:
+                    # We're in cooldown, buffer the transcript
+                    if not self.active_calls[call_sid].is_in_cooldown:
+                        self.active_calls[call_sid].is_in_cooldown = True
+                        self.active_calls[call_sid].transcript_buffer = ""
+                        logger.debug(f"Entering cooldown period for call {call_sid}")
+                    
+                    # Add to buffer if it's not empty
+                    if transcript.strip():
+                        self.active_calls[call_sid].transcript_buffer += " " + transcript.strip()
+                        logger.debug(f"Buffered transcript during cooldown: {self.active_calls[call_sid].transcript_buffer}")
+                    
+                    # If this is final, process the buffered transcript
+                    if is_final and self.active_calls[call_sid].transcript_buffer:
+                        buffered_transcript = self.active_calls[call_sid].transcript_buffer.strip()
+                        logger.info(f"Processing buffered transcript after cooldown: {buffered_transcript}")
+                        await self.llm_service.process_transcript(
+                            call_sid=call_sid,
+                            transcript=buffered_transcript,
+                            is_final=True,
+                            metadata={**metadata, "buffered": True},
+                            response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
+                                call_sid=call_sid,
+                                content=content,
+                                is_final=is_final,
+                                metadata=response_metadata,
+                            ),
+                        )
+                        # Reset buffer and cooldown state
+                        self.active_calls[call_sid].transcript_buffer = ""
+                        self.active_calls[call_sid].is_in_cooldown = False
+                    return
+
+            # Only check for interruption on final transcripts to avoid multiple triggers
+            if is_final and self.active_calls[call_sid].is_ai_speaking:
                 # Only consider it an interruption if AI has been speaking for minimum time
                 speaking_start = self.active_calls[call_sid].ai_speaking_start_time
                 if speaking_start:
-                    speaking_duration = (
-                        datetime.now() - speaking_start
-                    ).total_seconds()
-                    if (
-                        speaking_duration
-                        >= self.active_calls[call_sid].min_speaking_time
-                    ):
+                    speaking_duration = (datetime.now() - speaking_start).total_seconds()
+                    if speaking_duration >= self.active_calls[call_sid].min_speaking_time:
                         word_count = len(transcript.strip().split())
-                        if (
-                            word_count
-                            >= self.active_calls[call_sid].interruption_threshold
-                        ):
+                        if word_count >= self.active_calls[call_sid].interruption_threshold:
                             logger.info(
                                 f"Detected interruption in call {call_sid} with {word_count} words "
                                 f"after {speaking_duration:.2f} seconds of AI speaking"
                             )
-                            await self._handle_interruption(call_sid)
+                            # Update last interruption time
+                            self.active_calls[call_sid].last_interruption_time = datetime.now()
+                            # Pass the interrupting transcript to handle_interruption
+                            await self._handle_interruption(call_sid, transcript)
                             return
                     else:
                         logger.debug(
@@ -308,6 +360,7 @@ class CallHandler:
                         )
 
             # Process with LLM if it's a final transcript and call is still active
+            # and not already handled as an interruption
             if is_final and self.active_calls[call_sid].is_active:
                 logger.info(f"Processing final transcript for {call_sid}: {transcript}")
 
