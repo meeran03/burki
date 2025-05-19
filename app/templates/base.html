@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}VAPI Admin{% endblock %}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom styles -->
+    <style>
+        .form-input {
+            @apply w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50;
+        }
+        .btn-primary {
+            @apply py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md transition duration-300;
+        }
+        .btn-secondary {
+            @apply py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg shadow-md transition duration-300;
+        }
+        .card {
+            @apply bg-white rounded-lg shadow-md p-6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <a href="/" class="text-xl font-bold text-blue-600">VAPI Admin</a>
+                    </div>
+                    <nav class="ml-6 flex space-x-8">
+                        <a href="/" class="inline-flex items-center px-1 pt-1 border-b-2 {% if request.url.path == '/' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                            Dashboard
+                        </a>
+                        <a href="/assistants" class="inline-flex items-center px-1 pt-1 border-b-2 {% if request.url.path.startswith('/assistants') %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                            Assistants
+                        </a>
+                        <a href="/calls" class="inline-flex items-center px-1 pt-1 border-b-2 {% if request.url.path.startswith('/calls') %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                            Calls
+                        </a>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-12 py-6 border-t">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p class="text-center text-gray-500 text-sm">
+                &copy; 2023 VAPI Clone. All rights reserved.
+            </p>
+        </div>
+    </footer>
+
+    <!-- Additional scripts -->
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

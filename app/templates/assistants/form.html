@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if assistant %}Edit Assistant{% else %}Create Assistant{% endif %} - VAPI Admin
+{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 lg:px-8">
+    <div class="mb-8">
+        <h1 class="text-2xl font-semibold text-gray-900">
+            {% if assistant %}Edit Assistant: {{ assistant.name }}{% else %}Create New Assistant{% endif %}
+        </h1>
+        <p class="mt-2 text-sm text-gray-700">
+            {% if assistant %}Update assistant details and settings.{% else %}Configure a new voice assistant.{% endif %}
+        </p>
+    </div>
+
+    <div class="bg-white shadow sm:rounded-lg">
+        <form method="POST" class="p-6 space-y-8">
+            <!-- Basic Information -->
+            <div>
+                <h3 class="text-lg font-medium leading-6 text-gray-900">Basic Information</h3>
+                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <div class="sm:col-span-3">
+                        <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+                        <div class="mt-1">
+                            <input type="text" name="name" id="name" required
+                                value="{{ assistant.name if assistant else '' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="phone_number" class="block text-sm font-medium text-gray-700">Phone Number</label>
+                        <div class="mt-1">
+                            {% if phone_numbers %}
+                            <select name="phone_number" id="phone_number" required
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                <option value="">-- Select a phone number --</option>
+                                {% for phone in phone_numbers %}
+                                <option value="{{ phone.phone_number }}" {% if assistant and assistant.phone_number == phone.phone_number %}selected{% endif %}>
+                                    {{ phone.friendly_name }} ({{ phone.phone_number }})
+                                </option>
+                                {% endfor %}
+                                <option value="custom">Custom phone number (enter below)</option>
+                            </select>
+                            <div id="custom_phone_container" class="mt-2" style="display: none;">
+                                <input type="text" id="custom_phone_number" placeholder="+1234567890"
+                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                <p class="mt-1 text-xs text-gray-500">Enter in E.164 format (e.g., +1234567890)</p>
+                            </div>
+                            <script>
+                                document.getElementById('phone_number').addEventListener('change', function() {
+                                    const customContainer = document.getElementById('custom_phone_container');
+                                    const customPhoneInput = document.getElementById('custom_phone_number');
+                                    
+                                    if (this.value === 'custom') {
+                                        customContainer.style.display = 'block';
+                                        customPhoneInput.name = 'phone_number';
+                                        this.name = '_phone_number_dropdown';
+                                    } else {
+                                        customContainer.style.display = 'none';
+                                        customPhoneInput.name = '_custom_phone_number';
+                                        this.name = 'phone_number';
+                                    }
+                                });
+                            </script>
+                            {% else %}
+                            <input type="text" name="phone_number" id="phone_number" required
+                                value="{{ assistant.phone_number if assistant else '' }}"
+                                placeholder="+1234567890"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                            <p class="mt-1 text-xs text-gray-500">
+                                No Twilio phone numbers found. Enter in E.164 format (e.g., +1234567890).
+                                {% if not assistant %}
+                                <a href="https://www.twilio.com/console/phone-numbers/search" target="_blank" class="text-blue-600 hover:underline">
+                                    Purchase a number from Twilio
+                                </a>
+                                {% endif %}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-6">
+                        <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                        <div class="mt-1">
+                            <textarea id="description" name="description" rows="3"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">{{ assistant.description if assistant else '' }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-6">
+                        <div class="flex items-center">
+                            <input id="is_active" name="is_active" type="checkbox" 
+                                {% if not assistant or assistant.is_active %}checked{% endif %}
+                                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <label for="is_active" class="ml-2 block text-sm text-gray-900">
+                                Active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Keys -->
+            <div>
+                <h3 class="text-lg font-medium leading-6 text-gray-900">API Keys</h3>
+                <p class="mt-1 text-sm text-gray-500">
+                    Optional: Provide API keys for this assistant. If not provided, system defaults will be used.
+                </p>
+                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <div class="sm:col-span-3">
+                        <label for="openai_api_key" class="block text-sm font-medium text-gray-700">OpenAI API Key</label>
+                        <div class="mt-1">
+                            <input type="text" name="openai_api_key" id="openai_api_key"
+                                value="{{ assistant.openai_api_key if assistant else '' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="deepgram_api_key" class="block text-sm font-medium text-gray-700">Deepgram API Key</label>
+                        <div class="mt-1">
+                            <input type="text" name="deepgram_api_key" id="deepgram_api_key"
+                                value="{{ assistant.deepgram_api_key if assistant else '' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="elevenlabs_api_key" class="block text-sm font-medium text-gray-700">ElevenLabs API Key</label>
+                        <div class="mt-1">
+                            <input type="text" name="elevenlabs_api_key" id="elevenlabs_api_key"
+                                value="{{ assistant.elevenlabs_api_key if assistant else '' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="elevenlabs_voice_id" class="block text-sm font-medium text-gray-700">ElevenLabs Voice ID</label>
+                        <div class="mt-1">
+                            <input type="text" name="elevenlabs_voice_id" id="elevenlabs_voice_id"
+                                value="{{ assistant.elevenlabs_voice_id if assistant else '' }}"
+                                placeholder="21m00Tcm4TlvDq8ikWAM"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="twilio_account_sid" class="block text-sm font-medium text-gray-700">Twilio Account SID</label>
+                        <div class="mt-1">
+                            <input type="text" name="twilio_account_sid" id="twilio_account_sid"
+                                value="{{ assistant.twilio_account_sid if assistant else '' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="twilio_auth_token" class="block text-sm font-medium text-gray-700">Twilio Auth Token</label>
+                        <div class="mt-1">
+                            <input type="text" name="twilio_auth_token" id="twilio_auth_token"
+                                value="{{ assistant.twilio_auth_token if assistant else '' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LLM Configuration -->
+            <div>
+                <h3 class="text-lg font-medium leading-6 text-gray-900">LLM Configuration</h3>
+                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <div class="sm:col-span-3">
+                        <label for="openai_model" class="block text-sm font-medium text-gray-700">OpenAI Model</label>
+                        <div class="mt-1">
+                            <input type="text" name="openai_model" id="openai_model"
+                                value="{{ assistant.openai_model if assistant else 'gpt-4-turbo' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="custom_llm_url" class="block text-sm font-medium text-gray-700">Custom LLM URL (Optional)</label>
+                        <div class="mt-1">
+                            <input type="text" name="custom_llm_url" id="custom_llm_url"
+                                value="{{ assistant.custom_llm_url if assistant else '' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="openai_temperature" class="block text-sm font-medium text-gray-700">Temperature</label>
+                        <div class="mt-1">
+                            <input type="number" step="0.1" min="0" max="2" name="openai_temperature" id="openai_temperature"
+                                value="{{ assistant.openai_temperature if assistant else 0.7 }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="openai_max_tokens" class="block text-sm font-medium text-gray-700">Max Tokens</label>
+                        <div class="mt-1">
+                            <input type="number" step="50" min="50" max="4000" name="openai_max_tokens" id="openai_max_tokens"
+                                value="{{ assistant.openai_max_tokens if assistant else 500 }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-6">
+                        <label for="system_prompt" class="block text-sm font-medium text-gray-700">System Prompt</label>
+                        <div class="mt-1">
+                            <textarea id="system_prompt" name="system_prompt" rows="4"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">{{ assistant.system_prompt if assistant else 'You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Call Control Settings -->
+            <div>
+                <h3 class="text-lg font-medium leading-6 text-gray-900">Call Control Settings</h3>
+                <div class="mt-5 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <div class="sm:col-span-6">
+                        <label for="end_call_message" class="block text-sm font-medium text-gray-700">End Call Message</label>
+                        <div class="mt-1">
+                            <input type="text" name="end_call_message" id="end_call_message"
+                                value="{{ assistant.end_call_message if assistant else 'Thank you for calling. Goodbye!' }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="max_idle_messages" class="block text-sm font-medium text-gray-700">Max Idle Messages</label>
+                        <div class="mt-1">
+                            <input type="number" name="max_idle_messages" id="max_idle_messages"
+                                value="{{ assistant.max_idle_messages if assistant else 3 }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-3">
+                        <label for="idle_timeout" class="block text-sm font-medium text-gray-700">Idle Timeout (seconds)</label>
+                        <div class="mt-1">
+                            <input type="number" name="idle_timeout" id="idle_timeout"
+                                value="{{ assistant.idle_timeout if assistant else 30 }}"
+                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex justify-end space-x-3 pt-5">
+                <a href="/assistants" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    {% if assistant %}Update{% else %}Create{% endif %} Assistant
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

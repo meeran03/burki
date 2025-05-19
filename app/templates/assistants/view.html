@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}{{ assistant.name }} - VAPI Admin{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 lg:px-8">
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-gray-900">{{ assistant.name }}</h1>
+            <p class="mt-2 text-sm text-gray-700">{{ assistant.description }}</p>
+        </div>
+        <div class="flex space-x-3">
+            <a href="/assistants/{{ assistant.id }}/edit" class="btn-secondary">
+                Edit
+            </a>
+            <button 
+                onclick="if(confirm('Are you sure you want to delete this assistant?')) window.location.href='/assistants/{{ assistant.id }}/delete'"
+                class="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md transition duration-300">
+                Delete
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Basic Information -->
+        <div class="card">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+            <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Phone Number</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.phone_number }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Status</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if assistant.is_active %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Active
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Inactive
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Created</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.created_at.strftime('%b %d, %Y') }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.updated_at.strftime('%b %d, %Y %H:%M') }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- API Keys -->
+        <div class="card">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">API Configuration</h3>
+            <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">OpenAI API Key</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if assistant.openai_api_key %}
+                            <span class="text-green-600">✓ Custom key set</span>
+                        {% else %}
+                            <span class="text-gray-500">Using system default</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Deepgram API Key</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if assistant.deepgram_api_key %}
+                            <span class="text-green-600">✓ Custom key set</span>
+                        {% else %}
+                            <span class="text-gray-500">Using system default</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">ElevenLabs API Key</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if assistant.elevenlabs_api_key %}
+                            <span class="text-green-600">✓ Custom key set</span>
+                        {% else %}
+                            <span class="text-gray-500">Using system default</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Twilio Credentials</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if assistant.twilio_account_sid and assistant.twilio_auth_token %}
+                            <span class="text-green-600">✓ Custom credentials set</span>
+                        {% else %}
+                            <span class="text-gray-500">Using system default</span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- LLM Settings -->
+        <div class="card">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">LLM Configuration</h3>
+            <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">OpenAI Model</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.openai_model or "gpt-4-turbo (default)" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Temperature</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.openai_temperature or "0.7 (default)" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Max Tokens</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.openai_max_tokens or "500 (default)" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Custom LLM URL</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if assistant.custom_llm_url %}
+                            {{ assistant.custom_llm_url }}
+                        {% else %}
+                            <span class="text-gray-500">Not set</span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+            <div class="mt-4">
+                <dt class="text-sm font-medium text-gray-500">System Prompt</dt>
+                <dd class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded border mt-2">
+                    {{ assistant.system_prompt or "Default system prompt" }}
+                </dd>
+            </div>
+        </div>
+
+        <!-- Voice Settings -->
+        <div class="card">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Voice Configuration</h3>
+            <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">ElevenLabs Voice ID</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.elevenlabs_voice_id or "21m00Tcm4TlvDq8ikWAM (default)" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">End Call Message</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.end_call_message or "Thank you for calling. Goodbye! (default)" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Max Idle Messages</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.max_idle_messages or "3 (default)" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-sm font-medium text-gray-500">Idle Timeout</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.idle_timeout or "30 (default)" }} seconds</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Call History -->
+    <div class="mt-8">
+        <h2 class="text-lg font-medium text-gray-900">Recent Calls</h2>
+        <div class="mt-4 bg-white shadow overflow-hidden sm:rounded-lg">
+            {% if calls %}
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Call ID</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Caller</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th scope="col" class="relative px-6 py-3">
+                            <span class="sr-only">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for call in calls %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {{ call.call_sid }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ call.customer_phone_number }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {% if call.status == "ongoing" %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    Ongoing
+                                </span>
+                            {% elif call.status == "completed" %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Completed
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    {{ call.status|capitalize }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ call.duration or '-' }} seconds
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ call.started_at.strftime('%b %d, %Y %H:%M') }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <a href="/calls/{{ call.id }}" class="text-blue-600 hover:text-blue-900">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center py-6">
+                <p class="text-gray-500">No calls recorded yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %} 
