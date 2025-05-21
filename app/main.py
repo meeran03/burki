@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 
 from app.core.call_manager import CallManager
 from app.core.assistant_manager import assistant_manager
-from app.db.database import get_db
 from app.api.assistants import router as assistants_router
 from app.api.calls import router as calls_router
 from app.api.web import router as web_router
@@ -48,12 +47,9 @@ call_manager = CallManager()
 async def startup_event():
     """Run on application startup."""
     # Load active assistants
-    db = next(get_db())
     try:
-        await assistant_manager.load_assistants(db)
+        await assistant_manager.load_assistants()
     except Exception as e:  # pylint: disable=
         logger.error("Error loading assistants: %s", e, exc_info=True)
-    finally:
-        db.close()
 
     logger.info("Application startup complete")

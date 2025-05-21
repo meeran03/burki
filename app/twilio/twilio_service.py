@@ -168,3 +168,82 @@ class TwilioService:
         except Exception as e:
             logger.error(f"Unexpected error fetching phone info: {e}")
             return None 
+
+    @staticmethod
+    def end_call(
+        call_sid: str,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> bool:
+        """
+        End a Twilio call via the REST API.
+        
+        Args:
+            call_sid: The Twilio Call SID to end
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            logger.error("Could not get Twilio client to end call")
+            return False
+        
+        try:
+            # Update call status to completed to end the call
+            client.calls(call_sid).update(status="completed")
+            logger.info(f"Successfully ended call {call_sid} via Twilio API")
+            return True
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error ending call: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error ending call: {e}")
+            return False
+    
+    @staticmethod
+    def transfer_call(
+        call_sid: str,
+        destination: str,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> bool:
+        """
+        Transfer a Twilio call to another number using TwiML.
+        
+        Args:
+            call_sid: The Twilio Call SID to transfer
+            destination: The phone number to transfer to (E.164 format)
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            logger.error("Could not get Twilio client to transfer call")
+            return False
+        
+        try:
+            # Create TwiML to transfer the call
+            twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+            <Response>
+                <Dial>{destination}</Dial>
+            </Response>
+            """
+            
+            # Update the call with the transfer TwiML
+            client.calls(call_sid).update(twiml=twiml)
+            logger.info(f"Successfully initiated transfer of call {call_sid} to {destination}")
+            return True
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error transferring call: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error transferring call: {e}")
+            return False 

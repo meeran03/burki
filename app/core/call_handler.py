@@ -4,11 +4,11 @@ This file contains the CallHandler class for managing call state and conversatio
 
 # pylint: disable=too-many-ancestors,logging-fstring-interpolation,broad-exception-caught
 import logging
+import base64
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 from fastapi import WebSocket
-import base64
 
 from app.services.deepgram_service import DeepgramService
 from app.services.llm_service import LLMService
@@ -36,9 +36,13 @@ class CallState:
     is_ai_speaking: bool = False  # Track when AI is speaking
     ai_speaking_start_time: Optional[datetime] = None  # Track when AI started speaking
     interruption_threshold: int = 3  # Number of words to trigger interruption
-    min_speaking_time: float = 0.5  # Minimum time AI must be speaking before interruption is valid (in seconds)
+    min_speaking_time: float = (
+        0.5  # Minimum time AI must be speaking before interruption is valid (in seconds)
+    )
     last_interruption_time: Optional[datetime] = None  # Track last interruption
-    interruption_cooldown: float = 2.0  # Cooldown period in seconds between interruptions
+    interruption_cooldown: float = (
+        2.0  # Cooldown period in seconds between interruptions
+    )
     transcript_buffer: str = ""  # Buffer for accumulating transcripts during cooldown
     is_in_cooldown: bool = False  # Track if we're in cooldown period
 
@@ -51,23 +55,20 @@ class CallHandler:
 
     def __init__(
         self,
-        deepgram_service: DeepgramService,
-        llm_service: LLMService,
-        tts_service: TTSService,
         system_prompt: Optional[str] = None,
+        custom_llm_url: Optional[str] = None,
     ):
         """
         Initialize the call handler.
 
         Args:
-            deepgram_service: DeepgramService instance for transcription
-            llm_service: LLMService instance for conversation
-            tts_service: TTSService instance for text-to-speech
             system_prompt: Optional custom system prompt for the LLM
+            custom_llm_url: Optional URL for custom LLM endpoint
         """
-        self.deepgram_service = deepgram_service
-        self.llm_service = llm_service
-        self.tts_service = tts_service
+        # Initialize services internally
+        self.deepgram_service = DeepgramService()
+        self.llm_service = LLMService(custom_llm_url=custom_llm_url)
+        self.tts_service = TTSService()
         self.system_prompt = system_prompt
 
         # Track active calls
@@ -188,17 +189,19 @@ class CallHandler:
             self.active_calls[call_sid].is_ai_speaking = False
             self.active_calls[call_sid].ai_speaking_start_time = None
 
-    async def _handle_interruption(self, call_sid: str, interrupting_transcript: Optional[str] = None) -> None:
+    async def _handle_interruption(
+        self, call_sid: str, interrupting_transcript: Optional[str] = None
+    ) -> None:
         """
         Handle user interruption by stopping AI speech and processing.
-        
+
         Args:
             call_sid: The Twilio call SID
             interrupting_transcript: The transcript that caused the interruption
         """
         if call_sid not in self.active_calls:
             return
-            
+
         try:
             # Send clear message to Twilio to stop buffered audio
             clear_message = {
@@ -206,24 +209,30 @@ class CallHandler:
                 "streamSid": self.active_calls[call_sid].metadata.get("stream_sid"),
             }
             await self.active_calls[call_sid].websocket.send_json(clear_message)
-            
+
             # Stop TTS synthesis
             await self.tts_service.stop_synthesis(call_sid)
-            
+
             # Reset speaking state
             self.active_calls[call_sid].is_ai_speaking = False
             self.active_calls[call_sid].ai_speaking_start_time = None
-            
+
             logger.info(f"Handled interruption for call {call_sid}")
 
             # Process the interrupting speech if provided
             if interrupting_transcript and self.active_calls[call_sid].is_active:
-                logger.info(f"Processing interrupting speech: {interrupting_transcript}")
+                logger.info(
+                    f"Processing interrupting speech: {interrupting_transcript}"
+                )
                 await self.llm_service.process_transcript(
                     call_sid=call_sid,
                     transcript=interrupting_transcript,
                     is_final=True,  # Always treat interrupting speech as final
-                    metadata={"interrupted": True},  # Mark as interrupted speech
+                    metadata={
+                        "interrupted": True,  # Mark as interrupted speech
+                        "to_number": self.active_calls[call_sid].to_number,
+                        "from_number": self.active_calls[call_sid].from_number,
+                    },
                     response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
                         call_sid=call_sid,
                         content=content,
@@ -231,7 +240,7 @@ class CallHandler:
                         metadata=response_metadata,
                     ),
                 )
-            
+
         except Exception as e:
             logger.error(
                 f"Error handling interruption for call {call_sid}: {e}", exc_info=True
@@ -252,6 +261,34 @@ class CallHandler:
         try:
             if call_sid not in self.active_calls:
                 return
+
+            # Check for special actions
+            if is_final and metadata.get("action"):
+                if metadata["action"] == "end_call":
+                    logger.info(f"Ending call {call_sid} due to LLM endCall tool")
+                    await self.end_call(call_sid, with_twilio=True)
+                    return
+                elif metadata["action"] == "transfer_call":
+                    destination = metadata.get("destination")
+                    if destination:
+                        logger.info(f"Transferring call {call_sid} to {destination}")
+                        
+                        # Import TwilioService for call transfer
+                        from app.twilio.twilio_service import TwilioService
+                        
+                        # Attempt to transfer the call using TwilioService
+                        transfer_success = TwilioService.transfer_call(
+                            call_sid=call_sid,
+                            destination=destination
+                        )
+                        
+                        if transfer_success:
+                            logger.info(f"Successfully initiated transfer for call {call_sid}")
+                        else:
+                            logger.error(f"Failed to transfer call {call_sid}")
+                        
+                        # End the call in our system after transfer
+                        return
 
             # Process text through TTS service
             if content:
@@ -308,21 +345,34 @@ class CallHandler:
                         self.active_calls[call_sid].is_in_cooldown = True
                         self.active_calls[call_sid].transcript_buffer = ""
                         logger.debug(f"Entering cooldown period for call {call_sid}")
-                    
+
                     # Add to buffer if it's not empty
                     if transcript.strip():
-                        self.active_calls[call_sid].transcript_buffer += " " + transcript.strip()
-                        logger.debug(f"Buffered transcript during cooldown: {self.active_calls[call_sid].transcript_buffer}")
-                    
+                        self.active_calls[call_sid].transcript_buffer += (
+                            " " + transcript.strip()
+                        )
+                        logger.debug(
+                            f"Buffered transcript during cooldown: {self.active_calls[call_sid].transcript_buffer}"
+                        )
+
                     # If this is final, process the buffered transcript
                     if is_final and self.active_calls[call_sid].transcript_buffer:
-                        buffered_transcript = self.active_calls[call_sid].transcript_buffer.strip()
-                        logger.info(f"Processing buffered transcript after cooldown: {buffered_transcript}")
+                        buffered_transcript = self.active_calls[
+                            call_sid
+                        ].transcript_buffer.strip()
+                        logger.info(
+                            f"Processing buffered transcript after cooldown: {buffered_transcript}"
+                        )
                         await self.llm_service.process_transcript(
                             call_sid=call_sid,
                             transcript=buffered_transcript,
                             is_final=True,
-                            metadata={**metadata, "buffered": True},
+                            metadata={
+                                **metadata,
+                                "buffered": True,
+                                "to_number": self.active_calls[call_sid].to_number,
+                                "from_number": self.active_calls[call_sid].from_number,
+                            },
                             response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
                                 call_sid=call_sid,
                                 content=content,
@@ -340,16 +390,26 @@ class CallHandler:
                 # Only consider it an interruption if AI has been speaking for minimum time
                 speaking_start = self.active_calls[call_sid].ai_speaking_start_time
                 if speaking_start:
-                    speaking_duration = (datetime.now() - speaking_start).total_seconds()
-                    if speaking_duration >= self.active_calls[call_sid].min_speaking_time:
+                    speaking_duration = (
+                        datetime.now() - speaking_start
+                    ).total_seconds()
+                    if (
+                        speaking_duration
+                        >= self.active_calls[call_sid].min_speaking_time
+                    ):
                         word_count = len(transcript.strip().split())
-                        if word_count >= self.active_calls[call_sid].interruption_threshold:
+                        if (
+                            word_count
+                            >= self.active_calls[call_sid].interruption_threshold
+                        ):
                             logger.info(
                                 f"Detected interruption in call {call_sid} with {word_count} words "
                                 f"after {speaking_duration:.2f} seconds of AI speaking"
                             )
                             # Update last interruption time
-                            self.active_calls[call_sid].last_interruption_time = datetime.now()
+                            self.active_calls[call_sid].last_interruption_time = (
+                                datetime.now()
+                            )
                             # Pass the interrupting transcript to handle_interruption
                             await self._handle_interruption(call_sid, transcript)
                             return
@@ -369,7 +429,11 @@ class CallHandler:
                     call_sid=call_sid,
                     transcript=transcript,
                     is_final=is_final,
-                    metadata=metadata,
+                    metadata={
+                        **metadata,
+                        "to_number": self.active_calls[call_sid].to_number,
+                        "from_number": self.active_calls[call_sid].from_number,
+                    },
                     response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
                         call_sid=call_sid,
                         content=content,
@@ -425,20 +489,36 @@ class CallHandler:
             )
             return False
 
-    async def end_call(self, call_sid: str) -> None:
+    async def end_call(self, call_sid: str, with_twilio=False) -> None:
         """
         End call handling and clean up resources.
 
         Args:
             call_sid: The Twilio call SID
+            with_twilio: Whether to end the call via Twilio API
         """
         if call_sid not in self.active_calls:
+            logger.debug(f"Call {call_sid} is not active, skipping end_call")
             return
 
         try:
             # Mark call as inactive first to prevent new processing
             self.active_calls[call_sid].is_active = False
-            
+
+            # If we need to end the call with Twilio, use TwilioService
+            if with_twilio:
+                from app.twilio.twilio_service import TwilioService
+                
+                # Attempt to end the call using TwilioService
+                end_success = TwilioService.end_call(call_sid=call_sid)
+                
+                if end_success:
+                    logger.info(f"Successfully ended call {call_sid} via Twilio API")
+                else:
+                    logger.error(f"Failed to end call {call_sid} via Twilio API")
+
+                return
+
             # Stop transcription first
             await self.deepgram_service.stop_transcription(call_sid)
 
@@ -448,10 +528,15 @@ class CallHandler:
             # End LLM conversation
             await self.llm_service.end_conversation(call_sid)
 
-            # Clean up call state
-            del self.active_calls[call_sid]
-
-            logger.info(f"Ended handling call {call_sid}")
+            # Clean up call state - save a reference for logging before deletion
+            call_state = self.active_calls.get(call_sid)
+            
+            # Only try to delete if the key still exists (may have been removed by another concurrent process)
+            if call_sid in self.active_calls:
+                del self.active_calls[call_sid]
+                logger.info(f"Ended handling call {call_sid}")
+            else:
+                logger.warning(f"Call {call_sid} was already removed from active_calls")
 
         except Exception as e:
             logger.error(f"Error ending call {call_sid}: {e}", exc_info=True)
