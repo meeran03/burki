@@ -161,41 +161,9 @@ async def websocket_endpoint(websocket: WebSocket):
                             },
                         )
 
-                        # Start Deepgram transcription
-                        sample_rate = int(media_format.get("rate", 8000))
-                        channels = int(media_format.get("channels", 1))
-
-                        # Create a callback function that includes all required parameters
-                        async def transcription_callback(
-                            transcript: str, is_final: bool, metadata: dict
-                        ) -> None:
-                            await call_handler.handle_transcript(
-                                call_sid=call_sid,
-                                transcript=transcript,
-                                is_final=is_final,
-                                metadata=metadata,
-                            )
-
-                        success = await call_handler.deepgram_service.start_transcription(
-                            call_sid,
-                            transcription_callback,  # Use the properly defined callback
-                            sample_rate=sample_rate,
-                            channels=channels,
-                        )
-
-                        if success:
-                            logger.info(f"Started transcription for call: {call_sid}")
-
-                            # Send a welcome message via TTS
-                            await call_handler.tts_service.process_text(
-                                call_sid=call_sid,
-                                text="Hello! I'm your AI assistant. How can I help you today?<flush/>",
-                                force_flush=True,
-                            )
-                        else:
-                            logger.error(
-                                f"Failed to start transcription for call: {call_sid}"
-                            )
+                        # The welcome message is now handled in the call_handler.start_call method
+                        # since DeepgramService is now initialized per-call
+                        # Removed redundant deepgram initialization as it's now handled in call_handler.start_call
 
                     except Exception as e:
                         logger.error(

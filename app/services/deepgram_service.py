@@ -7,7 +7,7 @@ import os
 import logging
 import asyncio
 import traceback
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, Optional
 
 from deepgram import (
     DeepgramClient,
@@ -32,102 +32,113 @@ class DeepgramService:
     # Constants
     MAX_RECONNECTS = 3
 
-    def __init__(self):
-        """Initialize the Deepgram client."""
-        # Get API key from environment variable
-        self.api_key = os.getenv("DEEPGRAM_API_KEY")
-        # Allow override with auth token if specified
-        self.auth_token = os.getenv("DEEPGRAM_AUTH_TOKEN")
+    # Class-level client (shared across instances)
+    _client = None
 
-        # Create client options with keepalive for better connection stability
-        client_options = DeepgramClientOptions(
-            options={
-                "keepalive": "true",
-            }
-        )
+    @classmethod
+    def get_client(cls):
+        """
+        Get or create the Deepgram client.
+        
+        Returns:
+            DeepgramClient: The shared Deepgram client
+        """
+        if cls._client is None:
+            # Get API key from environment variable
+            api_key = os.getenv("DEEPGRAM_API_KEY")
+            # Allow override with auth token if specified
+            auth_token = os.getenv("DEEPGRAM_AUTH_TOKEN")
 
-        self.deepgram = None
-        self.active_connections = {}  # Keyed by call_sid
-        self.is_connected = {}  # Connection status keyed by call_sid
-        self.reconnect_attempts = {}  # Reconnection attempts keyed by call_sid
+            # Create client options with keepalive for better connection stability
+            client_options = DeepgramClientOptions(
+                options={
+                    "keepalive": "true",
+                }
+            )
 
-        try:
-            # Initialize with either API key or auth token
-            if self.auth_token:
-                # Use auth token if available
-                self.deepgram = DeepgramClient(self.auth_token, client_options)
-                logger.info("Deepgram client initialized with auth token")
-            elif self.api_key:
-                # Fall back to API key
-                self.deepgram = DeepgramClient(self.api_key, client_options)
-                logger.info("Deepgram client initialized with API key")
-            else:
-                logger.warning(
-                    "Neither Deepgram API key nor auth token found. STT features will be limited."
-                )
-        except Exception as e:
-            logger.error(f"Error initializing Deepgram client: {e}", exc_info=True)
+            try:
+                # Initialize with either API key or auth token
+                if auth_token:
+                    # Use auth token if available
+                    cls._client = DeepgramClient(auth_token, client_options)
+                    logger.info("Deepgram client initialized with auth token")
+                elif api_key:
+                    # Fall back to API key
+                    cls._client = DeepgramClient(api_key, client_options)
+                    logger.info("Deepgram client initialized with API key")
+                else:
+                    logger.warning(
+                        "Neither Deepgram API key nor auth token found. STT features will be limited."
+                    )
+            except Exception as e:
+                logger.error(f"Error initializing Deepgram client: {e}", exc_info=True)
+        
+        return cls._client
+
+    def __init__(self, call_sid: Optional[str] = None):
+        """
+        Initialize a Deepgram service instance for a specific call.
+        
+        Args:
+            call_sid: The unique identifier for this call
+        """
+        self.call_sid = call_sid
+        self.deepgram = self.get_client()
+        self.connection = None
+        self.transcript_callback = None
+        self.is_connected = False
+        self.reconnect_attempts = 0
+        self.sample_rate = 8000
+        self.channels = 1
+        
+        if call_sid:
+            logger.info(f"DeepgramService initialized for call {call_sid}")
 
     async def start_transcription(
         self,
-        call_sid: str,
         transcript_callback: Callable[[str, bool, Dict], None],
         sample_rate: int = 8000,
         channels: int = 1,
-    ):
+    ) -> bool:
         """
-        Start a live transcription session for a call.
+        Start a live transcription session for this call.
 
         Args:
-            call_sid: Twilio Call SID
             transcript_callback: Callback function to handle transcripts
             sample_rate: Audio sample rate in Hz
             channels: Number of audio channels
+            
+        Returns:
+            bool: Whether transcription was successfully started
         """
         if not self.deepgram:
             logger.error("Deepgram client not initialized")
             return False
 
-        # Initialize connection tracking
-        self.is_connected[call_sid] = False
-        self.reconnect_attempts[call_sid] = 0
+        if not self.call_sid:
+            logger.error("Cannot start transcription without call_sid")
+            return False
 
-        # Store callback
-        self.active_connections[call_sid] = {
-            "connection": None,
-            "callback": transcript_callback,
-        }
+        # Store callback and audio settings
+        self.transcript_callback = transcript_callback
+        self.sample_rate = sample_rate
+        self.channels = channels
 
         # Establish connection
-        return await self._ensure_connection(call_sid, sample_rate, channels)
+        return await self._ensure_connection()
 
-    async def _ensure_connection(
-        self, call_sid: str, sample_rate: int = 8000, channels: int = 1
-    ) -> bool:
+    async def _ensure_connection(self) -> bool:
         """
-        Ensure there is an active connection to Deepgram for the given call_sid.
-
-        Args:
-            call_sid: Twilio Call SID
-            sample_rate: Audio sample rate
-            channels: Number of audio channels
+        Ensure there is an active connection to Deepgram for this call.
 
         Returns:
             bool: Whether a connection was successfully established
         """
-        if (
-            call_sid in self.is_connected
-            and self.is_connected[call_sid]
-            and call_sid in self.active_connections
-            and self.active_connections[call_sid]["connection"]
-        ):
+        if self.is_connected and self.connection:
             return True
 
-        if (
-            call_sid in self.reconnect_attempts
-            and self.reconnect_attempts[call_sid] >= self.MAX_RECONNECTS
-        ):
-            logger.error(f"Max reconnection attempts reached for call {call_sid}")
+        if self.reconnect_attempts >= self.MAX_RECONNECTS:
+            logger.error(f"Max reconnection attempts reached for call {self.call_sid}")
             return False
 
         try:
@@ -137,29 +148,23 @@ class DeepgramService:
             # Set up event handlers with proper coroutines
             connection.on(
                 LiveTranscriptionEvents.Transcript,
-                lambda ws, result: self._on_message_async(ws, result, call_sid),
+                lambda ws, result: self._on_message_async(ws, result),
             )
             connection.on(
                 LiveTranscriptionEvents.Error,
-                lambda ws, error: self._on_error_async(ws, error, call_sid),
+                lambda ws, error: self._on_error_async(ws, error),
             )
             connection.on(
                 LiveTranscriptionEvents.Open,
-                lambda ws, open: self._on_open_async(ws, open, call_sid),
+                lambda ws, open: self._on_open_async(ws, open),
             )
             connection.on(
                 LiveTranscriptionEvents.Close,
-                lambda ws, close: self._on_close_async(ws, close, call_sid),
+                lambda ws, close: self._on_close_async(ws, close),
             )
 
             # Store connection
-            if call_sid in self.active_connections:
-                self.active_connections[call_sid]["connection"] = connection
-            else:
-                self.active_connections[call_sid] = {
-                    "connection": connection,
-                    "callback": None,
-                }
+            self.connection = connection
 
             # Configure options for streaming audio
             options = LiveOptions(
@@ -167,8 +172,8 @@ class DeepgramService:
                 punctuate=True,
                 language="en-US",
                 encoding="mulaw",  # Twilio uses mulaw encoding
-                channels=channels,
-                sample_rate=sample_rate,
+                channels=self.channels,
+                sample_rate=self.sample_rate,
                 endpointing=100,  # More responsive stopping of conversation
                 utterance_end_ms=1000,  # Word-based silence detector (1 second)
                 smart_format=True,
@@ -179,12 +184,12 @@ class DeepgramService:
             try:
                 await connection.start(options)
                 logger.info(
-                    f"Started Deepgram Nova-3 transcription for call {call_sid}"
+                    f"Started Deepgram Nova-3 transcription for call {self.call_sid}"
                 )
 
                 # Connection start was successful if we get here
-                self.is_connected[call_sid] = True
-                self.reconnect_attempts[call_sid] = 0
+                self.is_connected = True
+                self.reconnect_attempts = 0
                 return True
             except Exception as e:
                 logger.error(f"Failed to start with Nova-3 model, trying fallback: {e}")
@@ -195,8 +200,8 @@ class DeepgramService:
                         punctuate=True,
                         language="en-US",
                         encoding="mulaw",  # Twilio uses mulaw encoding
-                        channels=channels,
-                        sample_rate=sample_rate,
+                        channels=self.channels,
+                        sample_rate=self.sample_rate,
                         endpointing=100,
                         utterance_end_ms=1000,
                         smart_format=True,
@@ -204,46 +209,37 @@ class DeepgramService:
                     )
                     await connection.start(options)
                     logger.info(
-                        f"Started Deepgram Nova-2 transcription (fallback) for call {call_sid}"
+                        f"Started Deepgram Nova-2 transcription (fallback) for call {self.call_sid}"
                     )
 
                     # Connection start was successful if we get here
-                    self.is_connected[call_sid] = True
-                    self.reconnect_attempts[call_sid] = 0
+                    self.is_connected = True
+                    self.reconnect_attempts = 0
                     return True
                 except Exception as e2:
                     logger.error(f"Failed with Nova-2 model: {e2}")
-                    if call_sid in self.reconnect_attempts:
-                        self.reconnect_attempts[call_sid] += 1
+                    self.reconnect_attempts += 1
                     return False
 
         except Exception as e:
             logger.error(f"Error establishing Deepgram connection: {e}", exc_info=True)
-            if call_sid in self.reconnect_attempts:
-                self.reconnect_attempts[call_sid] += 1
+            self.reconnect_attempts += 1
             return False
 
-    async def _on_open_async(self, ws, open_event, call_sid: str):
+    async def _on_open_async(self, ws, open_event):
         """Handle WebSocket open event."""
-        logger.info(f"Deepgram connection opened for call {call_sid}")
-        self.is_connected[call_sid] = True
+        logger.info(f"Deepgram connection opened for call {self.call_sid}")
+        self.is_connected = True
 
-    async def _on_message_async(self, ws, result, call_sid: str):
+    async def _on_message_async(self, ws, result):
         """
         Handle transcript messages from Deepgram.
 
         Args:
             ws: WebSocket connection
             result: Transcript result
-            call_sid: Twilio Call SID
         """
         try:
-            if call_sid not in self.active_connections:
-                logger.warning(f"Received transcript for unknown call {call_sid}")
-                return
-
-            callback = self.active_connections[call_sid].get("callback")
-
             # Extract the transcript from the result
             try:
                 channel = result.channel
@@ -262,20 +258,20 @@ class DeepgramService:
                 speech_final = result.speech_final
                 # Log the transcript
                 if speech_final:
-                    logger.info(f"Speech Final - Transcript for {call_sid}: {sentence}")
+                    logger.info(f"Speech Final - Transcript for {self.call_sid}: {sentence}")
                 elif is_final:
-                    logger.info(f"Final Result - Transcript for {call_sid}: {sentence}")
+                    logger.info(f"Final Result - Transcript for {self.call_sid}: {sentence}")
                 else:
                     logger.info(
-                        f"Interim Result - Transcript for {call_sid}: {sentence}"
+                        f"Interim Result - Transcript for {self.call_sid}: {sentence}"
                     )
 
                 # Pass to callback if available
-                if callback:
+                if self.transcript_callback:
                     try:
                         # Create a task for the callback to avoid blocking the event handler
                         asyncio.create_task(
-                            callback(
+                            self.transcript_callback(
                                 sentence,
                                 is_final,
                                 {"is_final": is_final, "speech_final": speech_final},
@@ -293,69 +289,49 @@ class DeepgramService:
             logger.error(f"Error in transcript handler: {e}")
             logger.error(traceback.format_exc())
 
-    async def _on_error_async(self, ws, error, call_sid: str):
+    async def _on_error_async(self, ws, error):
         """Handle WebSocket error event."""
-        logger.error(f"Deepgram error for call {call_sid}: {error}")
+        logger.error(f"Deepgram error for call {self.call_sid}: {error}")
 
         # Mark connection as closed
-        self.is_connected[call_sid] = False
+        self.is_connected = False
 
         # Try to reconnect
-        if (
-            call_sid in self.reconnect_attempts
-            and self.reconnect_attempts[call_sid] < self.MAX_RECONNECTS
-        ):
+        if self.reconnect_attempts < self.MAX_RECONNECTS:
             logger.info(
-                f"Attempting to reconnect for call {call_sid}, attempt {self.reconnect_attempts[call_sid] + 1}/{self.MAX_RECONNECTS}"
+                f"Attempting to reconnect for call {self.call_sid}, attempt {self.reconnect_attempts + 1}/{self.MAX_RECONNECTS}"
             )
-            # Get the sample rate and channels from the current connection if available
-            connection_info = self.active_connections.get(call_sid, {})
-            sample_rate = connection_info.get("sample_rate", 8000)
-            channels = connection_info.get("channels", 1)
-
             # Try to reconnect
-            await self._ensure_connection(call_sid, sample_rate, channels)
+            await self._ensure_connection()
 
-    async def _on_close_async(self, ws, close_event, call_sid: str):
+    async def _on_close_async(self, ws, close_event):
         """Handle WebSocket close event."""
-        logger.info(f"Deepgram connection closed for call {call_sid}")
+        logger.info(f"Deepgram connection closed for call {self.call_sid}")
 
         # Mark connection as closed
-        self.is_connected[call_sid] = False
+        self.is_connected = False
+        self.connection = None
 
-        # Clean up resources
-        if call_sid in self.active_connections:
-            self.active_connections[call_sid]["connection"] = None
-
-        # Remove the call from our tracking
-        if call_sid in self.reconnect_attempts:
-            del self.reconnect_attempts[call_sid]
-
-    async def send_audio(self, call_sid: str, audio_data: bytes) -> bool:
+    async def send_audio(self, audio_data: bytes) -> bool:
         """
-        Send audio data to an active Deepgram transcription session.
+        Send audio data to the Deepgram transcription session.
 
         Args:
-            call_sid: The Twilio call SID identifying the transcription session
             audio_data: Raw audio bytes to send to Deepgram
 
         Returns:
             bool: True if audio was sent successfully, False otherwise
         """
         # First ensure there's a connection
-        if call_sid not in self.is_connected or not self.is_connected[call_sid]:
+        if not self.is_connected:
             logger.warning(
-                f"No active connection for call: {call_sid}, attempting to reconnect"
+                f"No active connection for call: {self.call_sid}, attempting to reconnect"
             )
-            if not await self._ensure_connection(call_sid):
+            if not await self._ensure_connection():
                 return False
 
-        # Get the connection
-        connection_info = self.active_connections.get(call_sid, {})
-        connection = connection_info.get("connection")
-
-        if not connection:
-            logger.warning(f"No connection object for call: {call_sid}")
+        if not self.connection:
+            logger.warning(f"No connection object for call: {self.call_sid}")
             return False
 
         try:
@@ -363,41 +339,35 @@ class DeepgramService:
             logger.debug(f"Sending audio chunk of size: {len(audio_data)} bytes")
 
             # Send the audio data
-            await connection.send(audio_data)
+            await self.connection.send(audio_data)
             return True
         except Exception as e:
             logger.error(f"Error sending audio to Deepgram: {e}", exc_info=True)
             # Mark connection as failed
-            self.is_connected[call_sid] = False
+            self.is_connected = False
 
             # Try to reconnect on the next audio packet
             return False
 
-    async def stop_transcription(self, call_sid: str) -> None:
+    async def stop_transcription(self) -> None:
         """
-        Stop an active transcription session.
-
-        Args:
-            call_sid: The Twilio call SID identifying the transcription session
+        Stop the active transcription session.
         """
-        connection_info = self.active_connections.get(call_sid, {})
-        connection = connection_info.get("connection")
-
-        if not connection:
-            logger.warning(f"No active transcription for call: {call_sid}")
+        if not self.connection:
+            logger.warning(f"No active transcription for call: {self.call_sid}")
             return
 
         try:
             # Finish the connection
-            await connection.finish()
-            logger.info(f"Stopped Deepgram transcription for call: {call_sid}")
+            await self.connection.finish()
+            logger.info(f"Stopped Deepgram transcription for call: {self.call_sid}")
+        except asyncio.CancelledError:
+            # This is expected during shutdown - suppress the error
+            logger.info(f"Deepgram connection tasks cancelled during shutdown for call: {self.call_sid}")
         except Exception as e:
             logger.error(f"Error stopping Deepgram transcription: {e}", exc_info=True)
         finally:
             # Clean up resources
-            if call_sid in self.active_connections:
-                del self.active_connections[call_sid]
-            if call_sid in self.is_connected:
-                del self.is_connected[call_sid]
-            if call_sid in self.reconnect_attempts:
-                del self.reconnect_attempts[call_sid]
+            self.connection = None
+            self.is_connected = False
+            self.transcript_callback = None
