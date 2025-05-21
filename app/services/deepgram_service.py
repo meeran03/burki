@@ -7,7 +7,7 @@ import os
 import logging
 import asyncio
 import traceback
-from typing import Callable, Dict, Any, Optional
+from typing import Callable, Dict, Optional
 
 from deepgram import (
     DeepgramClient,
@@ -39,7 +39,7 @@ class DeepgramService:
     def get_client(cls):
         """
         Get or create the Deepgram client.
-        
+
         Returns:
             DeepgramClient: The shared Deepgram client
         """
@@ -72,13 +72,13 @@ class DeepgramService:
                     )
             except Exception as e:
                 logger.error(f"Error initializing Deepgram client: {e}", exc_info=True)
-        
+
         return cls._client
 
     def __init__(self, call_sid: Optional[str] = None):
         """
         Initialize a Deepgram service instance for a specific call.
-        
+
         Args:
             call_sid: The unique identifier for this call
         """
@@ -90,7 +90,7 @@ class DeepgramService:
         self.reconnect_attempts = 0
         self.sample_rate = 8000
         self.channels = 1
-        
+
         if call_sid:
             logger.info(f"DeepgramService initialized for call {call_sid}")
 
@@ -107,7 +107,7 @@ class DeepgramService:
             transcript_callback: Callback function to handle transcripts
             sample_rate: Audio sample rate in Hz
             channels: Number of audio channels
-            
+
         Returns:
             bool: Whether transcription was successfully started
         """
@@ -258,9 +258,13 @@ class DeepgramService:
                 speech_final = result.speech_final
                 # Log the transcript
                 if speech_final:
-                    logger.info(f"Speech Final - Transcript for {self.call_sid}: {sentence}")
+                    logger.info(
+                        f"Speech Final - Transcript for {self.call_sid}: {sentence}"
+                    )
                 elif is_final:
-                    logger.info(f"Final Result - Transcript for {self.call_sid}: {sentence}")
+                    logger.info(
+                        f"Final Result - Transcript for {self.call_sid}: {sentence}"
+                    )
                 else:
                     logger.info(
                         f"Interim Result - Transcript for {self.call_sid}: {sentence}"
@@ -363,7 +367,9 @@ class DeepgramService:
             logger.info(f"Stopped Deepgram transcription for call: {self.call_sid}")
         except asyncio.CancelledError:
             # This is expected during shutdown - suppress the error
-            logger.info(f"Deepgram connection tasks cancelled during shutdown for call: {self.call_sid}")
+            logger.info(
+                f"Deepgram connection tasks cancelled during shutdown for call: {self.call_sid}"
+            )
         except Exception as e:
             logger.error(f"Error stopping Deepgram transcription: {e}", exc_info=True)
         finally:

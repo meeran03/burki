@@ -9,7 +9,7 @@ import logging
 import asyncio
 import base64
 from typing import Optional, Dict, Any, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import websockets
 
 # Configure logging
@@ -18,18 +18,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TTSState:
-    """Represents the state of a TTS session."""
-
-    call_sid: str
-    websocket: Any = None
-    buffer: str = ""
-    is_connected: bool = False
-    audio_callback: Optional[Callable[[bytes, bool, Dict[str, Any]], None]] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -50,12 +38,37 @@ class TTSOptions:
 
 class TTSService:
     """
-    Service for handling ElevenLabs text-to-speech streaming.
-    Manages WebSocket connections and text buffering for natural speech synthesis.
+    Service for handling ElevenLabs text-to-speech streaming for a specific call.
+    Manages WebSocket connection and text buffering for natural speech synthesis.
     """
 
-    def __init__(self):
-        """Initialize the TTS service."""
+    # Available voices mapping (name -> id)
+    available_voices = {
+        "rachel": "21m00Tcm4TlvDq8ikWAM",
+        "domi": "AZnzlk1XvdvUeBnXmlld",
+        "bella": "EXAVITQu4vr4xnSDxMaL",
+        "antoni": "ErXwobaYiN019PkySvjV",
+        "elli": "MF3mGyEYCl7XYWbV9V6O",
+        "josh": "TxGEqnHWrfWFTfGW9XjX",
+        "arnold": "VR6AewLTigWG4xSOukaG",
+        "adam": "pNInz6obpgDQGcFmaJgB",
+        "sam": "yoZ06aMxZJJ28mfd3POQ",
+    }
+
+    # Available models
+    available_models = {
+        "turbo": "eleven_turbo_v2",
+        "enhanced": "eleven_enhanced_v2",
+        "multilingual": "eleven_multilingual_v2",
+    }
+
+    def __init__(self, call_sid: Optional[str] = None):
+        """
+        Initialize the TTS service for a specific call.
+
+        Args:
+            call_sid: The unique identifier for this call
+        """
         # Get API key from environment variable
         self.api_key = os.getenv("ELEVENLABS_API_KEY")
         if not self.api_key:
@@ -64,46 +77,29 @@ class TTSService:
         # ElevenLabs WebSocket base URL
         self.ws_base_url = "wss://api.elevenlabs.io/v1/text-to-speech"
 
-        # Track active TTS sessions
-        self.active_sessions: Dict[str, TTSState] = {}
-
         # Sentence-ending punctuation
         self.sentence_endings = {".", "!", "?", ":", ";"}
 
-        # Available voices mapping (name -> id)
-        self.available_voices = {
-            "rachel": "21m00Tcm4TlvDq8ikWAM",
-            "domi": "AZnzlk1XvdvUeBnXmlld",
-            "bella": "EXAVITQu4vr4xnSDxMaL",
-            "antoni": "ErXwobaYiN019PkySvjV",
-            "elli": "MF3mGyEYCl7XYWbV9V6O",
-            "josh": "TxGEqnHWrfWFTfGW9XjX",
-            "arnold": "VR6AewLTigWG4xSOukaG",
-            "adam": "pNInz6obpgDQGcFmaJgB",
-            "sam": "yoZ06aMxZJJ28mfd3POQ",
-        }
+        # Call-specific state
+        self.call_sid = call_sid
+        self.websocket = None
+        self.buffer = ""
+        self.is_connected = False
+        self.audio_callback = None
+        self.metadata = {}
 
-        # Available models
-        self.available_models = {
-            "turbo": "eleven_turbo_v2",
-            "enhanced": "eleven_enhanced_v2",
-            "multilingual": "eleven_multilingual_v2",
-        }
-
-        logger.info("TTSService initialized")
+        logger.info(f"TTSService initialized for call {call_sid}")
 
     async def start_session(
         self,
-        call_sid: str,
         options: Optional[TTSOptions] = None,
         audio_callback: Optional[Callable[[bytes, bool, Dict[str, Any]], None]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
-        Start a new TTS session for a call.
+        Start a new TTS session for this call.
 
         Args:
-            call_sid: The Twilio call SID
             options: Configuration options for TTS
             audio_callback: Callback function for handling audio data
             metadata: Additional metadata for the session
@@ -111,6 +107,10 @@ class TTSService:
         Returns:
             bool: Whether the session was started successfully
         """
+        if not self.call_sid:
+            logger.error("Cannot start TTS session without call_sid")
+            return False
+
         try:
             # Use default options if none provided
             if options is None:
@@ -133,12 +133,9 @@ class TTSService:
                 }
             )
 
-            # Initialize session state
-            self.active_sessions[call_sid] = TTSState(
-                call_sid=call_sid,
-                audio_callback=audio_callback,
-                metadata=session_metadata,
-            )
+            # Store callback and metadata
+            self.audio_callback = audio_callback
+            self.metadata = session_metadata
 
             # Connect to ElevenLabs WebSocket
             headers = {"xi-api-key": self.api_key}
@@ -159,50 +156,42 @@ class TTSService:
                 query_params.append(f"language_code={options.language}")
 
             # Construct the final WebSocket URL with the stream-input endpoint
-            ws_url = f"{self.ws_base_url}/{voice_id}/stream-input?{'&'.join(query_params)}"
+            ws_url = (
+                f"{self.ws_base_url}/{voice_id}/stream-input?{'&'.join(query_params)}"
+            )
 
             logger.info(f"Connecting to ElevenLabs with URL: {ws_url}")
 
             # Create connection with proper header passing
-            websocket = await websockets.connect(
-                ws_url,
-                additional_headers=headers
+            self.websocket = await websockets.connect(
+                ws_url, additional_headers=headers
             )
 
             # Update session state
-            self.active_sessions[call_sid].websocket = websocket
-            self.active_sessions[call_sid].is_connected = True
+            self.is_connected = True
 
             # Start a background task to receive audio chunks
-            asyncio.create_task(self._receive_audio_chunks(call_sid))
+            asyncio.create_task(self._receive_audio_chunks())
 
-            logger.info(f"Started TTS session for call {call_sid}")
+            logger.info(f"Started TTS session for call {self.call_sid}")
             return True
 
         except Exception as e:
             logger.error(
-                f"Error starting TTS session for call {call_sid}: {e}", exc_info=True
+                f"Error starting TTS session for call {self.call_sid}: {e}",
+                exc_info=True,
             )
-            if call_sid in self.active_sessions:
-                del self.active_sessions[call_sid]
             return False
 
-    async def _receive_audio_chunks(self, call_sid: str) -> None:
+    async def _receive_audio_chunks(self) -> None:
         """
         Continuously receive audio chunks from the WebSocket.
-
-        Args:
-            call_sid: The Twilio call SID
         """
-        if call_sid not in self.active_sessions:
-            return
-
-        session = self.active_sessions[call_sid]
-        if not session.websocket or not session.is_connected:
+        if not self.websocket or not self.is_connected:
             return
 
         try:
-            async for message in session.websocket:
+            async for message in self.websocket:
                 try:
                     # Parse the JSON message
                     data = json.loads(message)
@@ -213,17 +202,19 @@ class TTSService:
                         audio_data = base64.b64decode(data["audio"])
 
                         # Call the audio callback if available
-                        if session.audio_callback:
-                            await session.audio_callback(
-                                audio_data, False, {"call_sid": call_sid}  # Not final
+                        if self.audio_callback:
+                            await self.audio_callback(
+                                audio_data,
+                                False,
+                                {"call_sid": self.call_sid},  # Not final
                             )
 
                     # Handle the end of the stream
-                    if data.get("isFinal", False) and session.audio_callback:
-                        await session.audio_callback(
+                    if data.get("isFinal", False) and self.audio_callback:
+                        await self.audio_callback(
                             b"",  # Empty data for final signal
                             True,  # Final
-                            {"call_sid": call_sid},
+                            {"call_sid": self.call_sid},
                         )
 
                 except json.JSONDecodeError:
@@ -234,31 +225,23 @@ class TTSService:
                     logger.error(f"Error processing audio chunk: {e}", exc_info=True)
 
         except websockets.exceptions.ConnectionClosed:
-            logger.warning(f"WebSocket connection closed for call {call_sid}")
+            logger.warning(f"WebSocket connection closed for call {self.call_sid}")
         except Exception as e:
             logger.error(f"Error receiving audio chunks: {e}", exc_info=True)
 
-    async def process_text(
-        self, call_sid: str, text: str, force_flush: bool = False
-    ) -> bool:
+    async def process_text(self, text: str, force_flush: bool = False) -> bool:
         """
         Process text and convert to speech when appropriate.
 
         Args:
-            call_sid: The Twilio call SID
             text: The text to process
             force_flush: Whether to force immediate speech conversion
 
         Returns:
             bool: Whether the text was processed successfully
         """
-        if call_sid not in self.active_sessions:
-            logger.warning(f"No active TTS session for call {call_sid}")
-            return False
-
-        session = self.active_sessions[call_sid]
-        if not session.is_connected or not session.websocket:
-            logger.warning(f"TTS session not connected for call {call_sid}")
+        if not self.is_connected or not self.websocket:
+            logger.warning(f"TTS session not connected for call {self.call_sid}")
             return False
 
         try:
@@ -267,27 +250,27 @@ class TTSService:
                 # Split text at flush tag
                 parts = text.split("<flush/>")
                 # Add all parts except the last one to buffer
-                session.buffer += "".join(parts[:-1])
+                self.buffer += "".join(parts[:-1])
                 # Convert buffered text to speech
-                await self._convert_to_speech(call_sid)
+                await self._convert_to_speech()
                 # Add the last part to buffer
-                session.buffer += parts[-1]
+                self.buffer += parts[-1]
                 # Check if we need to convert the last part too
-                if force_flush or self._should_convert(session.buffer):
-                    await self._convert_to_speech(call_sid)
+                if force_flush or self._should_convert(self.buffer):
+                    await self._convert_to_speech()
             else:
                 # Add text to buffer
-                session.buffer += text
+                self.buffer += text
 
                 # Check if we should convert to speech
-                if force_flush or self._should_convert(session.buffer):
-                    await self._convert_to_speech(call_sid)
+                if force_flush or self._should_convert(self.buffer):
+                    await self._convert_to_speech()
 
             return True
 
         except Exception as e:
             logger.error(
-                f"Error processing text for call {call_sid}: {e}", exc_info=True
+                f"Error processing text for call {self.call_sid}: {e}", exc_info=True
             )
             return False
 
@@ -304,24 +287,20 @@ class TTSService:
         # Convert if the text ends with sentence-ending punctuation
         return any(text.rstrip().endswith(p) for p in self.sentence_endings)
 
-    async def _convert_to_speech(self, call_sid: str) -> None:
+    async def _convert_to_speech(self) -> None:
         """
         Convert buffered text to speech and send to ElevenLabs.
-
-        Args:
-            call_sid: The Twilio call SID
         """
-        session = self.active_sessions[call_sid]
-        if not session.buffer.strip():
+        if not self.buffer.strip():
             return
 
         try:
             # Get TTS settings from metadata
-            metadata = session.metadata
+            metadata = self.metadata
 
             # Prepare the message for ElevenLabs
             message = {
-                "text": session.buffer,
+                "text": self.buffer,
                 "voice_settings": {
                     "stability": metadata.get("stability", 0.5),
                     "similarity_boost": metadata.get("similarity_boost", 0.75),
@@ -339,40 +318,33 @@ class TTSService:
                 ]
 
             # Send the text to ElevenLabs
-            await session.websocket.send(json.dumps(message))
+            await self.websocket.send(json.dumps(message))
 
             # Clear the buffer
-            session.buffer = ""
+            self.buffer = ""
 
         except Exception as e:
             logger.error(
-                f"Error converting text to speech for call {call_sid}: {e}",
+                f"Error converting text to speech for call {self.call_sid}: {e}",
                 exc_info=True,
             )
             # Attempt to reconnect
-            await self._reconnect_session(call_sid)
+            await self._reconnect_session()
 
-    async def _reconnect_session(self, call_sid: str) -> bool:
+    async def _reconnect_session(self) -> bool:
         """
         Attempt to reconnect a TTS session.
-
-        Args:
-            call_sid: The Twilio call SID
 
         Returns:
             bool: Whether the reconnection was successful
         """
-        if call_sid not in self.active_sessions:
-            return False
-
-        session = self.active_sessions[call_sid]
         try:
             # Close existing connection if any
-            if session.websocket:
-                await session.websocket.close()
+            if self.websocket:
+                await self.websocket.close()
 
             # Get stored session settings
-            metadata = session.metadata
+            metadata = self.metadata
             voice_id = metadata.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
 
             # Build query parameters
@@ -387,73 +359,68 @@ class TTSService:
                 query_params.append(f"language_code={metadata['language']}")
 
             # Construct the final WebSocket URL with the stream-input endpoint
-            ws_url = f"{self.ws_base_url}/{voice_id}/stream-input?{'&'.join(query_params)}"
+            ws_url = (
+                f"{self.ws_base_url}/{voice_id}/stream-input?{'&'.join(query_params)}"
+            )
 
             # Reconnect with same settings
             headers = {"xi-api-key": self.api_key}
 
             # Use proper header passing
-            websocket = await websockets.connect(
-                ws_url,
-                additional_headers=headers
-            )
+            websocket = await websockets.connect(ws_url, additional_headers=headers)
 
             # Update session state
-            session.websocket = websocket
-            session.is_connected = True
+            self.websocket = websocket
+            self.is_connected = True
 
             # Start a new background task to receive audio chunks
-            asyncio.create_task(self._receive_audio_chunks(call_sid))
+            asyncio.create_task(self._receive_audio_chunks())
 
-            logger.info(f"Reconnected TTS session for call {call_sid}")
+            logger.info(f"Reconnected TTS session for call {self.call_sid}")
             return True
 
         except Exception as e:
             logger.error(
-                f"Error reconnecting TTS session for call {call_sid}: {e}",
+                f"Error reconnecting TTS session for call {self.call_sid}: {e}",
                 exc_info=True,
             )
-            session.is_connected = False
+            self.is_connected = False
             return False
 
-    async def end_session(self, call_sid: str) -> None:
+    async def end_session(self) -> None:
         """
         End a TTS session and clean up resources.
-
-        Args:
-            call_sid: The Twilio call SID
         """
-        if call_sid not in self.active_sessions:
-            return
-
-        session = self.active_sessions[call_sid]
         try:
             # Convert any remaining buffered text
-            if session.buffer.strip():
-                await self._convert_to_speech(call_sid)
+            if self.buffer.strip():
+                await self._convert_to_speech()
 
             # Send an empty string to close the connection properly
-            if session.websocket and session.is_connected:
+            if self.websocket and self.is_connected:
                 try:
-                    await session.websocket.send(json.dumps({"text": ""}))
+                    await self.websocket.send(json.dumps({"text": ""}))
                 except Exception:
                     pass  # Ignore errors when trying to send close message
 
             # Close WebSocket connection
-            if session.websocket:
-                await session.websocket.close()
+            if self.websocket:
+                await self.websocket.close()
+                self.websocket = None
 
-            # Clean up session
-            del self.active_sessions[call_sid]
+            # Reset state
+            self.is_connected = False
+            self.buffer = ""
 
-            logger.info(f"Ended TTS session for call {call_sid}")
+            logger.info(f"Ended TTS session for call {self.call_sid}")
 
         except Exception as e:
             logger.error(
-                f"Error ending TTS session for call {call_sid}: {e}", exc_info=True
+                f"Error ending TTS session for call {self.call_sid}: {e}", exc_info=True
             )
 
-    def get_voice_id(self, voice_name: str) -> str:
+    @classmethod
+    def get_voice_id(cls, voice_name: str) -> str:
         """
         Get a voice ID by name.
 
@@ -464,9 +431,10 @@ class TTSService:
             str: The voice ID
         """
         voice_name = voice_name.lower()
-        return self.available_voices.get(voice_name, self.available_voices["rachel"])
+        return cls.available_voices.get(voice_name, cls.available_voices["rachel"])
 
-    def get_model_id(self, model_name: str) -> str:
+    @classmethod
+    def get_model_id(cls, model_name: str) -> str:
         """
         Get a model ID by name.
 
@@ -477,62 +445,46 @@ class TTSService:
             str: The model ID
         """
         model_name = model_name.lower()
-        return self.available_models.get(model_name, self.available_models["turbo"])
+        return cls.available_models.get(model_name, cls.available_models["turbo"])
 
-    def get_session_state(self, call_sid: str) -> Optional[TTSState]:
-        """
-        Get the current state of a TTS session.
-
-        Args:
-            call_sid: The Twilio call SID
-
-        Returns:
-            Optional[TTSState]: The session state if it exists
-        """
-        return self.active_sessions.get(call_sid)
-
-    async def stop_synthesis(self, call_sid: str) -> None:
+    async def stop_synthesis(self) -> None:
         """
         Stop ongoing TTS synthesis for a call.
         This is used when an interruption is detected to immediately stop the AI from speaking.
-
-        Args:
-            call_sid: The Twilio call SID
         """
-        if call_sid not in self.active_sessions:
-            return
-
-        session = self.active_sessions[call_sid]
         try:
             # Clear any buffered text
-            session.buffer = ""
+            self.buffer = ""
 
             # Send an empty string to stop current synthesis
-            if session.websocket and session.is_connected:
+            if self.websocket and self.is_connected:
                 try:
                     # Send a message to stop current synthesis
                     stop_message = {
                         "text": "",
                         "flush": True,  # Force flush any buffered audio
-                        "stop": True,   # Signal to stop synthesis
+                        "stop": True,  # Signal to stop synthesis
                     }
-                    await session.websocket.send(json.dumps(stop_message))
+                    await self.websocket.send(json.dumps(stop_message))
                 except Exception as e:
                     logger.warning(f"Error sending stop message: {e}")
 
             # Close and reconnect the WebSocket to ensure clean state
-            if session.websocket:
+            if self.websocket:
                 try:
-                    await session.websocket.close()
+                    await self.websocket.close()
                 except Exception:
                     pass  # Ignore errors when closing
 
             # Reconnect to ensure clean state for future synthesis
-            await self._reconnect_session(call_sid)
+            await self._reconnect_session()
 
-            logger.info(f"Stopped TTS synthesis for call {call_sid}")
+            logger.info(f"Stopped TTS synthesis for call {self.call_sid}")
 
         except Exception as e:
-            logger.error(f"Error stopping TTS synthesis for call {call_sid}: {e}", exc_info=True)
+            logger.error(
+                f"Error stopping TTS synthesis for call {self.call_sid}: {e}",
+                exc_info=True,
+            )
             # Attempt to reconnect in case of errors
-            await self._reconnect_session(call_sid)
+            await self._reconnect_session()

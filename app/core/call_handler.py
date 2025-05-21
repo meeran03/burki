@@ -47,6 +47,7 @@ class CallState:
     is_in_cooldown: bool = False  # Track if we're in cooldown period
     llm_service: Optional[Any] = None  # LLM service for this call
     deepgram_service: Optional[Any] = None  # Deepgram service for this call
+    tts_service: Optional[Any] = None  # TTS service for this call
 
 
 class CallHandler:
@@ -67,8 +68,7 @@ class CallHandler:
             system_prompt: Optional custom system prompt for the LLM
             custom_llm_url: Optional URL for custom LLM endpoint
         """
-        # Initialize TTS service
-        self.tts_service = TTSService()
+        # Store configuration for call-specific service instances
         self.system_prompt = system_prompt
         self.custom_llm_url = custom_llm_url
 
@@ -102,8 +102,6 @@ class CallHandler:
             metadata=metadata or {},
         )
 
-        # Create a dedicated LLM service instance for this call
-        from app.services.llm_service import LLMService
         self.active_calls[call_sid].llm_service = LLMService(
             call_sid=call_sid,
             to_number=to_number,
@@ -112,18 +110,12 @@ class CallHandler:
             system_prompt=self.system_prompt,
         )
 
-        # Create a dedicated Deepgram service instance for this call
-        from app.services.deepgram_service import DeepgramService
-        self.active_calls[call_sid].deepgram_service = DeepgramService(call_sid=call_sid)
 
-        # Start TTS session
-        tts_options = TTSOptions(
-            voice_id=self.tts_service.get_voice_id("rachel"),  # Default voice
-            model_id=self.tts_service.get_model_id(
-                "turbo"
-            ),  # Turbo model for low latency
-            latency=1,  # Lowest latency
+        self.active_calls[call_sid].deepgram_service = DeepgramService(
+            call_sid=call_sid
         )
+
+        self.active_calls[call_sid].tts_service = TTSService(call_sid=call_sid)
 
         # Define audio callback to handle TTS audio
         async def audio_callback(
@@ -131,12 +123,22 @@ class CallHandler:
         ) -> None:
             await self._handle_tts_audio(call_sid, audio_data, is_final, audio_metadata)
 
-        await self.tts_service.start_session(
-            call_sid=call_sid,
+        # Start TTS session
+        tts_options = TTSOptions(
+            voice_id=TTSService.get_voice_id("rachel"),  # Default voice
+            model_id=TTSService.get_model_id("turbo"),  # Turbo model for low latency
+            latency=1,  # Lowest latency
+        )
+
+        await self.active_calls[call_sid].tts_service.start_session(
             options=tts_options,
             audio_callback=audio_callback,
             metadata={"call_sid": call_sid},
         )
+
+        # Start Deepgram transcription
+        sample_rate = int(metadata.get("media_format", {}).get("rate", 8000))
+        channels = int(metadata.get("media_format", {}).get("channels", 1))
 
         # Define transcription callback
         async def transcription_callback(
@@ -149,11 +151,9 @@ class CallHandler:
                 metadata=metadata,
             )
 
-        # Start Deepgram transcription
-        sample_rate = int(metadata.get("media_format", {}).get("rate", 8000))
-        channels = int(metadata.get("media_format", {}).get("channels", 1))
-        
-        success = await self.active_calls[call_sid].deepgram_service.start_transcription(
+        success = await self.active_calls[
+            call_sid
+        ].deepgram_service.start_transcription(
             transcript_callback=transcription_callback,
             sample_rate=sample_rate,
             channels=channels,
@@ -161,6 +161,12 @@ class CallHandler:
 
         if success:
             logger.info(f"Started transcription for call: {call_sid}")
+
+            # Send a welcome message via TTS
+            await self.active_calls[call_sid].tts_service.process_text(
+                text="Hello! I'm your AI assistant. How can I help you today?<flush/>",
+                force_flush=True,
+            )
         else:
             logger.error(f"Failed to start transcription for call: {call_sid}")
 
@@ -247,7 +253,7 @@ class CallHandler:
             await self.active_calls[call_sid].websocket.send_json(clear_message)
 
             # Stop TTS synthesis
-            await self.tts_service.stop_synthesis(call_sid)
+            await self.active_calls[call_sid].tts_service.stop_synthesis()
 
             # Reset speaking state
             self.active_calls[call_sid].is_ai_speaking = False
@@ -324,8 +330,7 @@ class CallHandler:
 
             # Process text through TTS service
             if content:
-                await self.tts_service.process_text(
-                    call_sid=call_sid,
+                await self.active_calls[call_sid].tts_service.process_text(
                     text=content,
                     force_flush=is_final,  # Force flush when it's the final response
                 )
@@ -503,7 +508,9 @@ class CallHandler:
 
         try:
             # Send audio to Deepgram
-            return await self.active_calls[call_sid].deepgram_service.send_audio(audio_data)
+            return await self.active_calls[call_sid].deepgram_service.send_audio(
+                audio_data
+            )
         except Exception as e:
             logger.error(
                 f"Error handling audio for call {call_sid}: {e}", exc_info=True
@@ -529,26 +536,26 @@ class CallHandler:
             # If we need to end the call with Twilio, use TwilioService
             if with_twilio:
                 from app.twilio.twilio_service import TwilioService
-                
+
                 # Attempt to end the call using TwilioService
                 end_success = TwilioService.end_call(call_sid=call_sid)
-                
+
                 if end_success:
                     logger.info(f"Successfully ended call {call_sid} via Twilio API")
                 else:
                     logger.error(f"Failed to end call {call_sid} via Twilio API")
-                
+
                 return
 
             # Stop transcription first
             await self.active_calls[call_sid].deepgram_service.stop_transcription()
 
             # End TTS session
-            await self.tts_service.end_session(call_sid)
+            await self.active_calls[call_sid].tts_service.end_session()
 
             # Clean up call state - save a reference for logging before deletion
             call_state = self.active_calls.get(call_sid)
-            
+
             # Only try to delete if the key still exists (may have been removed by another concurrent process)
             if call_sid in self.active_calls:
                 del self.active_calls[call_sid]
