@@ -1,7 +1,6 @@
 # pylint: disable=logging-fstring-interpolation, broad-exception-caught
 import logging
 from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 

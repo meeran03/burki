@@ -62,17 +62,38 @@ class TTSService:
         "multilingual": "eleven_multilingual_v2",
     }
 
-    def __init__(self, call_sid: Optional[str] = None):
+    def __init__(
+        self,
+        call_sid: Optional[str] = None,
+        api_key: Optional[str] = None,
+        voice_id: Optional[str] = None,
+        model_id: Optional[str] = None,
+        stability: float = 0.5,
+        similarity_boost: float = 0.75,
+        style: float = 0.0,
+        use_speaker_boost: bool = True,
+        latency: int = 1,
+    ):
         """
         Initialize the TTS service for a specific call.
 
         Args:
             call_sid: The unique identifier for this call
+            api_key: Optional custom API key for this call
+            voice_id: The voice ID to use (default is Rachel)
+            model_id: The model ID to use (default is Turbo)
+            stability: Voice stability (0.0-1.0)
+            similarity_boost: Voice similarity boost (0.0-1.0)
+            style: Speaking style (0.0-1.0)
+            use_speaker_boost: Enhance speech clarity and fidelity
+            latency: 1-4, where 1 is lowest latency
         """
-        # Get API key from environment variable
-        self.api_key = os.getenv("ELEVENLABS_API_KEY")
+        # Get API key from parameter or environment variable
+        self.api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
         if not self.api_key:
-            raise ValueError("ELEVENLABS_API_KEY environment variable is not set")
+            raise ValueError(
+                "ELEVENLABS_API_KEY environment variable is not set and no API key provided"
+            )
 
         # ElevenLabs WebSocket base URL
         self.ws_base_url = "wss://api.elevenlabs.io/v1/text-to-speech"
@@ -88,6 +109,15 @@ class TTSService:
         self.audio_callback = None
         self.metadata = {}
 
+        # Store TTS settings
+        self.voice_id = voice_id or self.get_voice_id("rachel")
+        self.model_id = model_id or self.get_model_id("turbo")
+        self.stability = stability
+        self.similarity_boost = similarity_boost
+        self.style = style
+        self.use_speaker_boost = use_speaker_boost
+        self.latency = latency
+
         logger.info(f"TTSService initialized for call {call_sid}")
 
     async def start_session(
@@ -100,7 +130,7 @@ class TTSService:
         Start a new TTS session for this call.
 
         Args:
-            options: Configuration options for TTS
+            options: Configuration options for TTS (optional, will use instance defaults if not provided)
             audio_callback: Callback function for handling audio data
             metadata: Additional metadata for the session
 
@@ -112,24 +142,31 @@ class TTSService:
             return False
 
         try:
-            # Use default options if none provided
-            if options is None:
-                options = TTSOptions()
+            # Use options from parameters or instance settings
+            session_options = options or TTSOptions(
+                voice_id=self.voice_id,
+                model_id=self.model_id,
+                stability=self.stability,
+                similarity_boost=self.similarity_boost,
+                style=self.style,
+                use_speaker_boost=self.use_speaker_boost,
+                latency=self.latency,
+            )
 
             # Store options in metadata for reconnection
             session_metadata = metadata or {}
             session_metadata.update(
                 {
-                    "voice_id": options.voice_id,
-                    "model_id": options.model_id,
-                    "stability": options.stability,
-                    "similarity_boost": options.similarity_boost,
-                    "style": options.style,
-                    "use_speaker_boost": options.use_speaker_boost,
-                    "latency": options.latency,
-                    "conditioning_phrase": options.conditioning_phrase,
-                    "language": options.language,
-                    "output_format": options.output_format,
+                    "voice_id": session_options.voice_id,
+                    "model_id": session_options.model_id,
+                    "stability": session_options.stability,
+                    "similarity_boost": session_options.similarity_boost,
+                    "style": session_options.style,
+                    "use_speaker_boost": session_options.use_speaker_boost,
+                    "latency": session_options.latency,
+                    "conditioning_phrase": session_options.conditioning_phrase,
+                    "language": session_options.language,
+                    "output_format": session_options.output_format,
                 }
             )
 
@@ -141,19 +178,19 @@ class TTSService:
             headers = {"xi-api-key": self.api_key}
 
             # Build the WebSocket URL with the voice_id in the path
-            voice_id = options.voice_id
+            voice_id = session_options.voice_id
 
             # Build query parameters
             query_params = [
-                f"model_id={options.model_id}",
-                f"optimize_streaming_latency={options.latency}",
-                f"output_format={options.output_format}",
+                f"model_id={session_options.model_id}",
+                f"optimize_streaming_latency={session_options.latency}",
+                f"output_format={session_options.output_format}",
                 "sample_rate=8000",  # Explicitly set sample rate to 8000Hz for Twilio
             ]
 
             # Add optional parameters
-            if options.language:
-                query_params.append(f"language_code={options.language}")
+            if session_options.language:
+                query_params.append(f"language_code={session_options.language}")
 
             # Construct the final WebSocket URL with the stream-input endpoint
             ws_url = (

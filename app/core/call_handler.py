@@ -12,7 +12,8 @@ from fastapi import WebSocket
 
 from app.services.deepgram_service import DeepgramService
 from app.services.llm_service import LLMService
-from app.services.tts_service import TTSService, TTSOptions
+from app.services.tts_service import TTSService
+from app.twilio.twilio_service import TwilioService
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +49,7 @@ class CallState:
     llm_service: Optional[Any] = None  # LLM service for this call
     deepgram_service: Optional[Any] = None  # Deepgram service for this call
     tts_service: Optional[Any] = None  # TTS service for this call
+    assistant: Optional[Any] = None  # Assistant to use for this call
 
 
 class CallHandler:
@@ -82,6 +84,7 @@ class CallHandler:
         to_number: Optional[str] = None,
         from_number: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        assistant: Optional[Any] = None,
     ) -> None:
         """
         Start handling a new call.
@@ -92,6 +95,7 @@ class CallHandler:
             to_number: The destination phone number
             from_number: The caller's phone number
             metadata: Additional call metadata
+            assistant: The assistant to use for this call
         """
         # Initialize call state
         self.active_calls[call_sid] = CallState(
@@ -100,22 +104,105 @@ class CallHandler:
             to_number=to_number,
             from_number=from_number,
             metadata=metadata or {},
+            assistant=assistant,
         )
 
+        # Set interruption settings from assistant if available
+        if assistant and assistant.interruption_settings:
+            settings = assistant.interruption_settings
+            self.active_calls[call_sid].interruption_threshold = settings.get(
+                "interruption_threshold", 3
+            )
+            self.active_calls[call_sid].min_speaking_time = settings.get(
+                "min_speaking_time", 0.5
+            )
+            self.active_calls[call_sid].interruption_cooldown = settings.get(
+                "interruption_cooldown", 2.0
+            )
+
+        # Get LLM configuration from assistant
+        custom_llm_url = None
+        system_prompt = None
+        llm_settings = {}
+
+        if assistant:
+            # Use custom LLM URL from assistant if available
+            custom_llm_url = assistant.custom_llm_url or self.custom_llm_url
+
+            # Get LLM settings from assistant
+            if assistant.llm_settings:
+                llm_settings = assistant.llm_settings
+                system_prompt = llm_settings.get("system_prompt", self.system_prompt)
+
+        # Create a dedicated LLM service instance for this call
         self.active_calls[call_sid].llm_service = LLMService(
             call_sid=call_sid,
             to_number=to_number,
             from_number=from_number,
-            custom_llm_url=self.custom_llm_url,
-            system_prompt=self.system_prompt,
+            custom_llm_url=custom_llm_url,
+            system_prompt=system_prompt,
         )
 
+        # Get Deepgram configuration from assistant
+        deepgram_api_key = None
+        stt_settings = {}
 
+        if assistant:
+            deepgram_api_key = assistant.deepgram_api_key
+            if assistant.stt_settings:
+                stt_settings = assistant.stt_settings
+
+        # Create Deepgram service with assistant settings
         self.active_calls[call_sid].deepgram_service = DeepgramService(
-            call_sid=call_sid
+            call_sid=call_sid,
+            api_key=deepgram_api_key,
+            model=stt_settings.get("model", "nova-3"),
+            language=stt_settings.get("language", "en-US"),
+            punctuate=stt_settings.get("punctuate", True),
+            interim_results=stt_settings.get("interim_results", True),
+            endpointing=stt_settings.get("endpointing", {}).get(
+                "silence_threshold", 100
+            ),
+            utterance_end_ms=stt_settings.get("utterance_end_ms", 1000),
+            smart_format=stt_settings.get("smart_format", True),
         )
 
-        self.active_calls[call_sid].tts_service = TTSService(call_sid=call_sid)
+        # Get TTS configuration from assistant
+        elevenlabs_api_key = None
+        voice_id = None
+        model_id = None
+        stability = 0.5
+        similarity_boost = 0.75
+        style = 0.0
+        use_speaker_boost = True
+        latency = 1
+
+        if assistant and assistant.tts_settings:
+            # Get ElevenLabs API key
+            elevenlabs_api_key = assistant.elevenlabs_api_key
+
+            # Extract TTS settings
+            settings = assistant.tts_settings
+            voice_id = TTSService.get_voice_id(settings.get("voice_id", "rachel"))
+            model_id = TTSService.get_model_id(settings.get("model_id", "turbo"))
+            stability = settings.get("stability", 0.5)
+            similarity_boost = settings.get("similarity_boost", 0.75)
+            style = settings.get("style", 0.0)
+            use_speaker_boost = settings.get("use_speaker_boost", True)
+            latency = settings.get("latency", 1)
+
+        # Create TTS service with assistant settings
+        self.active_calls[call_sid].tts_service = TTSService(
+            call_sid=call_sid,
+            api_key=elevenlabs_api_key,
+            voice_id=voice_id,
+            model_id=model_id,
+            stability=stability,
+            similarity_boost=similarity_boost,
+            style=style,
+            use_speaker_boost=use_speaker_boost,
+            latency=latency,
+        )
 
         # Define audio callback to handle TTS audio
         async def audio_callback(
@@ -123,15 +210,8 @@ class CallHandler:
         ) -> None:
             await self._handle_tts_audio(call_sid, audio_data, is_final, audio_metadata)
 
-        # Start TTS session
-        tts_options = TTSOptions(
-            voice_id=TTSService.get_voice_id("rachel"),  # Default voice
-            model_id=TTSService.get_model_id("turbo"),  # Turbo model for low latency
-            latency=1,  # Lowest latency
-        )
-
+        # Start TTS session with configured options
         await self.active_calls[call_sid].tts_service.start_session(
-            options=tts_options,
             audio_callback=audio_callback,
             metadata={"call_sid": call_sid},
         )
@@ -151,6 +231,7 @@ class CallHandler:
                 metadata=metadata,
             )
 
+        # Start transcription with sample rate and channels from media format
         success = await self.active_calls[
             call_sid
         ].deepgram_service.start_transcription(
@@ -162,9 +243,22 @@ class CallHandler:
         if success:
             logger.info(f"Started transcription for call: {call_sid}")
 
+            # Get welcome message from assistant or use default
+            welcome_message = (
+                "Hello! I'm your AI assistant. How can I help you today?<flush/>"
+            )
+            if (
+                assistant
+                and assistant.llm_settings
+                and "welcome_message" in assistant.llm_settings
+            ):
+                welcome_message = (
+                    assistant.llm_settings.get("welcome_message") + "<flush/>"
+                )
+
             # Send a welcome message via TTS
             await self.active_calls[call_sid].tts_service.process_text(
-                text="Hello! I'm your AI assistant. How can I help you today?<flush/>",
+                text=welcome_message,
                 force_flush=True,
             )
         else:
@@ -309,9 +403,6 @@ class CallHandler:
                     destination = metadata.get("destination")
                     if destination:
                         logger.info(f"Transferring call {call_sid} to {destination}")
-
-                        # Import TwilioService for call transfer
-                        from app.twilio.twilio_service import TwilioService
 
                         # Attempt to transfer the call using TwilioService
                         transfer_success = TwilioService.transfer_call(
@@ -535,9 +626,6 @@ class CallHandler:
 
             # If we need to end the call with Twilio, use TwilioService
             if with_twilio:
-                from app.twilio.twilio_service import TwilioService
-
-                # Attempt to end the call using TwilioService
                 end_success = TwilioService.end_call(call_sid=call_sid)
 
                 if end_success:

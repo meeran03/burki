@@ -284,6 +284,16 @@
                                                 placeholder="You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.">{{ assistant.llm_settings.system_prompt if assistant and assistant.llm_settings else 'You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.' }}</textarea>
                                         </div>
                                     </div>
+                                    
+                                    <div class="col-span-6">
+                                        <label for="welcome_message" class="block text-sm font-medium text-gray-700">Welcome Message</label>
+                                        <div class="mt-1">
+                                            <textarea id="welcome_message" name="welcome_message" rows="2"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="Hello! I'm your AI assistant. How can I help you today?">{{ assistant.llm_settings.welcome_message if assistant and assistant.llm_settings else 'Hello! I\'m your AI assistant. How can I help you today?' }}</textarea>
+                                        </div>
+                                        <p class="mt-1 text-xs text-gray-500">This message is spoken when the call is first answered.</p>
+                                    </div>
                                 </div>
                             </div>
 

@@ -36,13 +36,36 @@ class DeepgramService:
     _client = None
 
     @classmethod
-    def get_client(cls):
+    def get_client(cls, api_key: Optional[str] = None):
         """
         Get or create the Deepgram client.
 
+        Args:
+            api_key: Optional API key to use instead of environment variable
+
         Returns:
-            DeepgramClient: The shared Deepgram client
+            DeepgramClient: The Deepgram client
         """
+        # If we're using a custom API key for this instance, create a new client
+        if api_key:
+            # Create client options with keepalive for better connection stability
+            client_options = DeepgramClientOptions(
+                options={
+                    "keepalive": "true",
+                }
+            )
+            try:
+                client = DeepgramClient(api_key, client_options)
+                logger.info("Deepgram client initialized with custom API key")
+                return client
+            except Exception as e:
+                logger.error(
+                    f"Error initializing Deepgram client with custom API key: {e}",
+                    exc_info=True,
+                )
+                # Fall back to shared client
+
+        # Otherwise use the shared client
         if cls._client is None:
             # Get API key from environment variable
             api_key = os.getenv("DEEPGRAM_API_KEY")
@@ -75,21 +98,55 @@ class DeepgramService:
 
         return cls._client
 
-    def __init__(self, call_sid: Optional[str] = None):
+    def __init__(
+        self,
+        call_sid: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: str = "nova-3",
+        language: str = "en-US",
+        punctuate: bool = True,
+        interim_results: bool = True,
+        endpointing: int = 100,
+        utterance_end_ms: int = 1000,
+        smart_format: bool = True,
+        **options,
+    ):
         """
         Initialize a Deepgram service instance for a specific call.
 
         Args:
             call_sid: The unique identifier for this call
+            api_key: Optional custom API key for this call
+            model: Deepgram model to use (default: "nova-3")
+            language: Language code (default: "en-US")
+            punctuate: Whether to add punctuation (default: True)
+            interim_results: Whether to provide interim results (default: True)
+            endpointing: Time in ms for silence detection (default: 100)
+            utterance_end_ms: Time in ms to wait before ending utterance (default: 1000)
+            smart_format: Whether to apply smart formatting (default: True)
+            **options: Additional configuration options
         """
         self.call_sid = call_sid
-        self.deepgram = self.get_client()
+        self.api_key = api_key  # Store instance-specific API key
+        self.deepgram = self.get_client(
+            api_key
+        )  # Use instance-specific API key if provided
         self.connection = None
         self.transcript_callback = None
         self.is_connected = False
         self.reconnect_attempts = 0
         self.sample_rate = 8000
         self.channels = 1
+
+        # Store configuration options
+        self.model = model
+        self.language = language
+        self.punctuate = punctuate
+        self.interim_results = interim_results
+        self.endpointing = endpointing
+        self.utterance_end_ms = utterance_end_ms
+        self.smart_format = smart_format
+        self.options = options
 
         if call_sid:
             logger.info(f"DeepgramService initialized for call {call_sid}")
@@ -166,25 +223,25 @@ class DeepgramService:
             # Store connection
             self.connection = connection
 
-            # Configure options for streaming audio
-            options = LiveOptions(
-                model="nova-3",  # Use Nova-3 as requested
-                punctuate=True,
-                language="en-US",
+            # Configure options for streaming audio using instance settings
+            live_options = LiveOptions(
+                model=self.model,
+                punctuate=self.punctuate,
+                language=self.language,
                 encoding="mulaw",  # Twilio uses mulaw encoding
                 channels=self.channels,
                 sample_rate=self.sample_rate,
-                endpointing=100,  # More responsive stopping of conversation
-                utterance_end_ms=1000,  # Word-based silence detector (1 second)
-                smart_format=True,
-                interim_results=True,  # Enable for real-time responses
+                endpointing=self.endpointing,
+                utterance_end_ms=self.utterance_end_ms,
+                smart_format=self.smart_format,
+                interim_results=self.interim_results,
             )
 
             # Start the connection
             try:
-                await connection.start(options)
+                await connection.start(live_options)
                 logger.info(
-                    f"Started Deepgram Nova-3 transcription for call {self.call_sid}"
+                    f"Started Deepgram transcription with model {self.model} for call {self.call_sid}"
                 )
 
                 # Connection start was successful if we get here
@@ -192,22 +249,24 @@ class DeepgramService:
                 self.reconnect_attempts = 0
                 return True
             except Exception as e:
-                logger.error(f"Failed to start with Nova-3 model, trying fallback: {e}")
+                logger.error(
+                    f"Failed to start with model {self.model}, trying fallback: {e}"
+                )
                 try:
                     # Try with nova-2 model as fallback
-                    options = LiveOptions(
+                    fallback_options = LiveOptions(
                         model="nova-2",  # Fallback to Nova-2
-                        punctuate=True,
-                        language="en-US",
+                        punctuate=self.punctuate,
+                        language=self.language,
                         encoding="mulaw",  # Twilio uses mulaw encoding
                         channels=self.channels,
                         sample_rate=self.sample_rate,
-                        endpointing=100,
-                        utterance_end_ms=1000,
-                        smart_format=True,
-                        interim_results=True,
+                        endpointing=self.endpointing,
+                        utterance_end_ms=self.utterance_end_ms,
+                        smart_format=self.smart_format,
+                        interim_results=self.interim_results,
                     )
-                    await connection.start(options)
+                    await connection.start(fallback_options)
                     logger.info(
                         f"Started Deepgram Nova-2 transcription (fallback) for call {self.call_sid}"
                     )

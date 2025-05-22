@@ -159,6 +159,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "media_format": media_format,
                                 "tracks": tracks,
                             },
+                            assistant=assistant,
                         )
 
                         # The welcome message is now handled in the call_handler.start_call method

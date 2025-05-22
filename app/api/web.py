@@ -97,6 +97,7 @@ async def create_assistant(
     llm_temperature: Optional[float] = Form(None),
     llm_max_tokens: Optional[int] = Form(None),
     llm_system_prompt: Optional[str] = Form(None),
+    welcome_message: Optional[str] = Form(None),
     # TTS Settings
     tts_voice_id: Optional[str] = Form(None),
     tts_model_id: Optional[str] = Form(None),
@@ -140,19 +141,25 @@ async def create_assistant(
             status_code=400,
         )
 
+    # Helper function to convert empty strings to None
+    def empty_to_none(value):
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
+
     # Create assistant data with JSON settings
     assistant_data = {
         "name": name,
         "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
-        # API Keys
-        "openai_api_key": openai_api_key,
-        "deepgram_api_key": deepgram_api_key,
-        "elevenlabs_api_key": elevenlabs_api_key,
-        "twilio_account_sid": twilio_account_sid,
-        "twilio_auth_token": twilio_auth_token,
-        "custom_llm_url": custom_llm_url,
+        # API Keys - Convert empty strings to None
+        "openai_api_key": empty_to_none(openai_api_key),
+        "deepgram_api_key": empty_to_none(deepgram_api_key),
+        "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
+        "twilio_account_sid": empty_to_none(twilio_account_sid),
+        "twilio_auth_token": empty_to_none(twilio_auth_token),
+        "custom_llm_url": empty_to_none(custom_llm_url),
         # JSON Settings
         "llm_settings": (
             {
@@ -160,8 +167,9 @@ async def create_assistant(
                 "temperature": llm_temperature,
                 "max_tokens": llm_max_tokens,
                 "system_prompt": llm_system_prompt,
+                "welcome_message": empty_to_none(welcome_message),
             }
-            if any([llm_model, llm_temperature, llm_max_tokens, llm_system_prompt])
+            if any([llm_model, llm_temperature, llm_max_tokens, llm_system_prompt, welcome_message])
             else None
         ),
         "tts_settings": (
@@ -321,6 +329,7 @@ async def update_assistant(
     llm_temperature: Optional[float] = Form(None),
     llm_max_tokens: Optional[int] = Form(None),
     llm_system_prompt: Optional[str] = Form(None),
+    welcome_message: Optional[str] = Form(None),
     # TTS Settings
     tts_voice_id: Optional[str] = Form(None),
     tts_model_id: Optional[str] = Form(None),
@@ -369,19 +378,25 @@ async def update_assistant(
                 status_code=400,
             )
 
+    # Helper function to convert empty strings to None
+    def empty_to_none(value):
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
+
     # Create update data with JSON settings
     update_data = {
         "name": name,
         "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
-        # API Keys
-        "openai_api_key": openai_api_key or None,
-        "deepgram_api_key": deepgram_api_key or None,
-        "elevenlabs_api_key": elevenlabs_api_key or None,
-        "twilio_account_sid": twilio_account_sid or None,
-        "twilio_auth_token": twilio_auth_token or None,
-        "custom_llm_url": custom_llm_url or None,
+        # API Keys - Convert empty strings to None
+        "openai_api_key": empty_to_none(openai_api_key),
+        "deepgram_api_key": empty_to_none(deepgram_api_key),
+        "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
+        "twilio_account_sid": empty_to_none(twilio_account_sid),
+        "twilio_auth_token": empty_to_none(twilio_auth_token),
+        "custom_llm_url": empty_to_none(custom_llm_url),
         # JSON Settings
         "llm_settings": (
             {
@@ -389,8 +404,9 @@ async def update_assistant(
                 "temperature": llm_temperature,
                 "max_tokens": llm_max_tokens,
                 "system_prompt": llm_system_prompt,
+                "welcome_message": empty_to_none(welcome_message),
             }
-            if any([llm_model, llm_temperature, llm_max_tokens, llm_system_prompt])
+            if any([llm_model, llm_temperature, llm_max_tokens, llm_system_prompt, welcome_message])
             else None
         ),
         "tts_settings": (
@@ -459,7 +475,7 @@ async def update_assistant(
             else None
         ),
         # Call control settings
-        "end_call_message": end_call_message or None,
+        "end_call_message": empty_to_none(end_call_message),
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout,
     }
