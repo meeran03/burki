@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buraaq Voice AI - Next-Generation Enterprise Voice Intelligence Platform</title>
+    <meta name="description" content="Transform your business with Arabic-powered Voice AI. Real-time analytics, multilingual support, and enterprise-grade security for modern organizations.">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Styles -->
+    <style>
+        :root {
+            --gradient-primary: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            --gradient-secondary: linear-gradient(135deg, #6366f1, #3b82f6);
+            --gradient-accent: linear-gradient(135deg, #8b5cf6, #ec4899);
+            --glass-bg: rgba(30, 41, 59, 0.3);
+            --glass-border: rgba(148, 163, 184, 0.1);
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f172a;
+        }
+        
+        .glass-morphism {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+        }
+        
+        .gradient-text {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .glow-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .glow-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
+                        0 10px 10px -5px rgba(0, 0, 0, 0.04),
+                        0 0 0 1px rgba(59, 130, 246, 0.2);
+        }
+        
+        .floating {
+            animation: floating 3s ease-in-out infinite;
+        }
+        
+        @keyframes floating {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .fade-in {
+            animation: fadeInUp 0.8s ease-out forwards;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Staggered animation delays */
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+        .delay-400 { animation-delay: 0.4s; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <!-- Navigation -->
+    <nav class="fixed top-0 w-full z-50 glass-morphism">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+                        <span class="text-white font-bold text-lg">ب</span>
+                    </div>
+                    <h1 class="text-2xl font-bold gradient-text">Buraaq</h1>
+                    <span class="text-gray-400 text-sm">Voice AI</span>
+                </div>
+                
+                <!-- Navigation Links -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#features" class="text-gray-300 hover:text-white transition-colors">Features</a>
+                    <a href="#analytics" class="text-gray-300 hover:text-white transition-colors">Analytics</a>
+                    <a href="#enterprise" class="text-gray-300 hover:text-white transition-colors">Enterprise</a>
+                    <a href="#pricing" class="text-gray-300 hover:text-white transition-colors">Pricing</a>
+                </div>
+                
+                <!-- CTA Buttons -->
+                <div class="flex items-center space-x-4">
+                    <a href="/dashboard" class="text-gray-300 hover:text-white transition-colors">Dashboard</a>
+                    <a href="#demo" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all duration-300 shadow-lg">
+                        Get Started
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+        <!-- Background Elements -->
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-indigo-900/20"></div>
+        <div class="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-gradient-to-br from-blue-500/10 to-purple-500/10 floating"></div>
+        <div class="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-gradient-to-br from-purple-500/10 to-pink-500/10 floating" style="animation-delay: 1s;"></div>
+        
+        <div class="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 text-center">
+            <!-- Main Heading -->
+            <div class="fade-in">
+                <h1 class="text-5xl md:text-7xl font-bold mb-6">
+                    <span class="gradient-text">Voice Intelligence</span><br>
+                    <span class="text-white">Redefined</span>
+                </h1>
+            </div>
+            
+            <!-- Subheading -->
+            <div class="fade-in delay-100">
+                <p class="text-xl md:text-2xl text-gray-300 mb-8 max-w-4xl mx-auto leading-relaxed">
+                    Harness the power of Arabic heritage and cutting-edge AI to transform your enterprise communications. 
+                    Real-time analytics, multilingual processing, and unmatched performance.
+                </p>
+            </div>
+            
+            <!-- CTA Buttons -->
+            <div class="fade-in delay-200 flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6 mb-12">
+                <a href="/dashboard" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
+                    Start Free Trial
+                </a>
+                <a href="#features" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
+                    Explore Features
+                </a>
+            </div>
+            
+            <!-- Hero Stats -->
+            <div class="fade-in delay-300 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                <div class="glass-morphism rounded-xl p-6 glow-hover">
+                    <div class="text-3xl font-bold gradient-text mb-2">99.7%</div>
+                    <div class="text-gray-400">Accuracy Rate</div>
+                </div>
+                <div class="glass-morphism rounded-xl p-6 glow-hover">
+                    <div class="text-3xl font-bold gradient-text mb-2">1.2s</div>
+                    <div class="text-gray-400">Response Time</div>
+                </div>
+                <div class="glass-morphism rounded-xl p-6 glow-hover">
+                    <div class="text-3xl font-bold gradient-text mb-2">24/7</div>
+                    <div class="text-gray-400">Enterprise Support</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 relative">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8">
+            <!-- Section Header -->
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                    <span class="gradient-text">Enterprise-Grade</span> Voice Intelligence
+                </h2>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto">
+                    Built for modern enterprises that demand performance, security, and cultural authenticity
+                </p>
+            </div>
+            
+            <!-- Features Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Real-time Analytics -->
+                <div class="glass-morphism rounded-xl p-8 glow-hover">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-4">Real-time Analytics</h3>
+                    <p class="text-gray-400 mb-6">Advanced voice analytics with instant insights, sentiment analysis, and performance metrics.</p>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-400">Processing Speed</span>
+                            <span class="text-green-400">Real-time</span>
+                        </div>
+                        <div class="w-full h-2 bg-gray-700 rounded-full">
+                            <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full" style="width: 98%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Multilingual Support -->
+                <div class="glass-morphism rounded-xl p-8 glow-hover">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-4">Arabic Heritage</h3>
+                    <p class="text-gray-400 mb-6">Native Arabic language processing with cultural nuances and multilingual capabilities.</p>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">العربية</span>
+                        <span class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">English</span>
+                        <span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm">Français</span>
+                    </div>
+                </div>
+                
+                <!-- Enterprise Security -->
+                <div class="glass-morphism rounded-xl p-8 glow-hover">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-4">Enterprise Security</h3>
+                    <p class="text-gray-400 mb-6">Bank-grade encryption, GDPR compliance, and enterprise-level data protection.</p>
+                    <div class="space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                            <span class="text-sm text-gray-300">End-to-end encryption</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                            <span class="text-sm text-gray-300">GDPR compliant</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI-Powered Insights -->
+                <div class="glass-morphism rounded-xl p-8 glow-hover">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-4">AI-Powered Insights</h3>
+                    <p class="text-gray-400 mb-6">Machine learning algorithms that continuously improve and provide actionable insights.</p>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-400">Learning Accuracy</span>
+                            <span class="text-pink-400">95.3%</span>
+                        </div>
+                        <div class="w-full h-2 bg-gray-700 rounded-full">
+                            <div class="h-full bg-gradient-to-r from-pink-500 to-pink-400 rounded-full" style="width: 95%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Scalable Infrastructure -->
+                <div class="glass-morphism rounded-xl p-8 glow-hover">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-4">Scalable Infrastructure</h3>
+                    <p class="text-gray-400 mb-6">Cloud-native architecture that scales from startups to enterprise with 99.9% uptime.</p>
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div>
+                            <div class="text-lg font-bold text-indigo-400">99.9%</div>
+                            <div class="text-xs text-gray-500">Uptime</div>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-indigo-400">Auto</div>
+                            <div class="text-xs text-gray-500">Scaling</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Developer API -->
+                <div class="glass-morphism rounded-xl p-8 glow-hover">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mb-6">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-4">Developer-First API</h3>
+                    <p class="text-gray-400 mb-6">RESTful APIs, WebSocket support, and comprehensive SDKs for rapid integration.</p>
+                    <div class="bg-gray-800/50 rounded-lg p-3 font-mono text-sm text-green-400">
+                        <span class="text-gray-500">POST</span> /api/v1/analyze
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Analytics Dashboard Preview -->
+    <section id="analytics" class="py-20 bg-gradient-to-br from-gray-900 to-gray-800">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                    <span class="gradient-text">Real-time</span> Voice Analytics
+                </h2>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto">
+                    Gain unprecedented insights into your voice communications with our advanced analytics platform
+                </p>
+            </div>
+            
+            <!-- Dashboard Preview -->
+            <div class="glass-morphism rounded-2xl p-8 glow-hover">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                    <!-- KPI Cards -->
+                    <div class="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/20 rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                                </svg>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-white">2,847</div>
+                                <div class="text-sm text-gray-400">Total Calls</div>
+                            </div>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-700 rounded-full">
+                            <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" style="width: 78%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-green-500/10 to-green-600/10 border border-green-500/20 rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-white">99.2%</div>
+                                <div class="text-sm text-gray-400">Success Rate</div>
+                            </div>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-700 rounded-full">
+                            <div class="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full" style="width: 99%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/20 rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-white">1.4s</div>
+                                <div class="text-sm text-gray-400">Avg Response</div>
+                            </div>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-700 rounded-full">
+                            <div class="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full" style="width: 92%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gradient-to-br from-orange-500/10 to-orange-600/10 border border-orange-500/20 rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-white">156</div>
+                                <div class="text-sm text-gray-400">Active Users</div>
+                            </div>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-700 rounded-full">
+                            <div class="h-full bg-gradient-to-r from-orange-500 to-orange-400 rounded-full" style="width: 85%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Mock Chart Area -->
+                <div class="bg-gray-800/50 rounded-xl p-6 h-64 flex items-center justify-center">
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                        <h4 class="text-lg font-medium text-white mb-2">Real-time Analytics Dashboard</h4>
+                        <p class="text-gray-400">Interactive charts and insights available in the full platform</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section id="demo" class="py-20 relative">
+        <div class="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10"></div>
+        <div class="relative z-10 max-w-4xl mx-auto px-6 lg:px-8 text-center">
+            <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                Ready to Transform Your <span class="gradient-text">Voice Experience</span>?
+            </h2>
+            <p class="text-xl text-gray-400 mb-8">
+                Join leading enterprises who trust Buraaq Voice AI for their critical communications
+            </p>
+            
+            <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
+                <a href="/dashboard" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
+                    Start Your Free Trial
+                </a>
+                <a href="#contact" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
+                    Schedule Demo
+                </a>
+            </div>
+            
+            <p class="text-sm text-gray-500 mt-6">
+                No credit card required • 14-day free trial • Full enterprise features
+            </p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900/50 border-t border-gray-800">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8 py-12">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <!-- Brand -->
+                <div class="col-span-1">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+                            <span class="text-white font-bold">ب</span>
+                        </div>
+                        <h3 class="text-xl font-bold gradient-text">Buraaq Voice AI</h3>
+                    </div>
+                    <p class="text-gray-400 text-sm">
+                        Next-generation enterprise voice intelligence platform powered by Arabic heritage and modern AI.
+                    </p>
+                </div>
+                
+                <!-- Links -->
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Product</h4>
+                    <ul class="space-y-2 text-sm text-gray-400">
+                        <li><a href="#features" class="hover:text-white transition-colors">Features</a></li>
+                        <li><a href="#analytics" class="hover:text-white transition-colors">Analytics</a></li>
+                        <li><a href="#enterprise" class="hover:text-white transition-colors">Enterprise</a></li>
+                        <li><a href="/dashboard" class="hover:text-white transition-colors">Dashboard</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Company</h4>
+                    <ul class="space-y-2 text-sm text-gray-400">
+                        <li><a href="#about" class="hover:text-white transition-colors">About</a></li>
+                        <li><a href="#careers" class="hover:text-white transition-colors">Careers</a></li>
+                        <li><a href="#contact" class="hover:text-white transition-colors">Contact</a></li>
+                        <li><a href="#blog" class="hover:text-white transition-colors">Blog</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Support</h4>
+                    <ul class="space-y-2 text-sm text-gray-400">
+                        <li><a href="#docs" class="hover:text-white transition-colors">Documentation</a></li>
+                        <li><a href="#api" class="hover:text-white transition-colors">API Reference</a></li>
+                        <li><a href="#support" class="hover:text-white transition-colors">Support</a></li>
+                        <li><a href="#status" class="hover:text-white transition-colors">Status</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-800 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
+                <p class="text-gray-400 text-sm">© 2024 Buraaq Voice AI. All rights reserved.</p>
+                <div class="flex space-x-6 mt-4 md:mt-0">
+                    <a href="#privacy" class="text-gray-400 hover:text-white text-sm transition-colors">Privacy</a>
+                    <a href="#terms" class="text-gray-400 hover:text-white text-sm transition-colors">Terms</a>
+                    <a href="#security" class="text-gray-400 hover:text-white text-sm transition-colors">Security</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Smooth scrolling script -->
+    <script>
+        // Add fade-in animation on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                }
+            });
+        }, observerOptions);
+
+        // Observe all sections
+        document.querySelectorAll('section > div').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

@@ -31,7 +31,13 @@ start_time = time.time()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request, db: Session = Depends(get_db)):
+async def landing_page(request: Request):
+    """Landing page showcasing Buraaq Voice AI."""
+    return templates.TemplateResponse("landing.html", {"request": request})
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request, db: Session = Depends(get_db)):
     """Dashboard page with advanced analytics."""
     # Get active assistants
     active_assistants = await AssistantService.get_assistants(active_only=True)

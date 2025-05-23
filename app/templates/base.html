@@ -154,7 +154,7 @@
                         </a>
                     </div>
                     <nav class="ml-8 flex space-x-8">
-                        <a href="/" class="nav-item px-3 py-2 text-sm font-medium {% if request.url.path == '/' %}active text-blue-400{% else %}text-gray-300 hover:text-white{% endif %}">
+                        <a href="/dashboard" class="nav-item px-3 py-2 text-sm font-medium {% if request.url.path == '/dashboard' %}active text-blue-400{% else %}text-gray-300 hover:text-white{% endif %}">
                             Dashboard
                         </a>
                         <a href="/assistants" class="nav-item px-3 py-2 text-sm font-medium {% if request.url.path.startswith('/assistants') %}active text-blue-400{% else %}text-gray-300 hover:text-white{% endif %}">
