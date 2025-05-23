@@ -307,6 +307,8 @@ async def create_assistant(
     stt_utterance_end_ms: Optional[int] = Form(None),
     stt_vad_turnoff: Optional[int] = Form(None),
     stt_smart_format: Optional[bool] = Form(False),
+    stt_keywords: Optional[str] = Form(None),  # JSON string of keywords
+    stt_keyterms: Optional[str] = Form(None),  # JSON string of keyterms
     # Interruption Settings
     interruption_threshold: Optional[int] = Form(None),
     min_speaking_time: Optional[float] = Form(None),
@@ -424,6 +426,8 @@ async def create_assistant(
                 "utterance_end_ms": stt_utterance_end_ms,
                 "vad_turnoff": stt_vad_turnoff,
                 "smart_format": stt_smart_format,
+                "keywords": [],  # Will be populated below if provided
+                "keyterms": [],  # Will be populated below if provided
             }
             if any(
                 [
@@ -436,6 +440,8 @@ async def create_assistant(
                     stt_utterance_end_ms,
                     stt_vad_turnoff,
                     stt_smart_format,
+                    stt_keywords,
+                    stt_keyterms,
                 ]
             )
             else None
@@ -494,6 +500,59 @@ async def create_assistant(
                 status_code=400,
             )
     
+    # Parse keywords and keyterms if provided
+    if assistant_data.get("stt_settings"):
+        # Parse keywords from comma-separated string
+        if stt_keywords:
+            try:
+                keywords_list = []
+                for keyword in stt_keywords.split(','):
+                    keyword = keyword.strip()
+                    if ':' in keyword:
+                        # Handle keyword with intensifier (e.g., "OpenAI:2.0")
+                        word, intensifier = keyword.split(':', 1)
+                        keywords_list.append({
+                            "keyword": word.strip(),
+                            "intensifier": float(intensifier.strip())
+                        })
+                    elif keyword:
+                        # Handle keyword without intensifier (default 1.0)
+                        keywords_list.append({
+                            "keyword": keyword,
+                            "intensifier": 1.0
+                        })
+                assistant_data["stt_settings"]["keywords"] = keywords_list
+            except (ValueError, AttributeError) as e:
+                phone_numbers = TwilioService.get_available_phone_numbers()
+                return templates.TemplateResponse(
+                    "assistants/form.html",
+                    {
+                        "request": request,
+                        "assistant": None,
+                        "phone_numbers": phone_numbers,
+                        "error": f"Invalid keywords format: {str(e)}. Use format: 'keyword1:2.0, keyword2, keyword3:1.5'",
+                    },
+                    status_code=400,
+                )
+        
+        # Parse keyterms from comma-separated string
+        if stt_keyterms:
+            try:
+                keyterms_list = [term.strip() for term in stt_keyterms.split(',') if term.strip()]
+                assistant_data["stt_settings"]["keyterms"] = keyterms_list
+            except AttributeError as e:
+                phone_numbers = TwilioService.get_available_phone_numbers()
+                return templates.TemplateResponse(
+                    "assistants/form.html",
+                    {
+                        "request": request,
+                        "assistant": None,
+                        "phone_numbers": phone_numbers,
+                        "error": f"Invalid keyterms format: {str(e)}. Use comma-separated terms.",
+                    },
+                    status_code=400,
+                )
+
     # Add structured data prompt if provided
     if structured_data_prompt and structured_data_prompt.strip():
         custom_settings["structured_data_prompt"] = structured_data_prompt.strip()
@@ -642,6 +701,8 @@ async def update_assistant(
     stt_utterance_end_ms: Optional[int] = Form(None),
     stt_vad_turnoff: Optional[int] = Form(None),
     stt_smart_format: Optional[bool] = Form(False),
+    stt_keywords: Optional[str] = Form(None),  # JSON string of keywords
+    stt_keyterms: Optional[str] = Form(None),  # JSON string of keyterms
     # Interruption Settings
     interruption_threshold: Optional[int] = Form(None),
     min_speaking_time: Optional[float] = Form(None),
@@ -764,6 +825,8 @@ async def update_assistant(
                 "utterance_end_ms": stt_utterance_end_ms,
                 "vad_turnoff": stt_vad_turnoff,
                 "smart_format": stt_smart_format,
+                "keywords": [],  # Will be populated below if provided
+                "keyterms": [],  # Will be populated below if provided
             }
             if any(
                 [
@@ -776,6 +839,8 @@ async def update_assistant(
                     stt_utterance_end_ms,
                     stt_vad_turnoff,
                     stt_smart_format,
+                    stt_keywords,
+                    stt_keyterms,
                 ]
             )
             else None
@@ -833,6 +898,59 @@ async def update_assistant(
                 },
                 status_code=400,
             )
+
+    # Parse keywords and keyterms if provided
+    if update_data.get("stt_settings"):
+        # Parse keywords from comma-separated string
+        if stt_keywords:
+            try:
+                keywords_list = []
+                for keyword in stt_keywords.split(','):
+                    keyword = keyword.strip()
+                    if ':' in keyword:
+                        # Handle keyword with intensifier (e.g., "OpenAI:2.0")
+                        word, intensifier = keyword.split(':', 1)
+                        keywords_list.append({
+                            "keyword": word.strip(),
+                            "intensifier": float(intensifier.strip())
+                        })
+                    elif keyword:
+                        # Handle keyword without intensifier (default 1.0)
+                        keywords_list.append({
+                            "keyword": keyword,
+                            "intensifier": 1.0
+                        })
+                update_data["stt_settings"]["keywords"] = keywords_list
+            except (ValueError, AttributeError) as e:
+                phone_numbers = TwilioService.get_available_phone_numbers()
+                return templates.TemplateResponse(
+                    "assistants/form.html",
+                    {
+                        "request": request,
+                        "assistant": assistant,
+                        "phone_numbers": phone_numbers,
+                        "error": f"Invalid keywords format: {str(e)}. Use format: 'keyword1:2.0, keyword2, keyword3:1.5'",
+                    },
+                    status_code=400,
+                )
+        
+        # Parse keyterms from comma-separated string
+        if stt_keyterms:
+            try:
+                keyterms_list = [term.strip() for term in stt_keyterms.split(',') if term.strip()]
+                update_data["stt_settings"]["keyterms"] = keyterms_list
+            except AttributeError as e:
+                phone_numbers = TwilioService.get_available_phone_numbers()
+                return templates.TemplateResponse(
+                    "assistants/form.html",
+                    {
+                        "request": request,
+                        "assistant": assistant,
+                        "phone_numbers": phone_numbers,
+                        "error": f"Invalid keyterms format: {str(e)}. Use comma-separated terms.",
+                    },
+                    status_code=400,
+                )
 
     # Add structured data prompt if provided
     if structured_data_prompt and structured_data_prompt.strip():

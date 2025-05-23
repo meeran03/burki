@@ -52,7 +52,7 @@ class AssistantBase(BaseModel):
     # STT Settings
     stt_settings: Optional[Dict[str, Any]] = Field(
         default_factory=lambda: {
-            "model": "nova-2",
+            "model": "nova-3",
             "language": "en-US",
             "punctuate": True,
             "interim_results": True,
@@ -62,7 +62,9 @@ class AssistantBase(BaseModel):
             },
             "utterance_end_ms": 1000,
             "vad_turnoff": 500,
-            "smart_format": True
+            "smart_format": True,
+            "keywords": [],  # List of keyword objects with keyword and intensifier
+            "keyterms": []   # List of keyterm strings for Nova-3 model
         }
     )
     

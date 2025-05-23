@@ -200,6 +200,8 @@ class CallHandler:
             ),
             utterance_end_ms=stt_settings.get("utterance_end_ms", 1000),
             smart_format=stt_settings.get("smart_format", True),
+            keywords=stt_settings.get("keywords", []),
+            keyterms=stt_settings.get("keyterms", []),
         )
 
         # Get TTS configuration from assistant

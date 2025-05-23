@@ -109,6 +109,8 @@ class DeepgramService:
         endpointing: int = 100,
         utterance_end_ms: int = 1000,
         smart_format: bool = True,
+        keywords: Optional[list] = None,
+        keyterms: Optional[list] = None,
         **options,
     ):
         """
@@ -124,6 +126,8 @@ class DeepgramService:
             endpointing: Time in ms for silence detection (default: 100)
             utterance_end_ms: Time in ms to wait before ending utterance (default: 1000)
             smart_format: Whether to apply smart formatting (default: True)
+            keywords: List of keywords to detect
+            keyterms: List of keyterms to detect
             **options: Additional configuration options
         """
         self.call_sid = call_sid
@@ -146,10 +150,56 @@ class DeepgramService:
         self.endpointing = endpointing
         self.utterance_end_ms = utterance_end_ms
         self.smart_format = smart_format
+        self.keywords = keywords
+        self.keyterms = keyterms
         self.options = options
 
         if call_sid:
             logger.info(f"DeepgramService initialized for call {call_sid}")
+
+    def _format_keywords(self) -> Optional[list]:
+        """
+        Format keywords for Deepgram API.
+        
+        Keywords should be a list of dictionaries with 'keyword' and 'intensifier' keys.
+        Returns formatted keywords for the API.
+        """
+        if not self.keywords:
+            return None
+            
+        formatted = []
+        for item in self.keywords:
+            if isinstance(item, dict) and 'keyword' in item:
+                keyword = item['keyword'].strip()
+                intensifier = item.get('intensifier', 1.0)
+                if keyword:
+                    formatted.append(f"{keyword}:{intensifier}")
+            elif isinstance(item, str) and item.strip():
+                # Default intensifier of 1.0
+                formatted.append(f"{item.strip()}:1.0")
+        
+        return formatted if formatted else None
+
+    def _format_keyterms(self) -> Optional[list]:
+        """
+        Format keyterms for Deepgram API.
+        
+        Keyterms should be a list of strings.
+        Returns formatted keyterms for the API.
+        """
+        if not self.keyterms:
+            return None
+            
+        formatted = []
+        for item in self.keyterms:
+            if isinstance(item, str) and item.strip():
+                formatted.append(item.strip())
+            elif isinstance(item, dict) and 'keyterm' in item:
+                keyterm = item['keyterm'].strip()
+                if keyterm:
+                    formatted.append(keyterm)
+        
+        return formatted if formatted else None
 
     async def start_transcription(
         self,
@@ -224,18 +274,34 @@ class DeepgramService:
             self.connection = connection
 
             # Configure options for streaming audio using instance settings
-            live_options = LiveOptions(
-                model=self.model,
-                punctuate=self.punctuate,
-                language=self.language,
-                encoding="mulaw",  # Twilio uses mulaw encoding
-                channels=self.channels,
-                sample_rate=self.sample_rate,
-                endpointing=self.endpointing,
-                utterance_end_ms=self.utterance_end_ms,
-                smart_format=self.smart_format,
-                interim_results=self.interim_results,
-            )
+            live_options_dict = {
+                "model": self.model,
+                "punctuate": self.punctuate,
+                "language": self.language,
+                "encoding": "mulaw",  # Twilio uses mulaw encoding
+                "channels": self.channels,
+                "sample_rate": self.sample_rate,
+                "endpointing": self.endpointing,
+                "utterance_end_ms": self.utterance_end_ms,
+                "smart_format": self.smart_format,
+                "interim_results": self.interim_results,
+            }
+
+            # Add keywords if available and model supports them
+            formatted_keywords = self._format_keywords()
+            if formatted_keywords and self.model in ["nova-2", "nova-1", "enhanced", "base"]:
+                live_options_dict["keywords"] = formatted_keywords
+                logger.info(f"Added {len(formatted_keywords)} keywords for model {self.model}")
+
+            # Add keyterms if available and model supports them (Nova-3 only, English only)
+            formatted_keyterms = self._format_keyterms()
+            if (formatted_keyterms and 
+                self.model == "nova-3" and 
+                self.language.startswith("en")):
+                live_options_dict["keyterm"] = formatted_keyterms
+                logger.info(f"Added {len(formatted_keyterms)} keyterms for Nova-3 model")
+
+            live_options = LiveOptions(**live_options_dict)
 
             # Start the connection
             try:
@@ -254,18 +320,25 @@ class DeepgramService:
                 )
                 try:
                     # Try with nova-2 model as fallback
-                    fallback_options = LiveOptions(
-                        model="nova-2",  # Fallback to Nova-2
-                        punctuate=self.punctuate,
-                        language=self.language,
-                        encoding="mulaw",  # Twilio uses mulaw encoding
-                        channels=self.channels,
-                        sample_rate=self.sample_rate,
-                        endpointing=self.endpointing,
-                        utterance_end_ms=self.utterance_end_ms,
-                        smart_format=self.smart_format,
-                        interim_results=self.interim_results,
-                    )
+                    fallback_options_dict = {
+                        "model": "nova-2",  # Fallback to Nova-2
+                        "punctuate": self.punctuate,
+                        "language": self.language,
+                        "encoding": "mulaw",  # Twilio uses mulaw encoding
+                        "channels": self.channels,
+                        "sample_rate": self.sample_rate,
+                        "endpointing": self.endpointing,
+                        "utterance_end_ms": self.utterance_end_ms,
+                        "smart_format": self.smart_format,
+                        "interim_results": self.interim_results,
+                    }
+
+                    # Add keywords for Nova-2 fallback if available
+                    if formatted_keywords:
+                        fallback_options_dict["keywords"] = formatted_keywords
+                        logger.info(f"Added {len(formatted_keywords)} keywords to Nova-2 fallback")
+
+                    fallback_options = LiveOptions(**fallback_options_dict)
                     await connection.start(fallback_options)
                     logger.info(
                         f"Started Deepgram Nova-2 transcription (fallback) for call {self.call_sid}"

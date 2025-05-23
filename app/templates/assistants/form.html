@@ -429,10 +429,11 @@
                                         <div class="mt-1 relative rounded-md shadow-sm">
                                             <select name="stt_model" id="stt_model"
                                                 class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                                <option value="nova-2" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova-2' %}selected{% endif %}>Nova-2 (Latest)</option>
-                                                <option value="nova" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova' %}selected{% endif %}>Nova</option>
-                                                <option value="enhanced" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'enhanced' %}selected{% endif %}>Enhanced</option>
-                                                <option value="base" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'base' %}selected{% endif %}>Base</option>
+                                                <option value="nova-3" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova-3' %}selected{% endif %}>Nova-3 (Latest - Keyterms Support)</option>
+                                                <option value="nova-2" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova-2' %}selected{% endif %}>Nova-2 (Keywords Support)</option>
+                                                <option value="nova" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova' %}selected{% endif %}>Nova (Keywords Support)</option>
+                                                <option value="enhanced" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'enhanced' %}selected{% endif %}>Enhanced (Keywords Support)</option>
+                                                <option value="base" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'base' %}selected{% endif %}>Base (Keywords Support)</option>
                                             </select>
                                         </div>
                                     </div>
@@ -515,6 +516,58 @@
                                                 <label for="stt_smart_format" class="ml-2 block text-sm text-gray-900">
                                                     Smart Format
                                                 </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Keywords and Keyterms Section -->
+                                    <div class="col-span-6 border-t border-gray-200 pt-4">
+                                        <h5 class="text-sm font-medium text-gray-900 mb-3">Keywords & Keyterms</h5>
+                                        <p class="text-xs text-gray-500 mb-4">
+                                            Improve recognition of specialized terminology and proper nouns.
+                                        </p>
+                                        
+                                        <!-- Keywords (for Nova-2, Nova-1, Enhanced, Base models) -->
+                                        <div class="mb-4">
+                                            <label for="stt_keywords" class="block text-sm font-medium text-gray-700">
+                                                Keywords
+                                                <span class="text-xs text-gray-500">(Nova-2, Nova-1, Enhanced, Base models)</span>
+                                            </label>
+                                            <div class="mt-1">
+                                                <textarea id="stt_keywords" name="stt_keywords" rows="3"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                    placeholder="OpenAI:2.0, ChatGPT:1.5, API, machine learning:1.8">{% if assistant and assistant.stt_settings and assistant.stt_settings.keywords %}{% for keyword in assistant.stt_settings.keywords %}{% if keyword is mapping %}{{ keyword.keyword }}{% if keyword.intensifier != 1.0 %}:{{ keyword.intensifier }}{% endif %}{% else %}{{ keyword }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</textarea>
+                                            </div>
+                                            <p class="mt-1 text-xs text-gray-500">
+                                                Comma-separated keywords. Optional intensifiers with colon (e.g., "keyword:2.0"). 
+                                                Intensifier range: 0 (suppress) to 10+ (boost). Default: 1.0.
+                                            </p>
+                                            <div class="mt-2 p-2 bg-blue-50 rounded-md">
+                                                <p class="text-xs text-blue-800">
+                                                    <strong>Example:</strong> Deepgram:2.0, API:1.5, speech recognition, transcription
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Keyterms (for Nova-3 model only) -->
+                                        <div>
+                                            <label for="stt_keyterms" class="block text-sm font-medium text-gray-700">
+                                                Keyterms
+                                                <span class="text-xs text-gray-500">(Nova-3 model only, English language)</span>
+                                            </label>
+                                            <div class="mt-1">
+                                                <textarea id="stt_keyterms" name="stt_keyterms" rows="3"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                    placeholder="artificial intelligence, machine learning, neural networks, customer service">{% if assistant and assistant.stt_settings and assistant.stt_settings.keyterms %}{{ assistant.stt_settings.keyterms | join(', ') }}{% endif %}</textarea>
+                                            </div>
+                                            <p class="mt-1 text-xs text-gray-500">
+                                                Comma-separated keyterm phrases. Higher accuracy than keywords (up to 90% recall rate).
+                                                Limited to 500 tokens total across all keyterms.
+                                            </p>
+                                            <div class="mt-2 p-2 bg-green-50 rounded-md">
+                                                <p class="text-xs text-green-800">
+                                                    <strong>Example:</strong> artificial intelligence, machine learning, customer service, technical support
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -806,6 +859,37 @@ document.addEventListener('DOMContentLoaded', function() {
             element.style.display = 'grid';
         }
     });
+
+    // Handle STT model changes for keywords/keyterms visibility
+    const sttModelSelect = document.getElementById('stt_model');
+    const keywordsContainer = document.querySelector('#stt_keywords').closest('.mb-4');
+    const keytermsContainer = document.querySelector('#stt_keyterms').closest('div');
+    
+    function updateKeywordVisibility() {
+        const selectedModel = sttModelSelect.value;
+        const keywordSupportedModels = ['nova-2', 'nova-1', 'enhanced', 'base'];
+        const keytermSupportedModels = ['nova-3'];
+        
+        // Show/hide keywords based on model
+        if (keywordSupportedModels.includes(selectedModel)) {
+            keywordsContainer.style.display = 'block';
+        } else {
+            keywordsContainer.style.display = 'none';
+        }
+        
+        // Show/hide keyterms based on model
+        if (keytermSupportedModels.includes(selectedModel)) {
+            keytermsContainer.style.display = 'block';
+        } else {
+            keytermsContainer.style.display = 'none';
+        }
+    }
+    
+    // Initialize visibility on page load
+    if (sttModelSelect) {
+        updateKeywordVisibility();
+        sttModelSelect.addEventListener('change', updateKeywordVisibility);
+    }
 
     // Handle custom inputs
     const customInputs = {
