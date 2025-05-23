@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Billing Plans{% endblock %}
+
+{% block extra_head %}
+<script src="https://js.stripe.com/v3/"></script>
+<style>
+    .plan-card {
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+        background: white;
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .plan-card.current {
+        border-color: #3b82f6;
+        background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+        transform: scale(1.02);
+    }
+    .plan-card:hover:not(.current) {
+        border-color: #6b7280;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+    }
+    .feature-check {
+        color: #10b981;
+    }
+    .feature-cross {
+        color: #ef4444;
+    }
+    .stripe-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-gray-900 mb-4">Choose Your Plan</h1>
+        <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+            Scale your voice AI assistant with the right plan for your needs
+        </p>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if success %}
+    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6" role="alert">
+        <strong class="font-bold">Success!</strong>
+        <span class="block sm:inline">{{ success }}</span>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert">
+        <strong class="font-bold">Error!</strong>
+        <span class="block sm:inline">{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Plans Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        {% for plan in plans %}
+        <div class="plan-card p-8 {% if current_plan.id == plan.id %}current{% endif %}">
+            <!-- Plan Header -->
+            <div class="text-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900 mb-2">{{ plan.name }}</h3>
+                <p class="text-gray-600 mb-4">{{ plan.description }}</p>
+                
+                <!-- Price -->
+                <div class="mb-4">
+                    {% if plan.price_cents == 0 %}
+                    <span class="text-4xl font-bold text-gray-900">Free</span>
+                    {% else %}
+                    <span class="text-4xl font-bold text-gray-900">${{ "%.0f"|format(plan.price_cents / 100) }}</span>
+                    <span class="text-gray-600">/month</span>
+                    {% endif %}
+                </div>
+
+                <!-- Minutes -->
+                <div class="text-lg">
+                    {% if plan.monthly_minutes %}
+                    <span class="font-semibold text-gray-900">{{ plan.monthly_minutes }}</span> minutes/month
+                    {% else %}
+                    <span class="font-semibold text-gray-900">Unlimited</span> minutes
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Features -->
+            <div class="mb-8">
+                <h4 class="font-semibold text-gray-900 mb-4">Features included:</h4>
+                <ul class="space-y-3">
+                    {% for feature_key, feature_value in plan.features.items() %}
+                    <li class="flex items-center">
+                        {% if feature_value %}
+                        <span class="feature-check mr-3">✓</span>
+                        {% else %}
+                        <span class="feature-cross mr-3">✗</span>
+                        {% endif %}
+                        <span class="{% if feature_value %}text-gray-900{% else %}text-gray-400{% endif %}">
+                            {% if feature_key == 'unlimited_assistants' %}Unlimited Assistants
+                            {% elif feature_key == 'webhook_support' %}Webhook Support
+                            {% elif feature_key == 'api_access' %}API Access
+                            {% elif feature_key == 'priority_support' %}Priority Support
+                            {% elif feature_key == 'custom_integrations' %}Custom Integrations
+                            {% else %}{{ feature_key.replace('_', ' ').title() }}
+                            {% endif %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Action Button -->
+            <div class="text-center">
+                {% if current_plan.id == plan.id %}
+                <button class="w-full bg-gray-100 text-gray-500 py-3 px-6 rounded-lg font-semibold cursor-not-allowed">
+                    Current Plan
+                </button>
+                {% elif plan.price_cents == 0 %}
+                <button class="w-full bg-gray-100 text-gray-500 py-3 px-6 rounded-lg font-semibold cursor-not-allowed">
+                    Contact Support to Downgrade
+                </button>
+                {% else %}
+                <button onclick="upgradeToProPlan()" class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                    Upgrade to {{ plan.name }}
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Additional Info -->
+    <div class="mt-12 text-center">
+        <div class="bg-gray-50 rounded-lg p-6 max-w-2xl mx-auto">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Need Help Choosing?</h3>
+            <p class="text-gray-600 mb-4">
+                Start with the free Starter plan and upgrade when you need more minutes. 
+                You can also set up auto top-ups to add minutes as needed.
+            </p>
+            <div class="flex justify-center space-x-4">
+                <a href="/billing" class="text-blue-600 hover:text-blue-800 font-medium">
+                    Back to Dashboard
+                </a>
+                <a href="/billing/topup" class="text-green-600 hover:text-green-800 font-medium">
+                    Setup Auto Top-up
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upgrade Modal -->
+<div id="upgradeModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Upgrade to Pro Plan</h3>
+                <button onclick="closeUpgradeModal()" class="text-gray-400 hover:text-gray-600">
+                    <span class="sr-only">Close</span>
+                    ✕
+                </button>
+            </div>
+            
+            <form id="upgrade-form" method="post" action="/billing/upgrade-to-pro">
+                <div class="mb-4">
+                    <p class="text-gray-600 mb-4">
+                        You'll be charged $20/month for unlimited minutes and premium features.
+                    </p>
+                    
+                    <!-- Stripe Elements will be inserted here -->
+                    <div id="card-element" class="stripe-card">
+                        <!-- Stripe Elements will create form elements here -->
+                    </div>
+                    
+                    <!-- Used to display form errors -->
+                    <div id="card-errors" role="alert" class="text-red-600 text-sm mt-2"></div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeUpgradeModal()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" id="submit-button" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span id="button-text">Upgrade Now</span>
+                        <span id="spinner" class="hidden">Processing...</span>
+                    </button>
+                </div>
+                
+                <input type="hidden" name="payment_method_id" id="payment_method_id">
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize Stripe
+const stripe = Stripe('{{ stripe_public_key }}');
+const elements = stripe.elements();
+
+// Create card element
+const cardElement = elements.create('card', {
+    style: {
+        base: {
+            fontSize: '16px',
+            color: '#424770',
+            '::placeholder': {
+                color: '#aab7c4',
+            },
+        },
+    },
+});
+
+// Mount card element
+cardElement.mount('#card-element');
+
+// Handle real-time validation errors from the card Element
+cardElement.on('change', function(event) {
+    const displayError = document.getElementById('card-errors');
+    if (event.error) {
+        displayError.textContent = event.error.message;
+    } else {
+        displayError.textContent = '';
+    }
+});
+
+function upgradeToProPlan() {
+    document.getElementById('upgradeModal').classList.remove('hidden');
+    document.getElementById('upgradeModal').classList.add('flex');
+}
+
+function closeUpgradeModal() {
+    document.getElementById('upgradeModal').classList.add('hidden');
+    document.getElementById('upgradeModal').classList.remove('flex');
+}
+
+// Handle form submission
+document.getElementById('upgrade-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    
+    const submitButton = document.getElementById('submit-button');
+    const buttonText = document.getElementById('button-text');
+    const spinner = document.getElementById('spinner');
+    
+    // Disable submit button and show loading state
+    submitButton.disabled = true;
+    buttonText.classList.add('hidden');
+    spinner.classList.remove('hidden');
+    
+    try {
+        // Create payment method
+        const {error, paymentMethod} = await stripe.createPaymentMethod({
+            type: 'card',
+            card: cardElement,
+        });
+        
+        if (error) {
+            // Show error to customer
+            document.getElementById('card-errors').textContent = error.message;
+        } else {
+            // Set payment method ID and submit form
+            document.getElementById('payment_method_id').value = paymentMethod.id;
+            
+            // Submit the form
+            event.target.submit();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('card-errors').textContent = 'An unexpected error occurred.';
+    }
+    
+    // Re-enable submit button
+    submitButton.disabled = false;
+    buttonText.classList.remove('hidden');
+    spinner.classList.add('hidden');
+});
+
+// Close modal when clicking outside
+document.getElementById('upgradeModal').addEventListener('click', function(event) {
+    if (event.target === this) {
+        closeUpgradeModal();
+    }
+});
+</script>
+{% endblock %} 

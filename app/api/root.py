@@ -19,6 +19,7 @@ from app.core.call_handler import CallHandler
 from app.core.assistant_manager import AssistantManager
 from app.services.call_service import CallService
 from app.twilio.twilio_service import TwilioService
+from app.services.billing_service import BillingService
 
 router = APIRouter()
 # Configure logging
@@ -58,6 +59,38 @@ async def get_twiml(request: Request):
         f"Incoming call with SID: {call_sid} from {customer_phone_number} to {to_phone_number}"
     )
     logger.info("Request headers: %s", request.headers)
+
+    # Get assistant to check billing limits
+    if to_phone_number:
+        assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
+        if assistant:
+            # Check billing limits for the organization
+            usage_check = await BillingService.check_usage_limits(assistant.organization_id)
+            
+            if not usage_check.get("allowed", False):
+                # Create a TwiML response to reject the call or play a message
+                response = VoiceResponse()
+                
+                if usage_check.get("needs_upgrade", False):
+                    response.say(
+                        "Your call cannot be completed at this time. "
+                        "Your organization has exceeded its monthly usage limit. "
+                        "Please contact your administrator to upgrade your plan or add top-up credits.",
+                        voice="alice"
+                    )
+                else:
+                    response.say(
+                        "Your call cannot be completed at this time. "
+                        "Please try again later.",
+                        voice="alice"
+                    )
+                
+                response.hangup()
+                
+                logger.warning(
+                    f"Call rejected due to billing limits for organization {assistant.organization_id}: {usage_check}"
+                )
+                return Response(content=str(response), media_type="application/xml")
 
     # Create the TwiML response
     response = VoiceResponse()
@@ -337,6 +370,13 @@ async def recording_status_callback(request: Request):
                     all_completed = all(r.status in ["completed", "failed"] for r in recordings)
                     
                     if all_completed:
+                        # Record billing usage for the completed call
+                        try:
+                            await BillingService.record_call_usage(call.id)
+                            logger.info(f"Recorded billing usage for call {call.id}")
+                        except Exception as billing_error:
+                            logger.error(f"Error recording billing usage for call {call.id}: {billing_error}")
+                        
                         # Send webhook immediately since all recordings are ready
                         from app.services.webhook_service import WebhookService
                         
