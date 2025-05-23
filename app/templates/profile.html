@@ -7,8 +7,8 @@
     <!-- Page Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-bold text-white mb-2">Profile Settings</h1>
-            <p class="text-gray-400">Manage your personal account settings and preferences</p>
+            <h1 class="text-3xl font-bold text-white mb-2">Profile</h1>
+            <p class="text-gray-400">View your personal account information and settings</p>
         </div>
         <div class="flex items-center space-x-3">
             <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white text-lg">
@@ -19,12 +19,7 @@
 
     <!-- Profile Information Card -->
     <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-xl font-semibold text-white">Personal Information</h2>
-            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
-                <i class="fas fa-edit mr-2"></i>Edit Profile
-            </button>
-        </div>
+        <h2 class="text-xl font-semibold text-white mb-6">Personal Information</h2>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- Basic Info -->
@@ -97,51 +92,28 @@
                 </div>
             </div>
             <a href="/organization" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors">
-                <i class="fas fa-cog mr-2"></i>Manage
+                <i class="fas fa-eye mr-2"></i>View
             </a>
         </div>
     </div>
 
-    <!-- Security Settings Card -->
+    <!-- API Access Card -->
     <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-        <h2 class="text-xl font-semibold text-white mb-6">Security & Access</h2>
+        <h2 class="text-xl font-semibold text-white mb-6">API Access</h2>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Password -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 bg-green-600/20 rounded-lg flex items-center justify-center">
-                            <i class="fas fa-lock text-green-400"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-medium text-white">Password</h3>
-                            <p class="text-gray-400 text-sm">Last updated: Recently</p>
-                        </div>
-                    </div>
-                    <button class="px-3 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
-                        Change
-                    </button>
+        <div class="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-key text-blue-400"></i>
+                </div>
+                <div>
+                    <h3 class="font-medium text-white">API Keys</h3>
+                    <p class="text-gray-400 text-sm">{{ session.api_key_count or 0 }} active keys</p>
                 </div>
             </div>
-            
-            <!-- API Keys -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
-                            <i class="fas fa-key text-blue-400"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-medium text-white">API Keys</h3>
-                            <p class="text-gray-400 text-sm">{{ session.api_key_count or 0 }} active keys</p>
-                        </div>
-                    </div>
-                    <a href="/auth/api-keys" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-                        Manage
-                    </a>
-                </div>
-            </div>
+            <a href="/auth/api-keys" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+                Manage
+            </a>
         </div>
     </div>
 
@@ -182,21 +154,6 @@
                     <p class="text-gray-400 text-sm">Google OAuth</p>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Danger Zone Card -->
-    <div class="bg-red-900/20 border border-red-700/50 rounded-xl p-6">
-        <h2 class="text-xl font-semibold text-red-400 mb-4">Danger Zone</h2>
-        <p class="text-gray-400 mb-6">These actions cannot be undone. Please proceed with caution.</p>
-        
-        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <button class="px-4 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded-lg font-medium hover:bg-red-600/30 transition-colors">
-                <i class="fas fa-user-times mr-2"></i>Deactivate Account
-            </button>
-            <button class="px-4 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded-lg font-medium hover:bg-red-600/30 transition-colors">
-                <i class="fas fa-trash mr-2"></i>Delete Account
-            </button>
         </div>
     </div>
 </div>

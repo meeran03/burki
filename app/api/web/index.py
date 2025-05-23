@@ -277,6 +277,47 @@ async def organization_page(
         .all()
     )
     
+    # Get active assistants for this organization
+    active_assistants = (
+        db.query(Assistant)
+        .filter(
+            Assistant.organization_id == current_user.organization_id,
+            Assistant.is_active == True,
+        )
+        .all()
+    )
+
+    # Get call statistics for this organization
+    org_assistants = (
+        db.query(Assistant)
+        .filter(Assistant.organization_id == current_user.organization_id)
+        .all()
+    )
+    assistant_ids = [a.id for a in org_assistants]
+
+    if assistant_ids:
+        total_calls = (
+            db.query(Call).filter(Call.assistant_id.in_(assistant_ids)).count()
+        )
+        completed_calls = (
+            db.query(Call)
+            .filter(Call.assistant_id.in_(assistant_ids), Call.status == "completed")
+            .count()
+        )
+        failed_calls = (
+            db.query(Call)
+            .filter(
+                Call.assistant_id.in_(assistant_ids),
+                Call.status.in_(["failed", "no-answer", "busy"]),
+            )
+            .count()
+        )
+    else:
+        total_calls = completed_calls = failed_calls = 0
+
+    # Calculate success rate
+    success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
+    
     return templates.TemplateResponse(
         "organization.html",
         get_template_context(
@@ -284,5 +325,8 @@ async def organization_page(
             current_user=current_user,
             organization=current_user.organization,
             org_users=org_users,
+            active_assistants=active_assistants,
+            total_calls=total_calls,
+            success_rate=round(success_rate, 1),
         ),
     )

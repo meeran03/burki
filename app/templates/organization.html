@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Organization - Buraaq Voice AI{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-8">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Organization</h1>
+            <p class="text-gray-400">View your organization information and team members</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                <i class="fas fa-building text-white text-lg"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Organization Information Card -->
+    <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-6">Organization Information</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Basic Info -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Organization Name</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ organization.name if organization else 'No Organization' }}
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Organization Slug</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white font-mono">
+                        {{ organization.slug if organization else 'N/A' }}
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ organization.description if organization and organization.description else 'No description provided' }}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Organization Stats -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Created</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ organization.created_at.strftime('%B %d, %Y') if organization and organization.created_at else 'N/A' }}
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Status</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        <span class="inline-block bg-green-600/20 text-green-400 px-3 py-1 rounded-md text-sm font-medium">
+                            {{ 'Active' if organization and organization.is_active else 'Inactive' }}
+                        </span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Domain</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ organization.domain if organization and organization.domain else 'No domain set' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Members Card -->
+    <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-xl font-semibold text-white">Team Members</h2>
+                <p class="text-gray-400 text-sm">View your organization's team members</p>
+            </div>
+        </div>
+        
+        <!-- Members List -->
+        <div class="space-y-4">
+            {% for user in org_users %}
+            <div class="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
+                <div class="flex items-center space-x-4">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white text-sm">
+                        {{ user.first_name[0] if user.first_name else 'U' }}{{ user.last_name[0] if user.last_name else '' }}
+                    </div>
+                    <div>
+                        <h3 class="font-medium text-white">{{ user.first_name }} {{ user.last_name }}</h3>
+                        <p class="text-gray-400 text-sm">{{ user.email }}</p>
+                        <div class="flex items-center space-x-2 mt-1">
+                            <span class="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded-md text-xs font-medium capitalize">
+                                {{ user.role }}
+                            </span>
+                            {% if user.is_verified %}
+                            <span class="inline-block bg-green-600/20 text-green-400 px-2 py-1 rounded-md text-xs font-medium">
+                                Verified
+                            </span>
+                            {% endif %}
+                            {% if user.google_id %}
+                            <span class="inline-block bg-gray-600/20 text-gray-400 px-2 py-1 rounded-md text-xs font-medium">
+                                <i class="fab fa-google mr-1"></i>Google
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% if current_user.id == user.id %}
+                <span class="text-gray-400 text-sm">(You)</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Member Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-700">
+            <div class="text-center">
+                <div class="text-2xl font-bold text-white">{{ org_users|length }}</div>
+                <div class="text-gray-400 text-sm">Total Members</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-blue-400">{{ org_users|selectattr('role', 'eq', 'admin')|list|length }}</div>
+                <div class="text-gray-400 text-sm">Administrators</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-green-400">{{ org_users|selectattr('is_verified', 'eq', true)|list|length }}</div>
+                <div class="text-gray-400 text-sm">Verified</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage Overview Card -->
+    <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-6">Usage Overview</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <!-- AI Assistants -->
+            <div class="text-center p-4 bg-gray-700/30 rounded-lg">
+                <div class="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-robot text-blue-400 text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white">{{ active_assistants|length if active_assistants else 0 }}</div>
+                <div class="text-gray-400 text-sm">Active Assistants</div>
+            </div>
+            
+            <!-- Total Calls -->
+            <div class="text-center p-4 bg-gray-700/30 rounded-lg">
+                <div class="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-phone text-green-400 text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white">{{ total_calls if total_calls else 0 }}</div>
+                <div class="text-gray-400 text-sm">Total Calls</div>
+            </div>
+            
+            <!-- Success Rate -->
+            <div class="text-center p-4 bg-gray-700/30 rounded-lg">
+                <div class="w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-chart-line text-purple-400 text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white">{{ success_rate if success_rate else 0 }}%</div>
+                <div class="text-gray-400 text-sm">Success Rate</div>
+            </div>
+            
+            <!-- API Keys -->
+            <div class="text-center p-4 bg-gray-700/30 rounded-lg">
+                <div class="w-12 h-12 bg-orange-600/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-key text-orange-400 text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white">{{ session.api_key_count or 0 }}</div>
+                <div class="text-gray-400 text-sm">API Keys</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
