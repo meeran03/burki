@@ -1,100 +1,736 @@
 {% extends "base.html" %}
 
-{% block title %}Assistants - VAPI Admin{% endblock %}
+{% block title %}AI Assistants - Buraaq Voice AI{% endblock %}
 
 {% block content %}
-<div class="px-4 sm:px-6 lg:px-8">
-    <div class="sm:flex sm:items-center">
-        <div class="sm:flex-auto">
-            <h1 class="text-2xl font-semibold text-gray-900">Assistants</h1>
-            <p class="mt-2 text-sm text-gray-700">
-                A list of all voice assistants in your account with their phone numbers and status.
+<div class="space-y-8">
+    <!-- Header Section -->
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white">AI Assistants</h1>
+            <p class="mt-2 text-gray-400">
+                Manage your voice AI assistants, monitor performance, and optimize configurations
             </p>
         </div>
-        <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-            <a href="/assistants/new" class="btn-primary">
-                Add Assistant
+        <div class="mt-4 lg:mt-0 flex items-center space-x-3">
+            <div class="relative">
+                <button id="export-btn" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export
+                </button>
+                <div id="export-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-50">
+                    <div class="py-1">
+                        <button class="export-option flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white" data-format="csv">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Export as CSV
+                        </button>
+                        <button class="export-option flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white" data-format="json">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
+                            Export as JSON
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <a href="/assistants/new" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                New Assistant
             </a>
         </div>
     </div>
     
-    <!-- Assistants List -->
-    <div class="mt-8 flex flex-col">
-        <div class="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-            <div class="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+            <div class="flex items-center">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white">{{ stats.total_assistants }}</div>
+                    <div class="text-sm text-gray-400">Total Assistants</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+            <div class="flex items-center">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white">{{ stats.active_assistants }}</div>
+                    <div class="text-sm text-gray-400">Active</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+            <div class="flex items-center">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white">{{ "%.1f"|format(stats.avg_performance) }}%</div>
+                    <div class="text-sm text-gray-400">Avg Performance</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+            <div class="flex items-center">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-white">{{ stats.total_calls }}</div>
+                    <div class="text-sm text-gray-400">Total Calls</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <form id="filter-form" method="GET" class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <!-- Search Bar -->
+            <div class="flex-1 max-w-md">
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <input 
+                        type="search" 
+                        name="search"
+                        id="assistant-search"
+                        value="{{ filters.search }}"
+                        class="block w-full pl-10 pr-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Search assistants..."
+                        autocomplete="off"
+                    />
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex items-center space-x-3">
+                <!-- Status Filter -->
+                <select name="status" id="status-filter" class="px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Status</option>
+                    <option value="active" {% if filters.status == "active" %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if filters.status == "inactive" %}selected{% endif %}>Inactive</option>
+                </select>
+
+                <!-- Performance Filter -->
+                <select name="performance" id="performance-filter" class="px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Performance</option>
+                    <option value="excellent" {% if filters.performance == "excellent" %}selected{% endif %}>Excellent (95%+)</option>
+                    <option value="good" {% if filters.performance == "good" %}selected{% endif %}>Good (85-94%)</option>
+                    <option value="needs-improvement" {% if filters.performance == "needs-improvement" %}selected{% endif %}>Needs Improvement (&lt;85%)</option>
+                </select>
+
+                <!-- Per Page -->
+                <select name="per_page" id="per-page-filter" class="px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="10" {% if pagination.per_page == 10 %}selected{% endif %}>10 per page</option>
+                    <option value="25" {% if pagination.per_page == 25 %}selected{% endif %}>25 per page</option>
+                    <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50 per page</option>
+                    <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100 per page</option>
+                </select>
+
+                <!-- View Toggle -->
+                <div class="flex items-center bg-gray-700/50 rounded-lg p-1">
+                    <button type="button" id="table-view" class="p-2 rounded-md bg-blue-600 text-white">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <button type="button" id="card-view" class="p-2 rounded-md text-gray-400 hover:text-white">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hidden inputs for sorting and pagination -->
+            <input type="hidden" name="sort_by" value="{{ filters.sort_by }}">
+            <input type="hidden" name="sort_order" value="{{ filters.sort_order }}">
+            <input type="hidden" name="page" value="1">
+        </form>
+    </div>
+
+    <!-- Assistants Table View -->
+    <div id="table-container" class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
                     {% if assistants %}
-                    <table class="min-w-full divide-y divide-gray-300">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Name</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Phone Number</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Created</th>
-                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                                    <span class="sr-only">Actions</span>
+        <!-- Bulk Actions Bar -->
+        <div id="bulk-actions" class="hidden bg-blue-600/20 border-b border-blue-500/30 px-6 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <span class="text-sm text-blue-300">
+                        <span id="selected-count">0</span> assistants selected
+                    </span>
+                    <button type="button" class="bulk-action-btn px-3 py-1 text-xs font-medium text-blue-300 hover:text-white bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors" data-action="activate">
+                        Activate All
+                    </button>
+                    <button type="button" class="bulk-action-btn px-3 py-1 text-xs font-medium text-blue-300 hover:text-white bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors" data-action="deactivate">
+                        Deactivate All
+                    </button>
+                    <button type="button" class="bulk-action-btn px-3 py-1 text-xs font-medium text-red-300 hover:text-white bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors" data-action="delete">
+                        Delete All
+                    </button>
+                </div>
+                <button type="button" id="clear-selection" class="text-sm text-gray-400 hover:text-white">
+                    Clear Selection
+                </button>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-700/50">
+                    <tr>
+                        <th class="px-6 py-4 text-left">
+                            <input type="checkbox" id="select-all" class="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500">
+                        </th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                            <button type="button" class="sort-btn flex items-center space-x-1 hover:text-white" data-sort="name">
+                                <span>Assistant</span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                                </svg>
+                            </button>
+                        </th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                            <button type="button" class="sort-btn flex items-center space-x-1 hover:text-white" data-sort="phone">
+                                <span>Phone Number</span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                                </svg>
+                            </button>
+                        </th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Performance</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                            <button type="button" class="sort-btn flex items-center space-x-1 hover:text-white" data-sort="calls">
+                                <span>Calls</span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                                </svg>
+                            </button>
+                        </th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                            <button type="button" class="sort-btn flex items-center space-x-1 hover:text-white" data-sort="created">
+                                <span>Created</span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                                </svg>
+                            </button>
                                 </th>
+                        <th class="px-6 py-4 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white">
+                <tbody class="divide-y divide-gray-700/50" id="assistants-tbody">
                             {% for assistant in assistants %}
-                            <tr>
-                                <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                                    {{ assistant.name }}
+                    <tr class="hover:bg-gray-700/30 transition-colors assistant-row" data-assistant-id="{{ assistant.id }}">
+                        <td class="px-6 py-4">
+                            <input type="checkbox" class="assistant-checkbox rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" value="{{ assistant.id }}">
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-sm">
+                                    {{ assistant.name[0] }}
+                                </div>
+                                <div>
+                                    <div class="text-sm font-medium text-white">{{ assistant.name }}</div>
+                                    <div class="text-xs text-gray-400">
+                                        {% if assistant.description %}
+                                            {{ assistant.description[:50] }}{% if assistant.description|length > 50 %}...{% endif %}
+                                        {% else %}
+                                            No description
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ assistant.phone_number }}
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-300">{{ assistant.phone_number }}</div>
+                            <div class="text-xs text-gray-500">
+                                {% set provider = assistant.twilio_account_sid[:8] if assistant.twilio_account_sid else 'Default' %}
+                                {{ provider }}...
+                            </div>
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        <td class="px-6 py-4">
                                     {% if assistant.is_active %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-green-400 mr-2"></div>
                                         Active
                                     </span>
                                     {% else %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2"></div>
                                         Inactive
                                     </span>
                                     {% endif %}
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ assistant.created_at.strftime('%b %d, %Y') }}
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full performance-bar" data-width="{{ assistant.performance }}"></div>
+                                </div>
+                                <span class="text-xs font-medium 
+                                    {% if assistant.performance >= 95 %}text-green-400
+                                    {% elif assistant.performance >= 85 %}text-yellow-400
+                                    {% else %}text-red-400{% endif %}">
+                                    {{ assistant.performance }}%
+                                </span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-white">{{ assistant.total_calls }}</div>
+                            <div class="text-xs text-gray-400">{{ assistant.completed_calls }} completed</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-300">{{ assistant.created_at.strftime('%b %d, %Y') }}</div>
+                            <div class="text-xs text-gray-500">{{ assistant.created_at.strftime('%H:%M') }}</div>
                                 </td>
-                                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                    <a href="/assistants/{{ assistant.id }}" class="text-blue-600 hover:text-blue-900 mr-4">
-                                        View
-                                    </a>
-                                    <a href="/assistants/{{ assistant.id }}/edit" class="text-indigo-600 hover:text-indigo-900 mr-4">
-                                        Edit
-                                    </a>
-                                    <button 
-                                        onclick="if(confirm('Are you sure you want to delete this assistant?')) window.location.href='/assistants/{{ assistant.id }}/delete'"
-                                        class="text-red-600 hover:text-red-900">
-                                        Delete
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex items-center justify-end space-x-2">
+                                <a href="/assistants/{{ assistant.id }}" class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="View Details">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                </a>
+                                <a href="/assistants/{{ assistant.id }}/edit" class="p-2 text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors" title="Edit">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </a>
+                                <button type="button" class="delete-btn p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete" data-assistant-id="{{ assistant.id }}" data-assistant-name="{{ assistant.name }}">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
                                     </button>
+                            </div>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
-                    {% else %}
-                    <div class="text-center py-12 bg-white">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </div>
+
+        <!-- Pagination -->
+        <div class="bg-gray-700/30 px-6 py-4 flex items-center justify-between border-t border-gray-700/50">
+            <div class="flex items-center space-x-2">
+                <span class="text-sm text-gray-400">
+                    Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to {{ ((pagination.page - 1) * pagination.per_page) + assistants|length }} of {{ pagination.total_count }} results
+                </span>
+            </div>
+            
+            <div class="flex items-center space-x-1">
+                {% if pagination.has_prev %}
+                    <a href="?{% for key, value in request.query_params.items() %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ pagination.prev_page }}" class="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-600/50 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                         </svg>
-                        <h3 class="mt-2 text-sm font-medium text-gray-900">No assistants</h3>
-                        <p class="mt-1 text-sm text-gray-500">
-                            Get started by creating a new assistant.
-                        </p>
-                        <div class="mt-6">
-                            <a href="/assistants/new" class="btn-primary">
-                                Create Assistant
+                    </a>
+                {% else %}
+                    <button class="p-2 rounded-lg text-gray-600 cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                {% endif %}
+
+                <!-- Page numbers -->
+                {% set start_page = pagination.page - 2 if pagination.page > 2 else 1 %}
+                {% set end_page = start_page + 4 if start_page + 4 <= pagination.total_pages else pagination.total_pages %}
+                {% set start_page = end_page - 4 if end_page - 4 > 0 else 1 %}
+
+                {% for page_num in range(start_page, end_page + 1) %}
+                    {% if page_num == pagination.page %}
+                        <button class="px-3 py-1 rounded-lg bg-blue-600 text-white text-sm">{{ page_num }}</button>
+                    {% else %}
+                        <a href="?{% for key, value in request.query_params.items() %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_num }}" class="px-3 py-1 rounded-lg text-gray-300 hover:text-white hover:bg-gray-600/50 transition-colors text-sm">{{ page_num }}</a>
+                    {% endif %}
+                {% endfor %}
+
+                {% if pagination.has_next %}
+                    <a href="?{% for key, value in request.query_params.items() %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ pagination.next_page }}" class="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-600/50 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </a>
+                {% else %}
+                    <button class="p-2 rounded-lg text-gray-600 cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="p-12 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-700/50 flex items-center justify-center">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-300 mb-2">No AI assistants found</h3>
+            <p class="text-gray-500 mb-6">Create your first AI assistant to start handling voice calls with intelligent automation.</p>
+            <a href="/assistants/new" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Create Your First Assistant
                             </a>
                         </div>
+        {% endif %}
+    </div>
+
+    <!-- Card View Container (Hidden by default) -->
+    <div id="card-container" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for assistant in assistants %}
+        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 hover:bg-gray-700/30 transition-colors">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
+                        {{ assistant.name[0] }}
                     </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">{{ assistant.name }}</h3>
+                        <p class="text-sm text-gray-400">{{ assistant.phone_number }}</p>
+                    </div>
+                </div>
+                <input type="checkbox" class="assistant-checkbox rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" value="{{ assistant.id }}">
+            </div>
+
+            {% if assistant.description %}
+                <p class="text-sm text-gray-300 mb-4">{{ assistant.description[:100] }}{% if assistant.description|length > 100 %}...{% endif %}</p>
+            {% endif %}
+
+            <div class="space-y-3 mb-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-400">Status</span>
+                    {% if assistant.is_active %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
+                            <div class="w-1.5 h-1.5 rounded-full bg-green-400 mr-1"></div>
+                            Active
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400">
+                            <div class="w-1.5 h-1.5 rounded-full bg-gray-400 mr-1"></div>
+                            Inactive
+                        </span>
                     {% endif %}
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-400">Performance</span>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full performance-bar" data-width="{{ assistant.performance }}"></div>
+                        </div>
+                        <span class="text-xs font-medium 
+                            {% if assistant.performance >= 95 %}text-green-400
+                            {% elif assistant.performance >= 85 %}text-yellow-400
+                            {% else %}text-red-400{% endif %}">
+                            {{ assistant.performance }}%
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-400">Total Calls</span>
+                    <span class="text-sm font-medium text-white">{{ assistant.total_calls }}</span>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-400">Success Rate</span>
+                    <span class="text-sm font-medium text-white">{{ "%.1f"|format(assistant.success_rate) }}%</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-gray-700">
+                <span class="text-xs text-gray-500">Created {{ assistant.created_at.strftime('%b %d, %Y') }}</span>
+                <div class="flex items-center space-x-2">
+                    <a href="/assistants/{{ assistant.id }}" class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="View">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </a>
+                    <a href="/assistants/{{ assistant.id }}/edit" class="p-2 text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors" title="Edit">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </a>
+                    <button type="button" class="delete-btn p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Delete" data-assistant-id="{{ assistant.id }}" data-assistant-name="{{ assistant.name }}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
+        {% endfor %}
     </div>
 </div>
+
+{% block scripts %}
+<script>
+    // Performance bar initialization
+    document.addEventListener('DOMContentLoaded', () => {
+        const performanceBars = document.querySelectorAll('.performance-bar');
+        performanceBars.forEach(bar => {
+            const width = bar.getAttribute('data-width');
+            const percentage = parseInt(width);
+            
+            // Set width
+            bar.style.width = width + '%';
+            
+            // Set color based on performance
+            if (percentage >= 95) {
+                bar.className += ' bg-gradient-to-r from-green-500 to-emerald-400';
+            } else if (percentage >= 85) {
+                bar.className += ' bg-gradient-to-r from-yellow-500 to-orange-400';
+            } else {
+                bar.className += ' bg-gradient-to-r from-red-500 to-red-400';
+            }
+        });
+    });
+
+    // Auto-submit form on filter changes
+    const filterForm = document.getElementById('filter-form');
+    const searchInput = document.getElementById('assistant-search');
+    const statusFilter = document.getElementById('status-filter');
+    const performanceFilter = document.getElementById('performance-filter');
+    const perPageFilter = document.getElementById('per-page-filter');
+
+    function submitForm() {
+        // Reset to page 1 when filtering
+        const pageInput = filterForm.querySelector('input[name="page"]');
+        if (pageInput) pageInput.value = '1';
+        
+        filterForm.submit();
+    }
+
+    let searchTimeout;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(submitForm, 500); // Debounce search
+    });
+
+    statusFilter.addEventListener('change', submitForm);
+    performanceFilter.addEventListener('change', submitForm);
+    perPageFilter.addEventListener('change', submitForm);
+
+    // Sorting functionality
+    document.querySelectorAll('.sort-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sortBy = btn.getAttribute('data-sort');
+            const sortByInput = filterForm.querySelector('input[name="sort_by"]');
+            const sortOrderInput = filterForm.querySelector('input[name="sort_order"]');
+            const pageInput = filterForm.querySelector('input[name="page"]');
+            
+            // Toggle sort order if clicking the same column
+            if (sortByInput.value === sortBy) {
+                sortOrderInput.value = sortOrderInput.value === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortByInput.value = sortBy;
+                sortOrderInput.value = 'asc';
+            }
+            
+            pageInput.value = '1';
+            filterForm.submit();
+        });
+    });
+
+    // Bulk selection functionality
+    const selectAllCheckbox = document.getElementById('select-all');
+    const assistantCheckboxes = document.querySelectorAll('.assistant-checkbox');
+    const bulkActions = document.getElementById('bulk-actions');
+    const selectedCount = document.getElementById('selected-count');
+    const clearSelection = document.getElementById('clear-selection');
+
+    function updateBulkActions() {
+        const checkedBoxes = document.querySelectorAll('.assistant-checkbox:checked');
+        if (checkedBoxes.length > 0) {
+            bulkActions.classList.remove('hidden');
+            selectedCount.textContent = checkedBoxes.length;
+        } else {
+            bulkActions.classList.add('hidden');
+        }
+        
+        selectAllCheckbox.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < assistantCheckboxes.length;
+        selectAllCheckbox.checked = checkedBoxes.length === assistantCheckboxes.length;
+    }
+
+    selectAllCheckbox.addEventListener('change', () => {
+        assistantCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+        updateBulkActions();
+    });
+
+    assistantCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkActions);
+    });
+
+    clearSelection.addEventListener('click', () => {
+        assistantCheckboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        selectAllCheckbox.checked = false;
+        updateBulkActions();
+    });
+
+    // Bulk actions
+    document.querySelectorAll('.bulk-action-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const action = btn.getAttribute('data-action');
+            const checkedBoxes = document.querySelectorAll('.assistant-checkbox:checked');
+            const assistantIds = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            if (assistantIds.length === 0) return;
+            
+            const actionText = action === 'delete' ? 'delete' : action;
+            if (!confirm(`Are you sure you want to ${actionText} ${assistantIds.length} assistant(s)?`)) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('action', action);
+                formData.append('assistant_ids', assistantIds.join(','));
+                
+                const response = await fetch('/assistants/bulk-action', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show success message and reload
+                    alert(result.message);
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                alert('Error performing bulk action: ' + error.message);
+            }
+        });
+    });
+
+    // Delete individual assistant
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const assistantId = btn.getAttribute('data-assistant-id');
+            const assistantName = btn.getAttribute('data-assistant-name');
+            
+            if (confirm(`Are you sure you want to delete "${assistantName}"? This action cannot be undone.`)) {
+                window.location.href = `/assistants/${assistantId}/delete`;
+            }
+        });
+    });
+    
+    // View toggle functionality
+    const tableViewBtn = document.getElementById('table-view');
+    const cardViewBtn = document.getElementById('card-view');
+    const tableContainer = document.getElementById('table-container');
+    const cardContainer = document.getElementById('card-container');
+    
+    tableViewBtn.addEventListener('click', () => {
+        tableViewBtn.classList.add('bg-blue-600', 'text-white');
+        tableViewBtn.classList.remove('text-gray-400');
+        cardViewBtn.classList.remove('bg-blue-600', 'text-white');
+        cardViewBtn.classList.add('text-gray-400');
+        
+        tableContainer.classList.remove('hidden');
+        cardContainer.classList.add('hidden');
+    });
+    
+    cardViewBtn.addEventListener('click', () => {
+        cardViewBtn.classList.add('bg-blue-600', 'text-white');
+        cardViewBtn.classList.remove('text-gray-400');
+        tableViewBtn.classList.remove('bg-blue-600', 'text-white');
+        tableViewBtn.classList.add('text-gray-400');
+        
+        tableContainer.classList.add('hidden');
+        cardContainer.classList.remove('hidden');
+        
+        // Re-initialize performance bars for card view
+        setTimeout(() => {
+            const performanceBars = cardContainer.querySelectorAll('.performance-bar');
+            performanceBars.forEach(bar => {
+                const width = bar.getAttribute('data-width');
+                const percentage = parseInt(width);
+                
+                bar.style.width = width + '%';
+                
+                if (percentage >= 95) {
+                    bar.className = bar.className.replace(/bg-\S+/g, '') + ' bg-gradient-to-r from-green-500 to-emerald-400';
+                } else if (percentage >= 85) {
+                    bar.className = bar.className.replace(/bg-\S+/g, '') + ' bg-gradient-to-r from-yellow-500 to-orange-400';
+                } else {
+                    bar.className = bar.className.replace(/bg-\S+/g, '') + ' bg-gradient-to-r from-red-500 to-red-400';
+                }
+            });
+        }, 100);
+    });
+
+    // Export functionality
+    const exportBtn = document.getElementById('export-btn');
+    const exportDropdown = document.getElementById('export-dropdown');
+    
+    exportBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportDropdown.classList.toggle('hidden');
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+        exportDropdown.classList.add('hidden');
+    });
+    
+    // Handle export options
+    document.querySelectorAll('.export-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const format = option.getAttribute('data-format');
+            const currentParams = new URLSearchParams(window.location.search);
+            currentParams.set('format', format);
+            
+            // Create export URL with current filters
+            const exportUrl = `/assistants/export?${currentParams.toString()}`;
+            
+            // Create temporary link and click it to trigger download
+            const link = document.createElement('a');
+            link.href = exportUrl;
+            link.download = true;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            exportDropdown.classList.add('hidden');
+        });
+    });
+</script>
+{% endblock %}
 {% endblock %} 

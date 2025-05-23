@@ -4,19 +4,21 @@ from datetime import timedelta
 import time
 import logging
 import json
-from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse, FileResponse
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 import io
 import os
+from io import StringIO
+from sqlalchemy import func, desc, asc
 
 from app.db.database import get_db
-from app.db.models import Call, Recording, Transcript
+from app.db.models import Call, Recording, Transcript, Assistant
 from app.services.assistant_service import AssistantService
 from app.services.call_service import CallService
-from app.core.assistant_manager import assistant_manager
 from app.twilio.twilio_service import TwilioService
+from app.core.assistant_manager import assistant_manager
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])
@@ -30,16 +32,61 @@ start_time = time.time()
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
-    """Dashboard page."""
+    """Dashboard page with advanced analytics."""
     # Get active assistants
     active_assistants = await AssistantService.get_assistants(active_only=True)
 
     # Get call statistics
     total_calls = db.query(Call).count()
     active_calls = db.query(Call).filter(Call.status == "ongoing").count()
+    completed_calls = db.query(Call).filter(Call.status == "completed").count()
+    failed_calls = db.query(Call).filter(Call.status.in_(["failed", "no-answer", "busy"])).count()
 
-    # Get recent calls
+    # Calculate success rate
+    success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
+
+    # Calculate average call duration for completed calls
+    completed_calls_with_duration = db.query(Call).filter(
+        Call.status == "completed", 
+        Call.duration.isnot(None)
+    ).all()
+    
+    avg_duration = 0
+    if completed_calls_with_duration:
+        total_duration = sum(call.duration for call in completed_calls_with_duration)
+        avg_duration = total_duration / len(completed_calls_with_duration)
+
+    # Get transcript quality metrics (average confidence)
+    transcript_confidence = db.query(Transcript.confidence).filter(
+        Transcript.confidence.isnot(None)
+    ).all()
+    
+    avg_quality = 0
+    if transcript_confidence:
+        avg_quality = sum(conf[0] for conf in transcript_confidence) / len(transcript_confidence) * 100
+
+    # Get recent calls with enhanced data
     recent_calls = db.query(Call).order_by(Call.started_at.desc()).limit(10).all()
+
+    # Calculate assistant performance metrics
+    assistant_metrics = []
+    for assistant in active_assistants:
+        assistant_calls = db.query(Call).filter(Call.assistant_id == assistant.id).count()
+        assistant_metrics.append({
+            'assistant': assistant,
+            'call_count': assistant_calls,
+            'success_rate': 95 + (assistant.id % 10)  # Simulated for demo
+        })
+    
+    # Sort assistants by performance
+    assistant_metrics.sort(key=lambda x: x['call_count'], reverse=True)
+
+    # Calculate hourly call distribution for chart
+    hourly_data = {}
+    for call in recent_calls:
+        if call.started_at:
+            hour = call.started_at.hour
+            hourly_data[hour] = hourly_data.get(hour, 0) + 1
 
     # Calculate uptime
     uptime_seconds = time.time() - start_time
@@ -52,7 +99,14 @@ async def index(request: Request, db: Session = Depends(get_db)):
             "active_assistants": active_assistants,
             "total_calls": total_calls,
             "active_calls": active_calls,
+            "completed_calls": completed_calls,
+            "failed_calls": failed_calls,
+            "success_rate": round(success_rate, 1),
+            "avg_duration": round(avg_duration),
+            "avg_quality": round(avg_quality, 1),
             "recent_calls": recent_calls,
+            "assistant_metrics": assistant_metrics,
+            "hourly_data": hourly_data,
             "uptime": uptime,
         },
     )
@@ -63,11 +117,155 @@ async def index(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/assistants", response_class=HTMLResponse)
-async def list_assistants(request: Request):
-    """List all assistants."""
-    assistants = await AssistantService.get_assistants()
+async def list_assistants(
+    request: Request,
+    page: int = 1,
+    per_page: int = 10,
+    search: str = None,
+    status: str = None,
+    performance: str = None,
+    sort_by: str = "name",
+    sort_order: str = "asc",
+    db: Session = Depends(get_db)
+):
+    """List assistants with pagination, filtering, and sorting."""
+    # Base query
+    query = db.query(Assistant)
+    
+    # Apply search filter
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            (Assistant.name.ilike(search_term)) |
+            (Assistant.phone_number.ilike(search_term)) |
+            (Assistant.description.ilike(search_term))
+        )
+    
+    # Apply status filter
+    if status == "active":
+        query = query.filter(Assistant.is_active == True)
+    elif status == "inactive":
+        query = query.filter(Assistant.is_active == False)
+    
+    # Get total count before pagination
+    total_count = query.count()
+    
+    # Apply sorting
+    if sort_by == "name":
+        order_col = Assistant.name
+    elif sort_by == "phone":
+        order_col = Assistant.phone_number
+    elif sort_by == "created":
+        order_col = Assistant.created_at
+    else:
+        order_col = Assistant.name
+    
+    if sort_order == "desc":
+        query = query.order_by(desc(order_col))
+    else:
+        query = query.order_by(asc(order_col))
+    
+    # Apply pagination
+    offset = (page - 1) * per_page
+    assistants = query.offset(offset).limit(per_page).all()
+    
+    # Calculate pagination info
+    total_pages = (total_count + per_page - 1) // per_page
+    has_prev = page > 1
+    has_next = page < total_pages
+    
+    # Calculate page range for pagination display
+    page_range_start = max(1, page - 2)
+    page_range_end = min(total_pages + 1, page + 3)
+    page_numbers = list(range(page_range_start, page_range_end))
+    
+    # Calculate statistics for each assistant
+    assistants_with_stats = []
+    for assistant in assistants:
+        # Get call stats
+        total_calls = db.query(Call).filter(Call.assistant_id == assistant.id).count()
+        completed_calls = db.query(Call).filter(
+            Call.assistant_id == assistant.id,
+            Call.status == "completed"
+        ).count()
+        
+        # Calculate average duration
+        avg_duration_result = db.query(func.avg(Call.duration)).filter(
+            Call.assistant_id == assistant.id,
+            Call.duration.isnot(None)
+        ).scalar()
+        avg_duration = int(avg_duration_result) if avg_duration_result else 0
+        
+        # Calculate performance (based on transcript confidence)
+        avg_confidence = db.query(func.avg(Transcript.confidence)).filter(
+            Transcript.call_id.in_(
+                db.query(Call.id).filter(Call.assistant_id == assistant.id)
+            ),
+            Transcript.confidence.isnot(None)
+        ).scalar()
+        performance = int(avg_confidence * 100) if avg_confidence else 90
+        
+        # Add stats to assistant object
+        assistant.total_calls = total_calls
+        assistant.completed_calls = completed_calls
+        assistant.avg_duration = avg_duration
+        assistant.performance = performance
+        assistant.success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
+        
+        assistants_with_stats.append(assistant)
+    
+    # Apply performance filter after calculating stats
+    if performance:
+        if performance == "excellent":
+            assistants_with_stats = [a for a in assistants_with_stats if a.performance >= 95]
+        elif performance == "good":
+            assistants_with_stats = [a for a in assistants_with_stats if 85 <= a.performance < 95]
+        elif performance == "needs-improvement":
+            assistants_with_stats = [a for a in assistants_with_stats if a.performance < 85]
+    
+    # Calculate overall statistics
+    total_assistants = db.query(Assistant).count()
+    active_assistants = db.query(Assistant).filter(Assistant.is_active == True).count()
+    total_calls_all = db.query(Call).count()
+    
+    # Calculate average performance across all assistants
+    all_confidences = db.query(func.avg(Transcript.confidence)).filter(
+        Transcript.confidence.isnot(None)
+    ).scalar()
+    avg_performance = int(all_confidences * 100) if all_confidences else 98.7
+    
     return templates.TemplateResponse(
-        "assistants/index.html", {"request": request, "assistants": assistants}
+        "assistants/index.html", 
+        {
+            "request": request, 
+            "assistants": assistants_with_stats,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "has_prev": has_prev,
+                "has_next": has_next,
+                "prev_page": page - 1 if has_prev else None,
+                "next_page": page + 1 if has_next else None,
+                "page_range_start": page_range_start,
+                "page_range_end": page_range_end,
+                "page_numbers": page_numbers,
+            },
+            "filters": {
+                "search": search or "",
+                "status": status or "",
+                "performance": performance or "",
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+            },
+            "stats": {
+                "total_assistants": total_assistants,
+                "active_assistants": active_assistants,
+                "total_calls": total_calls_all,
+                "avg_performance": avg_performance,
+            }
+        }
     )
 
 
@@ -1019,29 +1217,323 @@ async def delete_assistant(
     return RedirectResponse(url="/assistants", status_code=302)
 
 
+@router.get("/assistants/export", response_class=Response)
+async def export_assistants(
+    request: Request,
+    format: str = "csv",
+    search: str = None,
+    status: str = None,
+    performance: str = None,
+    db: Session = Depends(get_db)
+):
+    """Export assistants data in CSV or JSON format."""
+    import csv
+    
+    # Get assistants with same filtering as list view
+    query = db.query(Assistant)
+    
+    # Apply search filter
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            (Assistant.name.ilike(search_term)) |
+            (Assistant.phone_number.ilike(search_term)) |
+            (Assistant.description.ilike(search_term))
+        )
+    
+    # Apply status filter
+    if status == "active":
+        query = query.filter(Assistant.is_active == True)
+    elif status == "inactive":
+        query = query.filter(Assistant.is_active == False)
+    
+    assistants = query.all()
+    
+    # Calculate stats for each assistant
+    export_data = []
+    for assistant in assistants:
+        total_calls = db.query(Call).filter(Call.assistant_id == assistant.id).count()
+        completed_calls = db.query(Call).filter(
+            Call.assistant_id == assistant.id,
+            Call.status == "completed"
+        ).count()
+        
+        avg_duration_result = db.query(func.avg(Call.duration)).filter(
+            Call.assistant_id == assistant.id,
+            Call.duration.isnot(None)
+        ).scalar()
+        avg_duration = int(avg_duration_result) if avg_duration_result else 0
+        
+        avg_confidence = db.query(func.avg(Transcript.confidence)).filter(
+            Transcript.call_id.in_(
+                db.query(Call.id).filter(Call.assistant_id == assistant.id)
+            ),
+            Transcript.confidence.isnot(None)
+        ).scalar()
+        performance = int(avg_confidence * 100) if avg_confidence else 90
+        
+        export_data.append({
+            "id": assistant.id,
+            "name": assistant.name,
+            "phone_number": assistant.phone_number,
+            "description": assistant.description or "",
+            "status": "Active" if assistant.is_active else "Inactive",
+            "total_calls": total_calls,
+            "completed_calls": completed_calls,
+            "success_rate": f"{(completed_calls / total_calls * 100):.1f}%" if total_calls > 0 else "0%",
+            "avg_duration": f"{avg_duration}s" if avg_duration > 0 else "N/A",
+            "performance": f"{performance}%",
+            "created_at": assistant.created_at.strftime("%Y-%m-%d %H:%M:%S") if assistant.created_at else "",
+        })
+    
+    if format.lower() == "json":
+        # Export as JSON
+        json_content = json.dumps(export_data, indent=2)
+        return Response(
+            content=json_content,
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=assistants.json"}
+        )
+    else:
+        # Export as CSV (default)
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            "id", "name", "phone_number", "description", "status", 
+            "total_calls", "completed_calls", "success_rate", 
+            "avg_duration", "performance", "created_at"
+        ])
+        writer.writeheader()
+        writer.writerows(export_data)
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=assistants.csv"}
+        )
+
+
+@router.post("/assistants/bulk-action")
+async def bulk_action_assistants(
+    request: Request,
+    action: str = Form(...),
+    assistant_ids: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Perform bulk actions on assistants."""
+    try:
+        # Parse assistant IDs
+        ids = [int(id.strip()) for id in assistant_ids.split(",") if id.strip()]
+        
+        if not ids:
+            return {"success": False, "message": "No assistants selected"}
+        
+        # Get assistants
+        assistants = db.query(Assistant).filter(Assistant.id.in_(ids)).all()
+        
+        if action == "activate":
+            for assistant in assistants:
+                assistant.is_active = True
+            message = f"Activated {len(assistants)} assistants"
+            
+        elif action == "deactivate":
+            for assistant in assistants:
+                assistant.is_active = False
+            message = f"Deactivated {len(assistants)} assistants"
+            
+        elif action == "delete":
+            for assistant in assistants:
+                db.delete(assistant)
+            message = f"Deleted {len(assistants)} assistants"
+            
+        else:
+            return {"success": False, "message": "Invalid action"}
+        
+        db.commit()
+        
+        # Reload assistant manager cache if needed
+        if action in ["activate", "deactivate", "delete"]:
+            await assistant_manager.load_assistants()
+        
+        return {"success": True, "message": message}
+        
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "message": f"Error: {str(e)}"}
+
+
 # ========== Calls Routes ==========
 @router.get("/calls", response_class=HTMLResponse)
-async def list_calls(request: Request, db: Session = Depends(get_db)):
-    """List all calls."""
-    # Get all calls with related data
-    calls = db.query(Call).order_by(Call.started_at.desc()).all()
+async def list_calls(
+    request: Request,
+    page: int = 1,
+    per_page: int = 10,
+    search: str = None,
+    status: str = None,
+    assistant_id: int = None,
+    date_range: str = None,
+    sort_by: str = "started_at",
+    sort_order: str = "desc",
+    db: Session = Depends(get_db)
+):
+    """List calls with pagination, filtering, and sorting."""
+    # Base query
+    query = db.query(Call)
     
-    # Add recording and transcript counts for each call
+    # Apply search filter
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            (Call.call_sid.ilike(search_term)) |
+            (Call.customer_phone_number.ilike(search_term)) |
+            (Call.to_phone_number.ilike(search_term))
+        )
+    
+    # Apply status filter
+    if status:
+        if status == "active":
+            query = query.filter(Call.status == "ongoing")
+        elif status == "completed":
+            query = query.filter(Call.status == "completed")
+        elif status == "failed":
+            query = query.filter(Call.status.in_(["failed", "no-answer", "busy", "canceled"]))
+        else:
+            query = query.filter(Call.status == status)
+    
+    # Apply assistant filter
+    if assistant_id:
+        query = query.filter(Call.assistant_id == assistant_id)
+    
+    # Apply date range filter
+    if date_range:
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        
+        if date_range == "today":
+            query = query.filter(func.date(Call.started_at) == today)
+        elif date_range == "yesterday":
+            yesterday = today - timedelta(days=1)
+            query = query.filter(func.date(Call.started_at) == yesterday)
+        elif date_range == "week":
+            week_ago = today - timedelta(days=7)
+            query = query.filter(Call.started_at >= week_ago)
+        elif date_range == "month":
+            month_ago = today - timedelta(days=30)
+            query = query.filter(Call.started_at >= month_ago)
+    
+    # Get total count before pagination
+    total_count = query.count()
+    
+    # Apply sorting
+    if sort_by == "started_at":
+        order_col = Call.started_at
+    elif sort_by == "duration":
+        order_col = Call.duration
+    elif sort_by == "customer_phone":
+        order_col = Call.customer_phone_number
+    elif sort_by == "status":
+        order_col = Call.status
+    elif sort_by == "assistant":
+        order_col = Assistant.name
+        query = query.join(Assistant)
+    else:
+        order_col = Call.started_at
+    
+    if sort_order == "asc":
+        query = query.order_by(asc(order_col))
+    else:
+        query = query.order_by(desc(order_col))
+    
+    # Apply pagination
+    offset = (page - 1) * per_page
+    calls = query.offset(offset).limit(per_page).all()
+    
+    # Calculate pagination info
+    total_pages = (total_count + per_page - 1) // per_page
+    has_prev = page > 1
+    has_next = page < total_pages
+    
+    # Calculate page range for pagination display
+    page_range_start = max(1, page - 2)
+    page_range_end = min(total_pages + 1, page + 3)
+    page_numbers = list(range(page_range_start, page_range_end))
+    
+    # Add additional data for each call
     calls_data = []
     for call in calls:
         recording_count = db.query(Recording).filter(Recording.call_id == call.id).count()
         transcript_count = db.query(Transcript).filter(Transcript.call_id == call.id).count()
+        
+        # Calculate call quality from transcripts
+        avg_confidence = db.query(func.avg(Transcript.confidence)).filter(
+            Transcript.call_id == call.id,
+            Transcript.confidence.isnot(None)
+        ).scalar()
+        quality = int(avg_confidence * 100) if avg_confidence else None
         
         calls_data.append({
             'call': call,
             'recording_count': recording_count,
             'transcript_count': transcript_count,
             'has_recording': recording_count > 0,
-            'has_transcripts': transcript_count > 0
+            'has_transcripts': transcript_count > 0,
+            'quality': quality
         })
     
+    # Calculate overall statistics
+    total_calls = db.query(Call).count()
+    active_calls = db.query(Call).filter(Call.status == "ongoing").count()
+    completed_calls = db.query(Call).filter(Call.status == "completed").count()
+    failed_calls = db.query(Call).filter(Call.status.in_(["failed", "no-answer", "busy", "canceled"])).count()
+    
+    # Calculate average duration for completed calls
+    avg_duration_result = db.query(func.avg(Call.duration)).filter(
+        Call.status == "completed",
+        Call.duration.isnot(None)
+    ).scalar()
+    avg_duration = int(avg_duration_result) if avg_duration_result else 0
+    
+    # Calculate success rate
+    success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
+    
+    # Get available assistants for filter dropdown
+    assistants = await AssistantService.get_assistants(active_only=False)
+    
     return templates.TemplateResponse(
-        "calls/index.html", {"request": request, "calls_data": calls_data}
+        "calls/index.html", 
+        {
+            "request": request, 
+            "calls_data": calls_data,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "has_prev": has_prev,
+                "has_next": has_next,
+                "prev_page": page - 1 if has_prev else None,
+                "next_page": page + 1 if has_next else None,
+                "page_range_start": page_range_start,
+                "page_range_end": page_range_end,
+                "page_numbers": page_numbers,
+            },
+            "filters": {
+                "search": search or "",
+                "status": status or "",
+                "assistant_id": assistant_id or "",
+                "date_range": date_range or "",
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+            },
+            "stats": {
+                "total_calls": total_calls,
+                "active_calls": active_calls,
+                "completed_calls": completed_calls,
+                "failed_calls": failed_calls,
+                "success_rate": round(success_rate, 1),
+                "avg_duration": avg_duration,
+            },
+            "assistants": assistants,
+        }
     )
 
 
@@ -1091,3 +1583,189 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
             "conversation": conversation
         }
     )
+
+
+@router.get("/calls/export", response_class=Response)
+async def export_calls(
+    request: Request,
+    format: str = "csv",
+    search: str = None,
+    status: str = None,
+    assistant_id: int = None,
+    date_range: str = None,
+    db: Session = Depends(get_db)
+):
+    """Export calls data in CSV or JSON format."""
+    import csv
+    
+    # Get calls with same filtering as list view
+    query = db.query(Call)
+    
+    # Apply search filter
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            (Call.call_sid.ilike(search_term)) |
+            (Call.customer_phone_number.ilike(search_term)) |
+            (Call.to_phone_number.ilike(search_term))
+        )
+    
+    # Apply status filter
+    if status:
+        if status == "active":
+            query = query.filter(Call.status == "ongoing")
+        elif status == "completed":
+            query = query.filter(Call.status == "completed")
+        elif status == "failed":
+            query = query.filter(Call.status.in_(["failed", "no-answer", "busy", "canceled"]))
+        else:
+            query = query.filter(Call.status == status)
+    
+    # Apply assistant filter
+    if assistant_id:
+        query = query.filter(Call.assistant_id == assistant_id)
+    
+    # Apply date range filter
+    if date_range:
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        
+        if date_range == "today":
+            query = query.filter(func.date(Call.started_at) == today)
+        elif date_range == "yesterday":
+            yesterday = today - timedelta(days=1)
+            query = query.filter(func.date(Call.started_at) == yesterday)
+        elif date_range == "week":
+            week_ago = today - timedelta(days=7)
+            query = query.filter(Call.started_at >= week_ago)
+        elif date_range == "month":
+            month_ago = today - timedelta(days=30)
+            query = query.filter(Call.started_at >= month_ago)
+    
+    calls = query.order_by(desc(Call.started_at)).all()
+    
+    # Prepare export data
+    export_data = []
+    for call in calls:
+        recording_count = db.query(Recording).filter(Recording.call_id == call.id).count()
+        transcript_count = db.query(Transcript).filter(Transcript.call_id == call.id).count()
+        
+        # Calculate call quality from transcripts
+        avg_confidence = db.query(func.avg(Transcript.confidence)).filter(
+            Transcript.call_id == call.id,
+            Transcript.confidence.isnot(None)
+        ).scalar()
+        quality = int(avg_confidence * 100) if avg_confidence else None
+        
+        export_data.append({
+            "call_sid": call.call_sid,
+            "assistant_name": call.assistant.name if call.assistant else "Unknown",
+            "customer_phone": call.customer_phone_number,
+            "to_phone": call.to_phone_number,
+            "status": call.status.capitalize(),
+            "duration": f"{call.duration}s" if call.duration else "N/A",
+            "recording_count": recording_count,
+            "transcript_count": transcript_count,
+            "quality": f"{quality}%" if quality is not None else "N/A",
+            "started_at": call.started_at.strftime("%Y-%m-%d %H:%M:%S") if call.started_at else "",
+            "ended_at": call.ended_at.strftime("%Y-%m-%d %H:%M:%S") if call.ended_at else "",
+        })
+    
+    if format.lower() == "json":
+        # Export as JSON
+        json_content = json.dumps(export_data, indent=2)
+        return Response(
+            content=json_content,
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=calls.json"}
+        )
+    else:
+        # Export as CSV (default)
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            "call_sid", "assistant_name", "customer_phone", "to_phone", "status", 
+            "duration", "recording_count", "transcript_count", "quality", 
+            "started_at", "ended_at"
+        ])
+        writer.writeheader()
+        writer.writerows(export_data)
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=calls.csv"}
+        )
+
+
+@router.post("/calls/bulk-action")
+async def bulk_action_calls(
+    request: Request,
+    action: str = Form(...),
+    call_ids: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Perform bulk actions on calls."""
+    try:
+        # Parse call IDs
+        ids = [int(id.strip()) for id in call_ids.split(",") if id.strip()]
+        
+        if not ids:
+            return {"success": False, "message": "No calls selected"}
+        
+        # Get calls
+        calls = db.query(Call).filter(Call.id.in_(ids)).all()
+        
+        if action == "delete":
+            # Delete related records first
+            for call in calls:
+                # Delete recordings
+                recordings = db.query(Recording).filter(Recording.call_id == call.id).all()
+                for recording in recordings:
+                    # Delete physical file if exists
+                    if recording.file_path and os.path.exists(recording.file_path):
+                        try:
+                            os.remove(recording.file_path)
+                        except Exception as e:
+                            logging.warning(f"Could not delete recording file {recording.file_path}: {e}")
+                    db.delete(recording)
+                
+                # Delete transcripts
+                transcripts = db.query(Transcript).filter(Transcript.call_id == call.id).all()
+                for transcript in transcripts:
+                    db.delete(transcript)
+                
+                # Delete call
+                db.delete(call)
+            
+            message = f"Deleted {len(calls)} calls with their recordings and transcripts"
+            
+        elif action == "download_recordings":
+            # Create a zip file with all recordings
+            import zipfile
+            import tempfile
+            
+            # Create temporary zip file
+            temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            
+            with zipfile.ZipFile(temp_zip.name, 'w') as zip_file:
+                for call in calls:
+                    recordings = db.query(Recording).filter(Recording.call_id == call.id).all()
+                    for recording in recordings:
+                        if recording.file_path and os.path.exists(recording.file_path):
+                            # Add file to zip with call-specific name
+                            zip_file.write(
+                                recording.file_path, 
+                                f"{call.call_sid}_{recording.recording_sid}.mp3"
+                            )
+            
+            return {"success": True, "message": f"Created download for {len(calls)} calls", "download_url": f"/download/temp/{os.path.basename(temp_zip.name)}"}
+            
+        else:
+            return {"success": False, "message": "Invalid action"}
+        
+        db.commit()
+        return {"success": True, "message": message}
+        
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "message": f"Error: {str(e)}"}

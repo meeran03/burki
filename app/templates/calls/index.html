@@ -1,113 +1,602 @@
 {% extends "base.html" %}
 
-{% block title %}Calls - VAPI Admin{% endblock %}
+{% block title %}Voice Intelligence Dashboard - Buraaq Voice AI{% endblock %}
 
 {% block content %}
-<div class="px-4 sm:px-6 lg:px-8">
-    <div class="sm:flex sm:items-center">
-        <div class="sm:flex-auto">
-            <h1 class="text-2xl font-semibold text-gray-900">Calls</h1>
-            <p class="mt-2 text-sm text-gray-700">
-                A list of all calls processed by your voice assistants.
+<div class="space-y-8">
+    <!-- Header Section -->
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+        <div>
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Voice Intelligence Dashboard
+            </h1>
+            <p class="mt-2 text-gray-400">
+                Real-time analytics and insights from your voice AI conversations
             </p>
         </div>
+        <div class="mt-4 lg:mt-0 flex items-center space-x-3">
+            <!-- Live indicator -->
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                <span class="text-blue-100 text-sm">{{ stats.active_calls }} Live Sessions</span>
+            </div>
+            
+            <!-- Export button -->
+            <div class="relative inline-block text-left">
+                <button id="exportButton" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Export
+                </button>
+                <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-48 bg-gray-800/90 backdrop-blur-sm border border-gray-700/50 rounded-lg shadow-lg z-50">
+                    <div class="py-1">
+                        <a href="#" onclick="exportData('csv')" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 hover:text-white">Export as CSV</a>
+                        <a href="#" onclick="exportData('json')" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 hover:text-white">Export as JSON</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <!-- Total Calls KPI -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-white">{{ stats.total_calls }}</div>
+                        <div class="text-sm text-gray-400">Total Calls</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Rate KPI -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-green-500/10 to-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-white">{{ stats.success_rate }}%</div>
+                        <div class="text-sm text-gray-400">Success Rate</div>
+                    </div>
+                </div>
+                <div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400" style="width: {{ stats.success_rate }}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Average Duration KPI -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-white">{{ stats.avg_duration }}s</div>
+                        <div class="text-sm text-gray-400">Avg Duration</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Calls KPI -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-white">{{ stats.active_calls }}</div>
+                        <div class="text-sm text-gray-400">Live Now</div>
+                    </div>
+                </div>
+                {% if stats.active_calls > 0 %}
+                <div class="w-8 h-1 bg-yellow-500 rounded-full animate-pulse"></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <form method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <!-- Search -->
+            <div class="relative md:col-span-2">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <input type="text" name="search" value="{{ filters.search }}" 
+                       placeholder="Search calls, phone numbers..." 
+                       class="block w-full pl-10 pr-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- Status Filter -->
+            <select name="status" class="px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">All Status</option>
+                <option value="active" {% if filters.status == "active" %}selected{% endif %}>Active</option>
+                <option value="completed" {% if filters.status == "completed" %}selected{% endif %}>Completed</option>
+                <option value="failed" {% if filters.status == "failed" %}selected{% endif %}>Failed</option>
+            </select>
+
+            <!-- Assistant Filter -->
+            <select name="assistant_id" class="px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">All Assistants</option>
+                {% for assistant in assistants %}
+                <option value="{{ assistant.id }}" {% if filters.assistant_id|string == assistant.id|string %}selected{% endif %}>
+                    {{ assistant.name }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <!-- Date Range Filter -->
+            <select name="date_range" class="px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">All Time</option>
+                <option value="today" {% if filters.date_range == "today" %}selected{% endif %}>Today</option>
+                <option value="yesterday" {% if filters.date_range == "yesterday" %}selected{% endif %}>Yesterday</option>
+                <option value="week" {% if filters.date_range == "week" %}selected{% endif %}>This Week</option>
+                <option value="month" {% if filters.date_range == "month" %}selected{% endif %}>This Month</option>
+            </select>
+
+            <!-- Sort -->
+            <select name="sort_by" class="px-3 py-2 border border-gray-600 rounded-lg bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="started_at" {% if filters.sort_by == "started_at" %}selected{% endif %}>Date</option>
+                <option value="duration" {% if filters.sort_by == "duration" %}selected{% endif %}>Duration</option>
+                <option value="status" {% if filters.sort_by == "status" %}selected{% endif %}>Status</option>
+                <option value="assistant" {% if filters.sort_by == "assistant" %}selected{% endif %}>Assistant</option>
+            </select>
+
+            <!-- Actions -->
+            <div class="flex items-center space-x-2">
+                <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                    Filter
+                </button>
+                <a href="/calls" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                    Clear
+                </a>
+            </div>
+        </form>
     </div>
     
-    <!-- Calls List -->
-    <div class="mt-8 flex flex-col">
-        <div class="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-            <div class="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+    <!-- Calls Table -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
                     {% if calls_data %}
-                    <table class="min-w-full divide-y divide-gray-300">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Call SID</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Assistant</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Caller</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Duration</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Recording</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Started</th>
-                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                                    <span class="sr-only">Actions</span>
+        <!-- Table Header -->
+        <div class="px-6 py-4 bg-gray-700/50 border-b border-gray-700/50">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">Voice Intelligence Records</h3>
+                <div class="flex items-center space-x-4">
+                    <!-- Bulk Actions -->
+                    <div class="flex items-center space-x-2">
+                        <select id="bulkAction" class="px-3 py-1 text-sm border border-gray-600 rounded bg-gray-700/50 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">Bulk Actions</option>
+                            <option value="download_recordings">Download Recordings</option>
+                            <option value="delete">Delete Calls</option>
+                        </select>
+                        <button id="applyBulkAction" class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            Apply
+                        </button>
+                    </div>
+                    
+                    <!-- Results count -->
+                    <span class="text-sm text-gray-400">
+                        {{ pagination.total_count }} results
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-700/30">
+                    <tr>
+                        <th class="w-12 px-6 py-4">
+                            <input type="checkbox" id="selectAll" class="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
                                 </th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Call Details</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Assistant</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Performance</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Duration</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Data</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white">
+                <tbody class="divide-y divide-gray-700/50">
                             {% for call_data in calls_data %}
                             {% set call = call_data.call %}
-                            <tr>
-                                <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                                    {{ call.call_sid }}
+                    <tr class="hover:bg-gray-700/30 transition-colors group">
+                        <td class="px-6 py-4">
+                            <input type="checkbox" class="call-checkbox rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800" value="{{ call.id }}">
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex flex-col">
+                                <div class="text-sm font-medium text-white">{{ call.call_sid }}</div>
+                                <div class="text-sm text-gray-400">{{ call.customer_phone_number }}</div>
+                                <div class="text-xs text-gray-500">{{ call.started_at.strftime('%b %d, %Y %H:%M') }}</div>
+                            </div>
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    <a href="/assistants/{{ call.assistant_id }}" class="text-blue-600 hover:text-blue-900">
-                                        {{ call.assistant.name }}
-                                    </a>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center mr-3">
+                                    <span class="text-white font-bold text-sm">{{ call.assistant.name[0] if call.assistant else '?' }}</span>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-medium text-white">
+                                        <a href="/assistants/{{ call.assistant_id }}" class="hover:text-blue-400 transition-colors">
+                                            {{ call.assistant.name if call.assistant else 'Unknown' }}
+                                        </a>
+                                    </div>
+                                    <div class="text-xs text-gray-400">{{ call.to_phone_number }}</div>
+                                </div>
+                            </div>
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ call.customer_phone_number }}
-                                </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        <td class="px-6 py-4">
                                     {% if call.status == "ongoing" %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                        Ongoing
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mr-2 animate-pulse"></div>
+                                Live
                                     </span>
                                     {% elif call.status == "completed" %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                                <div class="w-1.5 h-1.5 rounded-full bg-green-400 mr-2"></div>
                                         Completed
                                     </span>
                                     {% else %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                                <div class="w-1.5 h-1.5 rounded-full bg-red-400 mr-2"></div>
                                         {{ call.status|capitalize }}
                                     </span>
                                     {% endif %}
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {% if call.duration %}
-                                        {{ call.duration }} seconds
+                        <td class="px-6 py-4">
+                            {% if call_data.quality %}
+                            <div class="flex items-center space-x-2">
+                                <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    {% if call_data.quality >= 95 %}
+                                    <div class="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400" style="width: {{ call_data.quality }}%"></div>
+                                    {% elif call_data.quality >= 85 %}
+                                    <div class="h-full rounded-full bg-gradient-to-r from-yellow-500 to-orange-400" style="width: {{ call_data.quality }}%"></div>
                                     {% else %}
-                                        -
+                                    <div class="h-full rounded-full bg-gradient-to-r from-red-500 to-red-400" style="width: {{ call_data.quality }}%"></div>
+                                    {% endif %}
+                                </div>
+                                <span class="text-xs text-gray-400">{{ call_data.quality }}%</span>
+                            </div>
+                            {% else %}
+                            <span class="text-xs text-gray-500">No data</span>
                                     {% endif %}
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {% if call_data.has_recording %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                        ✓ Recorded
-                                    </span>
+                        <td class="px-6 py-4">
+                            {% if call.duration %}
+                            <div class="text-sm text-white">{{ call.duration }}s</div>
                                     {% else %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                        No Recording
-                                    </span>
+                            <span class="text-sm text-gray-500">-</span>
                                     {% endif %}
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ call.started_at.strftime('%b %d, %Y %H:%M') }}
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-4">
+                                {% if call_data.has_recording %}
+                                <div class="flex items-center text-green-400">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                    </svg>
+                                    <span class="text-xs">Recorded</span>
+                                </div>
+                                {% else %}
+                                <div class="flex items-center text-gray-500">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                                    </svg>
+                                    <span class="text-xs">No Recording</span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if call_data.has_transcripts %}
+                                <div class="flex items-center text-blue-400">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                                    </svg>
+                                    <span class="text-xs">{{ call_data.transcript_count }} Transcripts</span>
+                                </div>
+                                {% else %}
+                                <div class="flex items-center text-gray-500">
+                                    <span class="text-xs">No Transcript</span>
+                                </div>
+                                {% endif %}
+                            </div>
                                 </td>
-                                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                    <a href="/calls/{{ call.id }}" class="text-blue-600 hover:text-blue-900">
-                                        View
-                                    </a>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <a href="/calls/{{ call.id }}" 
+                                   class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                   title="View Details">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </a>
+                                
+                                {% if call_data.has_recording %}
+                                <button onclick="playRecording('{{ call.id }}')" 
+                                        class="p-2 text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                                        title="Play Recording">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H15M9 10v4a2 2 0 002 2h2a2 2 0 002-2v-4M9 10V9a2 2 0 012-2h2a2 2 0 012 2v1"></path>
+                                    </svg>
+                                </button>
+                                {% endif %}
+                            </div>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if pagination.total_pages > 1 %}
+        <div class="px-6 py-4 bg-gray-700/30 border-t border-gray-700/50">
+            <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-400">
+                    Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to 
+                    {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total_count else pagination.total_count }} 
+                    of {{ pagination.total_count }} results
+                </div>
+                <div class="flex items-center space-x-2">
+                    {% if pagination.has_prev %}
+                    <a href="?page={{ pagination.prev_page }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                        Previous
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Page numbers -->
+                    {% for page_num in pagination.page_numbers %}
+                    {% if page_num == pagination.page %}
+                    <span class="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg">
+                        {{ page_num }}
+                    </span>
                     {% else %}
-                    <div class="text-center py-12 bg-white">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                        </svg>
-                        <h3 class="mt-2 text-sm font-medium text-gray-900">No calls</h3>
-                        <p class="mt-1 text-sm text-gray-500">
-                            No calls have been made yet. Once calls are received, they will be listed here.
-                        </p>
-                    </div>
+                    <a href="?page={{ page_num }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                        {{ page_num }}
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if pagination.has_next %}
+                    <a href="?page={{ pagination.next_page }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                        Next
+                    </a>
                     {% endif %}
                 </div>
             </div>
         </div>
+        {% endif %}
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-12">
+            <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-white mb-2">No voice intelligence data yet</h3>
+            <p class="text-gray-400 mb-6">
+                When calls are processed through your voice AI assistants, they'll appear here with real-time analytics.
+            </p>
+            <a href="/assistants" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Configure Assistants
+            </a>
+        </div>
+        {% endif %}
     </div>
 </div>
+
+<!-- Custom Styles -->
+<style>
+/* Glow Hover Effect */
+.glow-hover {
+    transition: all 0.3s ease;
+}
+
+.glow-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
+                0 10px 10px -5px rgba(0, 0, 0, 0.04),
+                0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+/* Smooth Transitions */
+.transition-all {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+</style>
+
+<!-- JavaScript -->
+<script>
+// Export functionality
+document.getElementById('exportButton').addEventListener('click', function() {
+    const dropdown = document.getElementById('exportDropdown');
+    dropdown.classList.toggle('hidden');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const button = document.getElementById('exportButton');
+    const dropdown = document.getElementById('exportDropdown');
+    
+    if (!button.contains(event.target) && !dropdown.contains(event.target)) {
+        dropdown.classList.add('hidden');
+    }
+});
+
+function exportData(format) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('format', format);
+    
+    const exportUrl = '/calls/export?' + params.toString();
+    window.open(exportUrl, '_blank');
+    
+    document.getElementById('exportDropdown').classList.add('hidden');
+}
+
+// Bulk actions
+const selectAllCheckbox = document.getElementById('selectAll');
+const callCheckboxes = document.querySelectorAll('.call-checkbox');
+const bulkActionSelect = document.getElementById('bulkAction');
+const applyBulkActionBtn = document.getElementById('applyBulkAction');
+
+// Select all functionality
+selectAllCheckbox.addEventListener('change', function() {
+    callCheckboxes.forEach(checkbox => {
+        checkbox.checked = this.checked;
+    });
+    updateBulkActionButton();
+});
+
+// Individual checkbox change
+callCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        updateSelectAllState();
+        updateBulkActionButton();
+    });
+});
+
+function updateSelectAllState() {
+    const checkedCount = document.querySelectorAll('.call-checkbox:checked').length;
+    const totalCount = callCheckboxes.length;
+    
+    selectAllCheckbox.checked = checkedCount === totalCount;
+    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < totalCount;
+}
+
+function updateBulkActionButton() {
+    const checkedCount = document.querySelectorAll('.call-checkbox:checked').length;
+    const hasAction = bulkActionSelect.value !== '';
+    
+    applyBulkActionBtn.disabled = checkedCount === 0 || !hasAction;
+}
+
+// Bulk action select change
+bulkActionSelect.addEventListener('change', updateBulkActionButton);
+
+// Apply bulk action
+applyBulkActionBtn.addEventListener('click', function() {
+    const action = bulkActionSelect.value;
+    const selectedIds = Array.from(document.querySelectorAll('.call-checkbox:checked')).map(cb => cb.value);
+    
+    if (selectedIds.length === 0) {
+        alert('Please select calls to perform bulk action.');
+        return;
+    }
+    
+    if (action === 'delete') {
+        if (!confirm(`Are you sure you want to delete ${selectedIds.length} calls? This action cannot be undone.`)) {
+            return;
+        }
+    }
+    
+    // Show loading state
+    applyBulkActionBtn.textContent = 'Processing...';
+    applyBulkActionBtn.disabled = true;
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('call_ids', selectedIds.join(','));
+    
+    // Submit bulk action
+    fetch('/calls/bulk-action', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (action === 'delete') {
+                // Reload page for delete actions
+                window.location.reload();
+            } else if (action === 'download_recordings' && data.download_url) {
+                // Open download URL
+                window.open(data.download_url, '_blank');
+                
+                // Reset button state
+                applyBulkActionBtn.textContent = 'Apply';
+                applyBulkActionBtn.disabled = false;
+                bulkActionSelect.value = '';
+                updateBulkActionButton();
+            }
+            
+            alert(data.message);
+        } else {
+            alert('Error: ' + data.message);
+            // Reset button state
+            applyBulkActionBtn.textContent = 'Apply';
+            updateBulkActionButton();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while processing the bulk action.');
+        // Reset button state
+        applyBulkActionBtn.textContent = 'Apply';
+        updateBulkActionButton();
+    });
+});
+
+// Play recording function
+function playRecording(callId) {
+    // This would need to be implemented based on your recording structure
+    // For now, redirect to call detail page
+    window.location.href = `/calls/${callId}`;
+}
+
+// Real-time updates for active calls (optional)
+function updateActiveCalls() {
+    fetch('/calls/active-count')
+        .then(response => response.json())
+        .then(data => {
+            // Update active calls display
+            const activeCallElements = document.querySelectorAll('[data-active-calls]');
+            activeCallElements.forEach(element => {
+                element.textContent = data.active_calls;
+            });
+        })
+        .catch(error => console.log('Could not update active calls:', error));
+}
+
+// Update every 30 seconds
+setInterval(updateActiveCalls, 30000);
+</script>
 {% endblock %} 

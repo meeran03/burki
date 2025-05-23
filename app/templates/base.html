@@ -1,63 +1,202 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}VAPI Admin{% endblock %}</title>
-    <!-- Tailwind CSS CDN -->
+    <title>{% block title %}Buraaq - Voice AI Infrastructure{% endblock %}</title>
+    
+    <!-- Tailwind CSS CDN with dark mode support -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js for interactive charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <!-- Custom styles -->
     <style>
-        .form-input {
-            @apply w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50;
+        :root {
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --shadow-primary: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --shadow-secondary: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-        .btn-primary {
-            @apply py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md transition duration-300;
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        .btn-secondary {
-            @apply py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg shadow-md transition duration-300;
+        
+        .gradient-primary {
+            background: var(--gradient-primary);
         }
-        .card {
-            @apply bg-white rounded-lg shadow-md p-6;
+        
+        .gradient-secondary {
+            background: var(--gradient-secondary);
+        }
+        
+        .gradient-accent {
+            background: var(--gradient-accent);
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .glow-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .glow-hover:hover {
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        .nav-item {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-item::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--gradient-accent);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-item:hover::after,
+        .nav-item.active::after {
+            width: 100%;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .floating {
+            animation: floating 3s ease-in-out infinite;
+        }
+        
+        @keyframes floating {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
         }
     </style>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'inter': ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-900 text-white min-h-screen font-inter">
     <!-- Header -->
-    <header class="bg-white shadow-sm">
+    <header class="bg-gray-800/50 backdrop-blur-sm border-b border-gray-700/50 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
-                <div class="flex">
+                <div class="flex items-center">
                     <div class="flex-shrink-0 flex items-center">
-                        <a href="/" class="text-xl font-bold text-blue-600">VAPI Admin</a>
+                        <a href="/" class="flex items-center space-x-3 group">
+                            <div class="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center text-white font-bold text-lg floating">
+                                ب
+                            </div>
+                            <span class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                                Buraaq
+                            </span>
+                        </a>
                     </div>
-                    <nav class="ml-6 flex space-x-8">
-                        <a href="/" class="inline-flex items-center px-1 pt-1 border-b-2 {% if request.url.path == '/' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                    <nav class="ml-8 flex space-x-8">
+                        <a href="/" class="nav-item px-3 py-2 text-sm font-medium {% if request.url.path == '/' %}active text-blue-400{% else %}text-gray-300 hover:text-white{% endif %}">
                             Dashboard
                         </a>
-                        <a href="/assistants" class="inline-flex items-center px-1 pt-1 border-b-2 {% if request.url.path.startswith('/assistants') %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                        <a href="/assistants" class="nav-item px-3 py-2 text-sm font-medium {% if request.url.path.startswith('/assistants') %}active text-blue-400{% else %}text-gray-300 hover:text-white{% endif %}">
                             Assistants
                         </a>
-                        <a href="/calls" class="inline-flex items-center px-1 pt-1 border-b-2 {% if request.url.path.startswith('/calls') %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                        <a href="/calls" class="nav-item px-3 py-2 text-sm font-medium {% if request.url.path.startswith('/calls') %}active text-blue-400{% else %}text-gray-300 hover:text-white{% endif %}">
                             Calls
                         </a>
                     </nav>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="p-2 rounded-lg bg-gray-700/50 hover:bg-gray-600/50 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM8 7h8M8 11h8M8 15h5" />
+                        </svg>
+                    </button>
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-sm font-semibold">
+                        A
+                    </div>
                 </div>
             </div>
         </div>
     </header>
 
     <!-- Main content -->
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 fade-in">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white mt-12 py-6 border-t">
+    <footer class="bg-gray-800/30 mt-16 py-8 border-t border-gray-700/50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p class="text-center text-gray-500 text-sm">
-                &copy; 2023 VAPI Clone. All rights reserved.
-            </p>
+            <div class="flex justify-between items-center">
+                <p class="text-gray-400 text-sm">
+                    &copy; 2025 Buraaq. Voice AI Infrastructure Platform.
+                </p>
+                <div class="flex space-x-6 text-sm text-gray-400">
+                    <a href="#" class="hover:text-white transition-colors">Documentation</a>
+                    <a href="#" class="hover:text-white transition-colors">API Reference</a>
+                    <a href="#" class="hover:text-white transition-colors">Support</a>
+                </div>
+            </div>
         </div>
     </footer>
 
