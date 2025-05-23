@@ -1,4 +1,6 @@
 import datetime
+import hashlib
+import secrets
 from sqlalchemy import (
     Column,
     Integer,
@@ -9,11 +11,209 @@ from sqlalchemy import (
     ForeignKey,
     Float,
     JSON,
+    Index,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
 Base = declarative_base()
+
+
+class Organization(Base):
+    """
+    Organization model represents a company or entity that has users and assistants.
+    """
+
+    __tablename__ = "organizations"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    domain = Column(String(100), nullable=True)  # For domain-based signup restrictions
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    # Organization settings
+    settings = Column(JSON, nullable=True, default=lambda: {
+        "allow_user_registration": True,
+        "require_email_verification": False,
+        "max_users": 100,
+        "max_assistants": 10,
+    })
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    # Relationships
+    users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
+    assistants = relationship("Assistant", back_populates="organization", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Organization(id={self.id}, name='{self.name}', slug='{self.slug}')>"
+
+
+class User(Base):
+    """
+    User model represents a user within an organization.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    first_name = Column(String(50), nullable=True)
+    last_name = Column(String(50), nullable=True)
+    full_name = Column(String(100), nullable=False)  # Kept for backward compatibility
+    password_hash = Column(String(255), nullable=True)  # Nullable for OAuth-only users
+    
+    # OAuth fields
+    google_id = Column(String(100), nullable=True, index=True)
+    avatar_url = Column(String(500), nullable=True)
+    
+    # User status and role
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_verified = Column(Boolean, nullable=False, default=False)
+    role = Column(String(20), nullable=False, default="user")  # admin, user, viewer
+    
+    # Login tracking
+    last_login_at = Column(DateTime, nullable=True)
+    login_count = Column(Integer, nullable=False, default=0)
+    
+    # User preferences
+    preferences = Column(JSON, nullable=True, default=lambda: {
+        "timezone": "UTC",
+        "notifications": {
+            "email": True,
+            "browser": True,
+        },
+        "dashboard": {
+            "refresh_interval": 30,
+            "default_view": "overview",
+        },
+    })
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    # Relationships
+    organization = relationship("Organization", back_populates="users")
+    api_keys = relationship("UserAPIKey", back_populates="user", cascade="all, delete-orphan")
+    assistants = relationship("Assistant", back_populates="user", cascade="all, delete-orphan")
+
+    # Unique constraint for email within organization
+    __table_args__ = (
+        Index('idx_user_org_email', 'organization_id', 'email', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<User(id={self.id}, email='{self.email}', organization_id={self.organization_id})>"
+
+    def set_password(self, password):
+        """Set password hash."""
+        import bcrypt
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    def check_password(self, password):
+        """Check if password matches hash."""
+        if not self.password_hash:
+            return False
+        import bcrypt
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+    
+    def set_full_name(self, first_name, last_name):
+        """Set first_name, last_name, and full_name together."""
+        self.first_name = first_name.strip() if first_name else ""
+        self.last_name = last_name.strip() if last_name else ""
+        self.full_name = f"{self.first_name} {self.last_name}".strip()
+    
+    def split_full_name_if_needed(self):
+        """Split full_name into first_name and last_name if they're not set."""
+        if self.full_name and (not self.first_name or not self.last_name):
+            parts = self.full_name.strip().split(' ', 1)
+            self.first_name = parts[0] if len(parts) > 0 else ""
+            self.last_name = parts[1] if len(parts) > 1 else ""
+
+
+class UserAPIKey(Base):
+    """
+    UserAPIKey model represents API keys generated by users for system access.
+    """
+
+    __tablename__ = "user_api_keys"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    key_hash = Column(String(255), nullable=False, index=True)  # SHA256 hash of the key
+    key_prefix = Column(String(20), nullable=False)  # First few chars for identification
+    
+    # Key metadata
+    last_used_at = Column(DateTime, nullable=True)
+    usage_count = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    # Permissions (can be expanded later)
+    permissions = Column(JSON, nullable=True, default=lambda: {
+        "read": True,
+        "write": True,
+        "admin": False,
+    })
+    
+    # Rate limiting
+    rate_limit = Column(JSON, nullable=True, default=lambda: {
+        "requests_per_minute": 100,
+        "requests_per_hour": 1000,
+        "requests_per_day": 10000,
+    })
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    # Relationships
+    user = relationship("User", back_populates="api_keys")
+
+    def __repr__(self):
+        return f"<UserAPIKey(id={self.id}, user_id={self.user_id}, name='{self.name}', prefix='{self.key_prefix}')>"
+
+    @staticmethod
+    def generate_api_key():
+        """Generate a new API key."""
+        # Generate a secure random key
+        key = f"diwaar_{''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(32))}"
+        return key
+
+    @staticmethod
+    def hash_key(key):
+        """Hash an API key for storage."""
+        return hashlib.sha256(key.encode('utf-8')).hexdigest()
+
+    @staticmethod
+    def get_key_prefix(key):
+        """Get the prefix of an API key for identification."""
+        return key[:12] + "..."
+
+    def verify_key(self, key):
+        """Verify if the provided key matches this record."""
+        return self.key_hash == self.hash_key(key)
 
 
 class Assistant(Base):
@@ -25,6 +225,8 @@ class Assistant(Base):
     __tablename__ = "assistants"
 
     id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     phone_number = Column(String(20), unique=True, nullable=False)
     description = Column(Text, nullable=True)
@@ -112,6 +314,8 @@ class Assistant(Base):
     )
 
     # Relationships
+    organization = relationship("Organization", back_populates="assistants")
+    user = relationship("User", back_populates="assistants")
     calls = relationship(
         "Call", back_populates="assistant", cascade="all, delete-orphan"
     )

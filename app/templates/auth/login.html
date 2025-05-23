@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In - Buraaq Voice AI{% endblock %}
+
+{% block extra_head %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+    :root {
+        --gradient-primary: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        --gradient-secondary: linear-gradient(135deg, #6366f1, #3b82f6);
+        --gradient-accent: linear-gradient(135deg, #8b5cf6, #ec4899);
+        --glass-bg: rgba(30, 41, 59, 0.4);
+        --glass-border: rgba(148, 163, 184, 0.2);
+        --input-bg: rgba(55, 65, 81, 0.8);
+        --input-border: rgba(75, 85, 99, 0.4);
+        --input-focus: rgba(59, 130, 246, 0.3);
+    }
+    
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    body {
+        background: #0f172a;
+        min-height: 100vh;
+        overflow-x: hidden;
+    }
+    
+    .auth-container {
+        min-height: 100vh;
+        background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                    radial-gradient(circle at 40% 40%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                    linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .auth-container::before {
+        content: '';
+        position: absolute;
+        top: -10%;
+        right: -10%;
+        width: 60%;
+        height: 60%;
+        background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+        animation: floating 8s ease-in-out infinite;
+        border-radius: 50%;
+    }
+    
+    .auth-container::after {
+        content: '';
+        position: absolute;
+        bottom: -10%;
+        left: -10%;
+        width: 60%;
+        height: 60%;
+        background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+        animation: floating 12s ease-in-out infinite reverse;
+        border-radius: 50%;
+    }
+    
+    @keyframes floating {
+        0%, 100% { transform: translateY(0px) translateX(0px) scale(1); }
+        33% { transform: translateY(-30px) translateX(20px) scale(1.05); }
+        66% { transform: translateY(-10px) translateX(-15px) scale(0.95); }
+    }
+    
+    .auth-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--glass-border);
+        border-radius: 2rem;
+        box-shadow: 
+            0 25px 50px -12px rgba(0, 0, 0, 0.7),
+            0 0 0 1px rgba(255, 255, 255, 0.05),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        max-width: 480px;
+        width: 100%;
+        position: relative;
+        z-index: 10;
+        overflow: hidden;
+    }
+    
+    .auth-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    }
+    
+    .brand-header {
+        text-align: center;
+        margin-bottom: 2.5rem;
+        position: relative;
+    }
+    
+    .brand-logo {
+        background: var(--gradient-primary);
+        border-radius: 1.25rem;
+        width: 4rem;
+        height: 4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.5rem;
+        color: white;
+        animation: floating 4s ease-in-out infinite;
+        margin: 0 auto 1rem;
+        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.3);
+    }
+    
+    .gradient-text {
+        background: var(--gradient-primary);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-weight: 800;
+        font-size: 2.5rem;
+        letter-spacing: -0.02em;
+    }
+    
+    .subtitle {
+        color: #94a3b8;
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin-top: 0.5rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+    
+    .form-label {
+        color: #e2e8f0;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        font-size: 0.95rem;
+    }
+    
+    .form-label i {
+        margin-right: 0.5rem;
+        color: #94a3b8;
+        width: 16px;
+    }
+    
+    .form-control {
+        background: var(--input-bg);
+        border: 1.5px solid var(--input-border);
+        border-radius: 1rem;
+        padding: 1.25rem 1.5rem;
+        color: #f1f5f9;
+        font-size: 1rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        width: 100%;
+        position: relative;
+    }
+    
+    .form-control::placeholder {
+        color: #6b7280;
+        font-weight: 400;
+    }
+    
+    .form-control:focus {
+        background: rgba(55, 65, 81, 0.95);
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 4px var(--input-focus);
+        outline: none;
+        transform: translateY(-1px);
+    }
+    
+    .form-control:hover:not(:focus) {
+        border-color: rgba(75, 85, 99, 0.6);
+        background: rgba(55, 65, 81, 0.9);
+    }
+    
+    .btn-google {
+        background: var(--gradient-secondary);
+        border: none;
+        color: white;
+        padding: 1.25rem 2rem;
+        border-radius: 1rem;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        margin-bottom: 2rem;
+    }
+    
+    .btn-google::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.6s;
+    }
+    
+    .btn-google:hover::before {
+        left: 100%;
+    }
+    
+    .btn-google:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 35px rgba(59, 130, 246, 0.4);
+    }
+    
+    .btn-primary {
+        background: var(--gradient-primary);
+        border: none;
+        padding: 1.25rem 2rem;
+        border-radius: 1rem;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        color: white;
+        margin-top: 1rem;
+    }
+    
+    .btn-primary::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.6s;
+    }
+    
+    .btn-primary:hover::before {
+        left: 100%;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 35px rgba(59, 130, 246, 0.4);
+    }
+    
+    .btn-outline-primary {
+        background: transparent;
+        border: 2px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa;
+        padding: 1rem 2rem;
+        border-radius: 1rem;
+        font-weight: 600;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .btn-outline-primary:hover {
+        background: rgba(59, 130, 246, 0.1);
+        border-color: #3b82f6;
+        color: #3b82f6;
+        transform: translateY(-1px);
+        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+    }
+    
+    .divider {
+        position: relative;
+        text-align: center;
+        margin: 2rem 0;
+    }
+    
+    .divider::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.3), transparent);
+    }
+    
+    .divider span {
+        background: var(--glass-bg);
+        padding: 0 1.5rem;
+        color: #94a3b8;
+        font-size: 0.9rem;
+        font-weight: 500;
+        backdrop-filter: blur(10px);
+    }
+    
+    .form-check {
+        margin: 1.5rem 0;
+    }
+    
+    .form-check-input {
+        margin-right: 0.75rem;
+        transform: scale(1.1);
+    }
+    
+    .form-check-input:checked {
+        background-color: #3b82f6;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    
+    .form-check-label {
+        color: #cbd5e1;
+        font-weight: 500;
+    }
+    
+    .alert {
+        border-radius: 1rem;
+        padding: 1.25rem;
+        margin-bottom: 2rem;
+        border: 1.5px solid;
+        backdrop-filter: blur(10px);
+    }
+    
+    .alert-danger {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+    }
+    
+    .text-link {
+        color: #60a5fa;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.2s;
+    }
+    
+    .text-link:hover {
+        color: #3b82f6;
+        text-decoration: underline;
+    }
+    
+    .auth-footer {
+        text-align: center;
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    
+    .auth-footer p {
+        color: #94a3b8;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+    
+    .forgot-password {
+        margin-top: 1.5rem;
+        text-align: center;
+    }
+    
+    .form-text {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        font-weight: 500;
+    }
+    
+    .fade-in {
+        animation: fadeInUp 0.8s ease-out forwards;
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    
+    @keyframes fadeInUp {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .delay-100 { animation-delay: 0.1s; }
+    .delay-200 { animation-delay: 0.2s; }
+    .delay-300 { animation-delay: 0.3s; }
+    .delay-400 { animation-delay: 0.4s; }
+    
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+        .auth-card {
+            margin: 1rem;
+            max-width: none;
+        }
+        
+        .gradient-text {
+            font-size: 2rem;
+        }
+        
+        .brand-logo {
+            width: 3.5rem;
+            height: 3.5rem;
+            font-size: 1.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-container d-flex align-items-center justify-content-center p-4">
+    <div class="auth-card p-5 fade-in">
+        <!-- Brand Header -->
+        <div class="brand-header fade-in delay-100">
+            <div class="brand-logo">ب</div>
+            <h1 class="gradient-text mb-0">Buraaq</h1>
+            <p class="subtitle">Sign in to your Voice AI platform</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger fade-in delay-200" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Google Sign In -->
+        <div class="fade-in delay-200">
+            <button type="button" class="btn btn-google d-flex align-items-center justify-content-center" onclick="signInWithGoogle()">
+                <i class="fab fa-google me-3"></i>
+                <span>Continue with Google</span>
+            </button>
+        </div>
+
+        <div class="divider fade-in delay-300">
+            <span>or continue with email</span>
+        </div>
+
+        <!-- Manual Login Form -->
+        <form method="post" action="/auth/login" class="fade-in delay-300">
+            <div class="form-group">
+                <label for="email" class="form-label">
+                    <i class="fas fa-envelope"></i>Email Address
+                </label>
+                <input type="email" class="form-control" id="email" name="email" 
+                       placeholder="Enter your email address" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">
+                    <i class="fas fa-lock"></i>Password
+                </label>
+                <input type="password" class="form-control" id="password" name="password" 
+                       placeholder="Enter your password" required>
+            </div>
+
+            <div class="form-group">
+                <label for="organization" class="form-label">
+                    <i class="fas fa-building"></i>Organization
+                </label>
+                <input type="text" class="form-control" id="organization" name="organization" 
+                       placeholder="your-organization-slug" required>
+                <div class="form-text">Your organization's unique identifier</div>
+            </div>
+
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me">
+                <label class="form-check-label" for="remember_me">
+                    Remember me for 30 days
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-sign-in-alt me-2"></i>Sign In
+            </button>
+        </form>
+
+        <div class="forgot-password fade-in delay-400">
+            <a href="/auth/forgot-password" class="text-link">
+                <i class="fas fa-question-circle me-1"></i>Forgot your password?
+            </a>
+        </div>
+
+        <div class="auth-footer fade-in delay-400">
+            <p>Don't have an account?</p>
+            <a href="/auth/register" class="btn btn-outline-primary">
+                <i class="fas fa-user-plus me-2"></i>Create Account
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+let googleSignInInitialized = false;
+
+function initializeGoogleSignIn() {
+    if (googleSignInInitialized) return;
+    
+    window.google.accounts.id.initialize({
+        client_id: "{{ google_client_id }}",
+        callback: handleCredentialResponse,
+        auto_select: false,
+        cancel_on_tap_outside: false
+    });
+    
+    googleSignInInitialized = true;
+}
+
+function signInWithGoogle() {
+    if (!window.google) {
+        console.error('Google Sign-In library not loaded');
+        return;
+    }
+    
+    if (!googleSignInInitialized) {
+        initializeGoogleSignIn();
+    }
+    
+    // Get organization slug from form
+    const organization = document.getElementById('organization').value;
+    if (!organization) {
+        alert('Please enter your organization slug first');
+        document.getElementById('organization').focus();
+        return;
+    }
+    
+    // Store organization in sessionStorage for the callback
+    sessionStorage.setItem('auth_organization', organization);
+    
+    window.google.accounts.id.prompt();
+}
+
+function handleCredentialResponse(response) {
+    const organization = sessionStorage.getItem('auth_organization');
+    if (!organization) {
+        alert('Organization slug is required');
+        return;
+    }
+    
+    // Create a form and submit the credential
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/auth/google';
+    
+    const credentialInput = document.createElement('input');
+    credentialInput.type = 'hidden';
+    credentialInput.name = 'credential';
+    credentialInput.value = response.credential;
+    
+    const orgInput = document.createElement('input');
+    orgInput.type = 'hidden';
+    orgInput.name = 'organization';
+    orgInput.value = organization;
+    
+    form.appendChild(credentialInput);
+    form.appendChild(orgInput);
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Initialize when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize fade-in animations
+    setTimeout(() => {
+        document.querySelectorAll('.fade-in').forEach(el => {
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
+        });
+    }, 100);
+    
+    if (window.google && window.google.accounts) {
+        initializeGoogleSignIn();
+    } else {
+        // Wait for Google library to load
+        const checkGoogle = setInterval(() => {
+            if (window.google && window.google.accounts) {
+                clearInterval(checkGoogle);
+                initializeGoogleSignIn();
+            }
+        }, 100);
+    }
+});
+</script>
+{% endblock %} 

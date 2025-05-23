@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block title %}API Keys - Diwaar Voice AI{% endblock %}
+
+{% block extra_head %}
+<style>
+    .api-key-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+    .api-key-card:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .key-preview {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        background: #f8fafc;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        border: 1px solid #e5e7eb;
+    }
+    .usage-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .copy-btn {
+        transition: all 0.2s ease;
+    }
+    .copy-btn:hover {
+        transform: scale(1.05);
+    }
+    .modal-body {
+        background: #f8fafc;
+    }
+    .new-key-display {
+        background: #dcfce7;
+        border: 2px solid #16a34a;
+        border-radius: 8px;
+        padding: 15px;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 14px;
+        word-break: break-all;
+    }
+    .warning-box {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>API Keys</h2>
+                    <p class="text-muted">Manage your API keys for programmatic access to Diwaar Voice AI</p>
+                </div>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createKeyModal">
+                    <i class="fas fa-plus me-2"></i>Create New Key
+                </button>
+            </div>
+
+            {% if success %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ success }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                {{ error }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+
+            <!-- API Keys List -->
+            {% if api_keys %}
+            <div class="row">
+                {% for key in api_keys %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="api-key-card p-4 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h5 class="card-title mb-0">{{ key.name }}</h5>
+                            <div class="dropdown">
+                                <button class="btn btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <button class="dropdown-item text-danger" onclick="deleteKey({{ key.id }}, '{{ key.name }}')">
+                                            <i class="fas fa-trash me-2"></i>Delete
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="key-preview mb-3">
+                            <strong>{{ key.key_prefix }}</strong>
+                            <button class="btn btn-sm btn-outline-secondary ms-2 copy-btn" 
+                                    onclick="copyToClipboard('{{ key.key_prefix }}')" 
+                                    title="Copy prefix">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <small class="text-muted">Usage Count</small>
+                                <div class="fw-bold">{{ key.usage_count }}</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Status</small>
+                                <div>
+                                    {% if key.is_active %}
+                                    <span class="badge bg-success usage-badge">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary usage-badge">Inactive</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <small class="text-muted">Last Used</small>
+                                <div class="small">
+                                    {% if key.last_used_at %}
+                                    {{ key.last_used_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                                    {% else %}
+                                    Never
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-muted small">
+                            Created: {{ key.created_at.strftime('%Y-%m-%d') }}
+                        </div>
+
+                        <!-- Permissions -->
+                        <div class="mt-3">
+                            <small class="text-muted">Permissions</small>
+                            <div class="mt-1">
+                                {% if key.permissions.get('read', False) %}
+                                <span class="badge bg-primary me-1">Read</span>
+                                {% endif %}
+                                {% if key.permissions.get('write', False) %}
+                                <span class="badge bg-warning me-1">Write</span>
+                                {% endif %}
+                                {% if key.permissions.get('admin', False) %}
+                                <span class="badge bg-danger me-1">Admin</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <!-- No API Keys -->
+            <div class="text-center py-5">
+                <i class="fas fa-key fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">No API Keys</h4>
+                <p class="text-muted mb-4">You haven't created any API keys yet. Create your first key to get started with programmatic access.</p>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createKeyModal">
+                    Create Your First API Key
+                </button>
+            </div>
+            {% endif %}
+
+            <!-- API Usage Information -->
+            <div class="mt-5">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>API Usage Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Authentication</h6>
+                                <p class="small text-muted">Include your API key in the Authorization header:</p>
+                                <div class="key-preview">
+                                    Authorization: Bearer YOUR_API_KEY
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Base URL</h6>
+                                <p class="small text-muted">All API requests should be made to:</p>
+                                <div class="key-preview">
+                                    {{ request.url_root }}api/v1/
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <a href="/docs" class="btn btn-outline-primary btn-sm" target="_blank">
+                                <i class="fas fa-book me-2"></i>View API Documentation
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create API Key Modal -->
+<div class="modal fade" id="createKeyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New API Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/auth/api-keys/create">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="keyName" class="form-label">Key Name</label>
+                        <input type="text" class="form-control" id="keyName" name="name" required
+                               placeholder="e.g., Production App, Development, Mobile App">
+                        <div class="form-text">Choose a descriptive name to help you identify this key later.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Permissions</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="permRead" name="permissions" value="read" checked>
+                            <label class="form-check-label" for="permRead">
+                                <strong>Read</strong> - View assistants, calls, transcripts, and recordings
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="permWrite" name="permissions" value="write" checked>
+                            <label class="form-check-label" for="permWrite">
+                                <strong>Write</strong> - Create and modify assistants, make calls
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="permAdmin" name="permissions" value="admin">
+                            <label class="form-check-label" for="permAdmin">
+                                <strong>Admin</strong> - Full access including user management
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="warning-box">
+                        <strong><i class="fas fa-exclamation-triangle me-2"></i>Important:</strong>
+                        You'll only be able to see the full API key once after creation. Make sure to copy and store it securely.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create API Key</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- New Key Display Modal -->
+{% if new_key %}
+<div class="modal fade show" id="newKeyModal" tabindex="-1" style="display: block;" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>API Key Created Successfully
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="warning-box">
+                    <strong><i class="fas fa-exclamation-triangle me-2"></i>Save this key now!</strong>
+                    This is the only time you'll be able to see the full key. Copy it and store it securely.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Your new API key:</label>
+                    <div class="new-key-display">
+                        {{ new_key }}
+                    </div>
+                    <button class="btn btn-success mt-2" onclick="copyToClipboard('{{ new_key }}')">
+                        <i class="fas fa-copy me-2"></i>Copy to Clipboard
+                    </button>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Key Name:</label>
+                    <div>{{ new_key_name }}</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="closeNewKeyModal()">
+                    I've Saved the Key
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteKeyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Delete API Key
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the API key "<strong id="deleteKeyName"></strong>"?</p>
+                <div class="alert alert-warning">
+                    <strong>Warning:</strong> This action cannot be undone. Any applications using this key will lose access immediately.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" style="display: inline;" id="deleteKeyForm">
+                    <button type="submit" class="btn btn-danger">Delete Key</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Show success message
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center text-white bg-success border-0';
+        toast.style.position = 'fixed';
+        toast.style.top = '20px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '1000';
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-check me-2"></i>Copied to clipboard!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 3000);
+    }).catch(function(err) {
+        console.error('Could not copy text: ', err);
+        alert('Failed to copy to clipboard');
+    });
+}
+
+function deleteKey(keyId, keyName) {
+    document.getElementById('deleteKeyName').textContent = keyName;
+    document.getElementById('deleteKeyForm').action = `/auth/api-keys/${keyId}/delete`;
+    
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteKeyModal'));
+    deleteModal.show();
+}
+
+function closeNewKeyModal() {
+    const modal = document.getElementById('newKeyModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        
+        // Remove backdrop
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
+        
+        // Re-enable body scroll
+        document.body.classList.remove('modal-open');
+        document.body.style.paddingRight = '';
+        
+        // Reload page to clear the new_key from URL
+        window.location.href = '/auth/api-keys';
+    }
+}
+
+// Auto-show new key modal if new key exists
+{% if new_key %}
+document.addEventListener('DOMContentLoaded', function() {
+    // Disable body scroll for backdrop
+    document.body.classList.add('modal-open');
+});
+{% endif %}
+</script>
+{% endblock %} 

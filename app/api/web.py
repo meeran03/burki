@@ -4,19 +4,24 @@ from datetime import timedelta
 import time
 import logging
 import json
-from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response
+import os
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import io
-import os
 from io import StringIO
 from sqlalchemy import func, desc, asc
+import jwt
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 from app.db.database import get_db
-from app.db.models import Call, Recording, Transcript, Assistant
+from app.db.models import Call, Recording, Transcript, Assistant, User, Organization, UserAPIKey
 from app.services.assistant_service import AssistantService
 from app.services.call_service import CallService
+from app.services.auth_service import AuthService, APIKeyService
 from app.twilio.twilio_service import TwilioService
 from app.core.assistant_manager import assistant_manager
 
@@ -26,36 +31,549 @@ router = APIRouter(tags=["web"])
 # Initialize Jinja2 templates
 templates = Jinja2Templates(directory="app/templates")
 
+# Security
+security = HTTPBearer(auto_error=False)
+auth_service = AuthService()
+
 # Track server start time for uptime display
 start_time = time.time()
+
+# Environment variables for configuration
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
+
+# ========== Template Context Helpers ==========
+
+def get_template_context(request: Request, **extra_context) -> dict:
+    """Get template context with session data and any extra context."""
+    context = {
+        "request": request,
+        "session": {
+            "user_id": request.session.get("user_id"),
+            "organization_id": request.session.get("organization_id"),
+            "user_email": request.session.get("user_email", ""),
+            "user_first_name": request.session.get("user_first_name", ""),
+            "user_last_name": request.session.get("user_last_name", ""),
+            "organization_name": request.session.get("organization_name", ""),
+            "organization_slug": request.session.get("organization_slug", ""),
+            "api_key_count": request.session.get("api_key_count", 0),
+        }
+    }
+    context.update(extra_context)
+    return context
+
+
+# ========== Authentication Helpers ==========
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optional[User]:
+    """Get the current authenticated user from session."""
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        # Ensure first_name and last_name are populated
+        user.split_full_name_if_needed()
+    return user
+
+
+async def require_auth(request: Request, db: Session = Depends(get_db)) -> User:
+    """Require authentication and return the current user."""
+    user = await get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Ensure first_name and last_name are populated
+    user.split_full_name_if_needed()
+    return user
+
+
+def create_access_token(user_id: int) -> str:
+    """Create a JWT access token for the user."""
+    payload = {"user_id": user_id}
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
+
+
+def verify_google_token(token: str) -> dict:
+    """Verify Google OAuth token and return user info."""
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            token, google_requests.Request(), GOOGLE_CLIENT_ID
+        )
+        return idinfo
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Google token")
+
+
+# ========== Authentication Routes ==========
+
+@router.get("/auth/login", response_class=HTMLResponse)
+async def login_page(request: Request, error: str = None):
+    """Display login page."""
+    return templates.TemplateResponse(
+        "auth/login.html", 
+        get_template_context(
+            request,
+            error=error,
+            google_client_id=GOOGLE_CLIENT_ID
+        )
+    )
+
+
+@router.post("/auth/login", response_class=HTMLResponse)
+async def login(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    organization: str = Form(...),
+    remember_me: bool = Form(False)
+):
+    """Handle manual login."""
+    try:
+        user = await auth_service.authenticate_user(email, password, organization)
+        if not user:
+            return templates.TemplateResponse(
+                "auth/login.html",
+                get_template_context(
+                    request,
+                    error="Invalid email, password, or organization",
+                    google_client_id=GOOGLE_CLIENT_ID
+                ),
+                status_code=400
+            )
+        
+        # Ensure names are properly split
+        user.split_full_name_if_needed()
+        
+        # Get organization data (fallback in case eager loading didn't work)
+        org_name = getattr(user.organization, 'name', '') if hasattr(user, 'organization') and user.organization else ''
+        org_slug = getattr(user.organization, 'slug', '') if hasattr(user, 'organization') and user.organization else ''
+        
+        # If organization data is missing, fetch it separately
+        if not org_name or not org_slug:
+            from app.services.auth_service import AuthService
+            organization = await AuthService.get_organization_by_id(user.organization_id)
+            if organization:
+                org_name = organization.name
+                org_slug = organization.slug
+        
+        # Set session with complete user and organization data
+        request.session["user_id"] = user.id
+        request.session["organization_id"] = user.organization_id
+        request.session["user_email"] = user.email
+        request.session["user_first_name"] = user.first_name or ""
+        request.session["user_last_name"] = user.last_name or ""
+        request.session["organization_name"] = org_name
+        request.session["organization_slug"] = org_slug
+        
+        # Redirect to dashboard
+        return RedirectResponse(url="/dashboard", status_code=302)
+        
+    except Exception as e:
+        logging.error(f"Login error: {e}")
+        return templates.TemplateResponse(
+            "auth/login.html",
+            get_template_context(
+                request,
+                error="An error occurred during login",
+                google_client_id=GOOGLE_CLIENT_ID
+            ),
+            status_code=500
+        )
+
+
+@router.post("/auth/google")
+async def google_login(
+    request: Request,
+    credential: str = Form(...),
+    organization: str = Form(...)
+):
+    """Handle Google OAuth login."""
+    try:
+        # Verify the Google token
+        google_user = verify_google_token(credential)
+        
+        # Authenticate or create user
+        user = await AuthService.authenticate_google_user(
+            google_id=google_user["sub"],
+            email=google_user["email"],
+            full_name=google_user["name"],
+            avatar_url=google_user.get("picture", ""),
+            organization_slug=organization
+        )
+        
+        # Ensure names are properly split
+        user.split_full_name_if_needed()
+        
+        # Get organization data (fallback in case eager loading didn't work)
+        org_name = getattr(user.organization, 'name', '') if hasattr(user, 'organization') and user.organization else ''
+        org_slug = getattr(user.organization, 'slug', '') if hasattr(user, 'organization') and user.organization else ''
+        
+        # If organization data is missing, fetch it separately
+        if not org_name or not org_slug:
+            organization = await AuthService.get_organization_by_id(user.organization_id)
+            if organization:
+                org_name = organization.name
+                org_slug = organization.slug
+        
+        # Set session with complete user and organization data
+        request.session["user_id"] = user.id
+        request.session["organization_id"] = user.organization_id
+        request.session["user_email"] = user.email
+        request.session["user_first_name"] = user.first_name or ""
+        request.session["user_last_name"] = user.last_name or ""
+        request.session["organization_name"] = org_name
+        request.session["organization_slug"] = org_slug
+        
+        # Redirect to dashboard
+        return RedirectResponse(url="/dashboard", status_code=302)
+        
+    except HTTPException as e:
+        return templates.TemplateResponse(
+            "auth/login.html",
+            get_template_context(
+                request,
+                error=e.detail,
+                google_client_id=GOOGLE_CLIENT_ID
+            ),
+            status_code=400
+        )
+    except Exception as e:
+        logging.error(f"Google login error: {e}")
+        return templates.TemplateResponse(
+            "auth/login.html",
+            get_template_context(
+                request,
+                error="An error occurred during Google login",
+                google_client_id=GOOGLE_CLIENT_ID
+            ),
+            status_code=500
+        )
+
+
+@router.get("/auth/register", response_class=HTMLResponse)
+async def register_page(request: Request, error: str = None, success: str = None):
+    """Display registration page."""
+    return templates.TemplateResponse(
+        "auth/register.html", 
+        get_template_context(
+            request,
+            error=error,
+            success=success,
+            google_client_id=GOOGLE_CLIENT_ID
+        )
+    )
+
+
+@router.post("/auth/register", response_class=HTMLResponse)
+async def register(
+    request: Request,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    email: str = Form(...),
+    organization: str = Form(...),
+    organization_name: str = Form(...),
+    password: str = Form(...),
+    confirm_password: str = Form(...),
+    agree_terms: bool = Form(...)
+):
+    """Handle manual registration."""
+    try:
+        # Validate passwords match
+        if password != confirm_password:
+            return templates.TemplateResponse(
+                "auth/register.html",
+                get_template_context(
+                    request,
+                    error="Passwords do not match",
+                    google_client_id=GOOGLE_CLIENT_ID
+                ),
+                status_code=400
+            )
+        
+        if not agree_terms:
+            return templates.TemplateResponse(
+                "auth/register.html",
+                get_template_context(
+                    request,
+                    error="You must agree to the terms of service",
+                    google_client_id=GOOGLE_CLIENT_ID
+                ),
+                status_code=400
+            )
+        
+        # Create organization first
+        org = await AuthService.create_organization(
+            name=organization_name,
+            slug=organization
+        )
+        
+        # Create user
+        user = await AuthService.create_user(
+            organization_id=org.id,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            password=password,
+            role="admin"  # First user in org becomes admin
+        )
+        
+        return templates.TemplateResponse(
+            "auth/register.html",
+            get_template_context(
+                request,
+                success="Account created successfully! You can now sign in.",
+                google_client_id=GOOGLE_CLIENT_ID
+            )
+        )
+        
+    except HTTPException as e:
+        return templates.TemplateResponse(
+            "auth/register.html",
+            get_template_context(
+                request,
+                error=e.detail,
+                google_client_id=GOOGLE_CLIENT_ID
+            ),
+            status_code=400
+        )
+    except Exception as e:
+        logging.error(f"Registration error: {e}")
+        return templates.TemplateResponse(
+            "auth/register.html",
+            get_template_context(
+                request,
+                error="An error occurred during registration",
+                google_client_id=GOOGLE_CLIENT_ID
+            ),
+            status_code=500
+        )
+
+
+@router.post("/auth/google-register")
+async def google_register(
+    request: Request,
+    credential: str = Form(...),
+    organization: str = Form(...),
+    organization_name: str = Form(...)
+):
+    """Handle Google OAuth registration."""
+    try:
+        # Verify the Google token
+        google_user = verify_google_token(credential)
+        
+        # Create organization first
+        org = await AuthService.create_organization(
+            name=organization_name,
+            slug=organization
+        )
+        
+        # Create user
+        user = await AuthService.create_user(
+            organization_id=org.id,
+            email=google_user["email"],
+            full_name=google_user["name"],
+            google_id=google_user["sub"],
+            avatar_url=google_user.get("picture", ""),
+            role="admin",  # First user in org becomes admin
+            is_verified=True  # Google users are auto-verified
+        )
+        
+        # Ensure names are properly split
+        user.split_full_name_if_needed()
+        
+        # Get organization data (fallback in case eager loading didn't work)
+        org_name = getattr(user.organization, 'name', '') if hasattr(user, 'organization') and user.organization else ''
+        org_slug = getattr(user.organization, 'slug', '') if hasattr(user, 'organization') and user.organization else ''
+        
+        # If organization data is missing, fetch it separately
+        if not org_name or not org_slug:
+            from app.services.auth_service import AuthService
+            organization = await AuthService.get_organization_by_id(user.organization_id)
+            if organization:
+                org_name = organization.name
+                org_slug = organization.slug
+        
+        # Set session with complete user and organization data
+        request.session["user_id"] = user.id
+        request.session["organization_id"] = user.organization_id
+        request.session["user_email"] = user.email
+        request.session["user_first_name"] = user.first_name or ""
+        request.session["user_last_name"] = user.last_name or ""
+        request.session["organization_name"] = org_name
+        request.session["organization_slug"] = org_slug
+        
+        # Redirect to dashboard
+        return RedirectResponse(url="/dashboard", status_code=302)
+        
+    except HTTPException as e:
+        return templates.TemplateResponse(
+            "auth/register.html",
+            get_template_context(
+                request,
+                error=e.detail,
+                google_client_id=GOOGLE_CLIENT_ID
+            ),
+            status_code=400
+        )
+    except Exception as e:
+        logging.error(f"Google registration error: {e}")
+        return templates.TemplateResponse(
+            "auth/register.html",
+            get_template_context(
+                request,
+                error="An error occurred during registration",
+                google_client_id=GOOGLE_CLIENT_ID
+            ),
+            status_code=500
+        )
+
+
+@router.get("/auth/logout")
+async def logout(request: Request):
+    """Handle logout."""
+    request.session.clear()
+    return RedirectResponse(url="/auth/login", status_code=302)
+
+
+@router.get("/auth/api-keys", response_class=HTMLResponse)
+async def api_keys_page(
+    request: Request, 
+    current_user: User = Depends(require_auth),
+    success: str = None,
+    error: str = None,
+    new_key: str = None,
+    new_key_name: str = None
+):
+    """Display API keys management page."""
+    api_keys = await APIKeyService.get_user_api_keys(current_user.id)
+    
+    return templates.TemplateResponse(
+        "auth/api_keys.html",
+        get_template_context(
+            request,
+            api_keys=api_keys,
+            success=success,
+            error=error,
+            new_key=new_key,
+            new_key_name=new_key_name
+        )
+    )
+
+
+@router.post("/auth/api-keys/create")
+async def create_api_key(
+    request: Request,
+    current_user: User = Depends(require_auth),
+    name: str = Form(...),
+    permissions: list[str] = Form([])
+):
+    """Create a new API key."""
+    try:
+        # Process permissions
+        perms = {
+            "read": "read" in permissions,
+            "write": "write" in permissions,
+            "admin": "admin" in permissions
+        }
+        
+        # Create the API key
+        api_key_record, plain_key = await APIKeyService.create_api_key(current_user.id, name)
+        
+        # Update permissions
+        api_key_record.permissions = perms
+        
+        # Redirect with the new key (this will show it once)
+        return RedirectResponse(
+            url=f"/auth/api-keys?new_key={plain_key}&new_key_name={name}",
+            status_code=302
+        )
+        
+    except Exception as e:
+        logging.error(f"API key creation error: {e}")
+        return RedirectResponse(
+            url="/auth/api-keys?error=Failed to create API key",
+            status_code=302
+        )
+
+
+@router.post("/auth/api-keys/{key_id}/delete")
+async def delete_api_key(
+    request: Request,
+    key_id: int,
+    current_user: User = Depends(require_auth)
+):
+    """Delete an API key."""
+    try:
+        success = await APIKeyService.delete_api_key(current_user.id, key_id)
+        if success:
+            return RedirectResponse(
+                url="/auth/api-keys?success=API key deleted successfully",
+                status_code=302
+            )
+        else:
+            return RedirectResponse(
+                url="/auth/api-keys?error=API key not found",
+                status_code=302
+            )
+    except Exception as e:
+        logging.error(f"API key deletion error: {e}")
+        return RedirectResponse(
+            url="/auth/api-keys?error=Failed to delete API key",
+            status_code=302
+        )
 
 
 @router.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Landing page showcasing Buraaq Voice AI."""
-    return templates.TemplateResponse("landing.html", {"request": request})
+    return templates.TemplateResponse("landing.html", get_template_context(request))
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, db: Session = Depends(get_db)):
+async def dashboard(request: Request, current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
     """Dashboard page with advanced analytics."""
-    # Get active assistants
-    active_assistants = await AssistantService.get_assistants(active_only=True)
+    # Get active assistants for this organization
+    active_assistants = db.query(Assistant).filter(
+        Assistant.organization_id == current_user.organization_id,
+        Assistant.is_active == True
+    ).all()
 
-    # Get call statistics
-    total_calls = db.query(Call).count()
-    active_calls = db.query(Call).filter(Call.status == "ongoing").count()
-    completed_calls = db.query(Call).filter(Call.status == "completed").count()
-    failed_calls = db.query(Call).filter(Call.status.in_(["failed", "no-answer", "busy"])).count()
+    # Get call statistics for this organization
+    org_assistants = db.query(Assistant).filter(Assistant.organization_id == current_user.organization_id).all()
+    assistant_ids = [a.id for a in org_assistants]
+    
+    if assistant_ids:
+        total_calls = db.query(Call).filter(Call.assistant_id.in_(assistant_ids)).count()
+        active_calls = db.query(Call).filter(
+            Call.assistant_id.in_(assistant_ids),
+            Call.status == "ongoing"
+        ).count()
+        completed_calls = db.query(Call).filter(
+            Call.assistant_id.in_(assistant_ids),
+            Call.status == "completed"
+        ).count()
+        failed_calls = db.query(Call).filter(
+            Call.assistant_id.in_(assistant_ids),
+            Call.status.in_(["failed", "no-answer", "busy"])
+        ).count()
+    else:
+        total_calls = active_calls = completed_calls = failed_calls = 0
 
     # Calculate success rate
     success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
 
     # Calculate average call duration for completed calls
-    completed_calls_with_duration = db.query(Call).filter(
-        Call.status == "completed", 
-        Call.duration.isnot(None)
-    ).all()
+    if assistant_ids:
+        completed_calls_with_duration = db.query(Call).filter(
+            Call.assistant_id.in_(assistant_ids),
+            Call.status == "completed", 
+            Call.duration.isnot(None)
+        ).all()
+    else:
+        completed_calls_with_duration = []
     
     avg_duration = 0
     if completed_calls_with_duration:
@@ -63,16 +581,27 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         avg_duration = total_duration / len(completed_calls_with_duration)
 
     # Get transcript quality metrics (average confidence)
-    transcript_confidence = db.query(Transcript.confidence).filter(
-        Transcript.confidence.isnot(None)
-    ).all()
+    if assistant_ids:
+        transcript_confidence = db.query(Transcript.confidence).filter(
+            Transcript.call_id.in_(
+                db.query(Call.id).filter(Call.assistant_id.in_(assistant_ids))
+            ),
+            Transcript.confidence.isnot(None)
+        ).all()
+    else:
+        transcript_confidence = []
     
     avg_quality = 0
     if transcript_confidence:
         avg_quality = sum(conf[0] for conf in transcript_confidence) / len(transcript_confidence) * 100
 
     # Get recent calls with enhanced data
-    recent_calls = db.query(Call).order_by(Call.started_at.desc()).limit(10).all()
+    if assistant_ids:
+        recent_calls = db.query(Call).filter(
+            Call.assistant_id.in_(assistant_ids)
+        ).order_by(Call.started_at.desc()).limit(10).all()
+    else:
+        recent_calls = []
 
     # Calculate assistant performance metrics
     assistant_metrics = []
@@ -100,21 +629,23 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     return templates.TemplateResponse(
         "index.html",
-        {
-            "request": request,
-            "active_assistants": active_assistants,
-            "total_calls": total_calls,
-            "active_calls": active_calls,
-            "completed_calls": completed_calls,
-            "failed_calls": failed_calls,
-            "success_rate": round(success_rate, 1),
-            "avg_duration": round(avg_duration),
-            "avg_quality": round(avg_quality, 1),
-            "recent_calls": recent_calls,
-            "assistant_metrics": assistant_metrics,
-            "hourly_data": hourly_data,
-            "uptime": uptime,
-        },
+        get_template_context(
+            request,
+            current_user=current_user,
+            organization=current_user.organization,
+            active_assistants=active_assistants,
+            total_calls=total_calls,
+            active_calls=active_calls,
+            completed_calls=completed_calls,
+            failed_calls=failed_calls,
+            success_rate=round(success_rate, 1),
+            avg_duration=round(avg_duration),
+            avg_quality=round(avg_quality, 1),
+            recent_calls=recent_calls,
+            assistant_metrics=assistant_metrics,
+            hourly_data=hourly_data,
+            uptime=uptime,
+        ),
     )
 
 
@@ -125,6 +656,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 @router.get("/assistants", response_class=HTMLResponse)
 async def list_assistants(
     request: Request,
+    current_user: User = Depends(require_auth),
     page: int = 1,
     per_page: int = 10,
     search: str = None,
@@ -135,8 +667,8 @@ async def list_assistants(
     db: Session = Depends(get_db)
 ):
     """List assistants with pagination, filtering, and sorting."""
-    # Base query
-    query = db.query(Assistant)
+    # Base query - filter by organization
+    query = db.query(Assistant).filter(Assistant.organization_id == current_user.organization_id)
     
     # Apply search filter
     if search:
@@ -230,22 +762,38 @@ async def list_assistants(
             assistants_with_stats = [a for a in assistants_with_stats if a.performance < 85]
     
     # Calculate overall statistics
-    total_assistants = db.query(Assistant).count()
-    active_assistants = db.query(Assistant).filter(Assistant.is_active == True).count()
-    total_calls_all = db.query(Call).count()
+    total_assistants = db.query(Assistant).filter(Assistant.organization_id == current_user.organization_id).count()
+    active_assistants = db.query(Assistant).filter(
+        Assistant.organization_id == current_user.organization_id,
+        Assistant.is_active == True
+    ).count()
+    total_calls_all = db.query(Call).filter(
+        Call.assistant_id.in_(
+            db.query(Assistant.id).filter(Assistant.organization_id == current_user.organization_id)
+        )
+    ).count()
     
     # Calculate average performance across all assistants
     all_confidences = db.query(func.avg(Transcript.confidence)).filter(
+        Transcript.call_id.in_(
+            db.query(Call.id).filter(
+                Call.assistant_id.in_(
+                    db.query(Assistant.id).filter(Assistant.organization_id == current_user.organization_id)
+                )
+            )
+        ),
         Transcript.confidence.isnot(None)
     ).scalar()
     avg_performance = int(all_confidences * 100) if all_confidences else 98.7
     
     return templates.TemplateResponse(
         "assistants/index.html", 
-        {
-            "request": request, 
-            "assistants": assistants_with_stats,
-            "pagination": {
+        get_template_context(
+            request,
+            current_user=current_user,
+            organization=current_user.organization,
+            assistants=assistants_with_stats,
+            pagination={
                 "page": page,
                 "per_page": per_page,
                 "total_count": total_count,
@@ -258,20 +806,20 @@ async def list_assistants(
                 "page_range_end": page_range_end,
                 "page_numbers": page_numbers,
             },
-            "filters": {
+            filters={
                 "search": search or "",
                 "status": status or "",
                 "performance": performance or "",
                 "sort_by": sort_by,
                 "sort_order": sort_order,
             },
-            "stats": {
+            stats={
                 "total_assistants": total_assistants,
                 "active_assistants": active_assistants,
                 "total_calls": total_calls_all,
                 "avg_performance": avg_performance,
             }
-        }
+        )
     )
 
 
@@ -441,7 +989,7 @@ async def export_transcripts(
 
 
 @router.get("/assistants/new", response_class=HTMLResponse)
-async def create_assistant_form(request: Request):
+async def create_assistant_form(request: Request, current_user: User = Depends(require_auth)):
     """Show the create assistant form."""
     # Get available phone numbers from Twilio
     phone_numbers = TwilioService.get_available_phone_numbers()
@@ -464,18 +1012,21 @@ async def create_assistant_form(request: Request):
 
     return templates.TemplateResponse(
         "assistants/form.html", 
-        {
-            "request": request, 
-            "assistant": None, 
-            "phone_numbers": phone_numbers,
-            "default_schema": default_schema
-        }
+        get_template_context(
+            request,
+            current_user=current_user,
+            organization=current_user.organization,
+            assistant=None, 
+            phone_numbers=phone_numbers,
+            default_schema=default_schema
+        )
     )
 
 
 @router.post("/assistants/new", response_class=HTMLResponse)
 async def create_assistant(
     request: Request,
+    current_user: User = Depends(require_auth),
     name: str = Form(...),
     phone_number: str = Form(...),
     description: Optional[str] = Form(None),
@@ -551,6 +1102,8 @@ async def create_assistant(
             "assistants/form.html",
             {
                 "request": request,
+                "current_user": current_user,
+                "organization": current_user.organization,
                 "assistant": None,
                 "phone_numbers": phone_numbers,
                 "default_schema": default_schema,
@@ -571,6 +1124,8 @@ async def create_assistant(
         "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
+        "organization_id": current_user.organization_id,
+        "user_id": current_user.id,
         # API Keys - Convert empty strings to None
         "openai_api_key": empty_to_none(openai_api_key),
         "deepgram_api_key": empty_to_none(deepgram_api_key),
@@ -696,6 +1251,8 @@ async def create_assistant(
                 "assistants/form.html",
                 {
                     "request": request,
+                    "current_user": current_user,
+                    "organization": current_user.organization,
                     "assistant": None,
                     "phone_numbers": phone_numbers,
                     "default_schema": default_schema,
@@ -732,6 +1289,8 @@ async def create_assistant(
                     "assistants/form.html",
                     {
                         "request": request,
+                        "current_user": current_user,
+                        "organization": current_user.organization,
                         "assistant": None,
                         "phone_numbers": phone_numbers,
                         "error": f"Invalid keywords format: {str(e)}. Use format: 'keyword1:2.0, keyword2, keyword3:1.5'",
@@ -750,6 +1309,8 @@ async def create_assistant(
                     "assistants/form.html",
                     {
                         "request": request,
+                        "current_user": current_user,
+                        "organization": current_user.organization,
                         "assistant": None,
                         "phone_numbers": phone_numbers,
                         "error": f"Invalid keyterms format: {str(e)}. Use comma-separated terms.",
@@ -794,6 +1355,8 @@ async def create_assistant(
             "assistants/form.html",
             {
                 "request": request,
+                "current_user": current_user,
+                "organization": current_user.organization,
                 "assistant": None,
                 "phone_numbers": phone_numbers,
                 "default_schema": default_schema,
@@ -823,7 +1386,7 @@ async def view_assistant(
 
     return templates.TemplateResponse(
         "assistants/view.html",
-        {"request": request, "assistant": assistant, "calls": calls},
+        get_template_context(request, assistant=assistant, calls=calls),
     )
 
 
@@ -857,12 +1420,12 @@ async def edit_assistant_form(
 
     return templates.TemplateResponse(
         "assistants/form.html",
-        {
-            "request": request, 
-            "assistant": assistant, 
-            "phone_numbers": phone_numbers,
-            "default_schema": default_schema
-        },
+        get_template_context(
+            request,
+            assistant=assistant, 
+            phone_numbers=phone_numbers,
+            default_schema=default_schema
+        ),
     )
 
 
@@ -1506,10 +2069,10 @@ async def list_calls(
     
     return templates.TemplateResponse(
         "calls/index.html", 
-        {
-            "request": request, 
-            "calls_data": calls_data,
-            "pagination": {
+        get_template_context(
+            request,
+            calls_data=calls_data,
+            pagination={
                 "page": page,
                 "per_page": per_page,
                 "total_count": total_count,
@@ -1522,7 +2085,7 @@ async def list_calls(
                 "page_range_end": page_range_end,
                 "page_numbers": page_numbers,
             },
-            "filters": {
+            filters={
                 "search": search or "",
                 "status": status or "",
                 "assistant_id": assistant_id or "",
@@ -1530,7 +2093,7 @@ async def list_calls(
                 "sort_by": sort_by,
                 "sort_order": sort_order,
             },
-            "stats": {
+            stats={
                 "total_calls": total_calls,
                 "active_calls": active_calls,
                 "completed_calls": completed_calls,
@@ -1538,8 +2101,8 @@ async def list_calls(
                 "success_rate": round(success_rate, 1),
                 "avg_duration": avg_duration,
             },
-            "assistants": assistants,
-        }
+            assistants=assistants,
+        )
     )
 
 
@@ -1581,13 +2144,14 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
         })
 
     return templates.TemplateResponse(
-        "calls/view.html", {
-            "request": request, 
-            "call": call,
-            "recordings": recordings,
-            "transcripts": transcripts,
-            "conversation": conversation
-        }
+        "calls/view.html", 
+        get_template_context(
+            request,
+            call=call,
+            recordings=recordings,
+            transcripts=transcripts,
+            conversation=conversation
+        )
     )
 
 

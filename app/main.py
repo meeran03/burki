@@ -4,8 +4,11 @@ Entry Point for Application
 
 # pylint: disable=logging-format-interpolation,logging-fstring-interpolation,broad-exception-caught
 import logging
+import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
 from app.core.call_manager import CallManager
@@ -29,9 +32,21 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify actual origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add session middleware
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
 
 app.include_router(root_router)
 app.include_router(web_router)
