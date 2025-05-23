@@ -65,9 +65,9 @@ class BillingService:
 
                 pro_plan = BillingPlan(
                     name="Pro",
-                    description="Unlimited minutes for $20/month",
-                    monthly_minutes=None,  # Unlimited
-                    price_cents=2000,  # $20
+                    description="1000 minutes for $30/month",
+                    monthly_minutes=1000,
+                    price_cents=3000,
                     stripe_price_id=os.getenv("STRIPE_PRO_PLAN_PRICE_ID"),
                     features={
                         "unlimited_assistants": True,
@@ -565,12 +565,8 @@ class BillingService:
         if billing_account.is_within_limits(additional_minutes):
             return {"allowed": True}
 
-        # Check if payment method is attached for overages or Pro plan
+        # Check if payment method is attached for overages
         if billing_account.needs_payment_method() and billing_account.is_payment_method_attached:
-            # If Pro plan (unlimited), always allow
-            if billing_account.plan.monthly_minutes is None:
-                return {"allowed": True}
-            
             # If auto-topup is enabled, allow and trigger topup
             if billing_account.auto_topup_enabled:
                 return {"allowed": True, "will_trigger_topup": True}
