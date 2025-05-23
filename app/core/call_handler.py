@@ -53,6 +53,14 @@ class CallState:
     deepgram_service: Optional[Any] = None  # Deepgram service for this call
     tts_service: Optional[Any] = None  # TTS service for this call
     assistant: Optional[Any] = None  # Assistant to use for this call
+    
+    # Idle timeout tracking
+    last_activity_time: datetime = field(default_factory=datetime.now)  # Track last activity
+    idle_message_count: int = 0  # Count of idle messages sent
+    idle_timeout_task: Optional[Any] = None  # Background task for idle timeout
+    idle_timeout_seconds: Optional[int] = None  # Timeout in seconds
+    max_idle_messages: Optional[int] = None  # Max idle messages before ending call
+    idle_message: Optional[str] = None  # Message to send when idle
 
 
 class CallHandler:
@@ -135,6 +143,15 @@ class CallHandler:
             )
             self.active_calls[call_sid].interruption_cooldown = settings.get(
                 "interruption_cooldown", 2.0
+            )
+
+        # Set idle timeout settings from assistant if available
+        if assistant:
+            self.active_calls[call_sid].idle_timeout_seconds = assistant.idle_timeout
+            self.active_calls[call_sid].max_idle_messages = assistant.max_idle_messages
+            self.active_calls[call_sid].idle_message = (
+                assistant.idle_message or 
+                "Are you still there? I'm here to help if you need anything."
             )
 
         # Get LLM configuration from assistant
@@ -283,6 +300,20 @@ class CallHandler:
                 force_flush=True
             )
 
+            # Start idle timeout monitoring if configured
+            if (self.active_calls[call_sid].idle_timeout_seconds and 
+                self.active_calls[call_sid].idle_timeout_seconds > 0):
+                self.active_calls[call_sid].idle_timeout_task = asyncio.create_task(
+                    self._monitor_idle_timeout(call_sid)
+                )
+                logger.info(f"Started idle timeout monitoring for call {call_sid} "
+                           f"with {self.active_calls[call_sid].idle_timeout_seconds}s timeout, "
+                           f"max {self.active_calls[call_sid].max_idle_messages} messages, "
+                           f"message: '{self.active_calls[call_sid].idle_message}'")
+            else:
+                logger.info(f"No idle timeout configured for call {call_sid} "
+                           f"(timeout: {self.active_calls[call_sid].idle_timeout_seconds})")
+
             # Send initial webhook status update after call starts
             if assistant:
                 try:
@@ -350,6 +381,76 @@ class CallHandler:
         except Exception as e:
             logger.error(f"Error starting call recording: {e}", exc_info=True)
 
+    async def _monitor_idle_timeout(self, call_sid: str) -> None:
+        """
+        Monitor idle timeout for a call and send idle messages when appropriate.
+        
+        Args:
+            call_sid: The Twilio call SID
+        """
+        if call_sid not in self.active_calls:
+            return
+            
+        try:
+            while self.active_calls[call_sid].is_active:
+                # Sleep for 1 second intervals to check timeout
+                await asyncio.sleep(1.0)
+                
+                if call_sid not in self.active_calls or not self.active_calls[call_sid].is_active:
+                    break
+                
+                call_state = self.active_calls[call_sid]
+                
+                # Skip if no timeout configured
+                if not call_state.idle_timeout_seconds:
+                    continue
+                
+                # Calculate time since last activity
+                time_since_activity = (datetime.now() - call_state.last_activity_time).total_seconds()
+                
+                # Log debug info every 10 seconds for troubleshooting
+                if int(time_since_activity) % 10 == 0 and time_since_activity > 0:
+                    logger.debug(f"Idle monitoring for call {call_sid}: {time_since_activity:.1f}s since last activity (threshold: {call_state.idle_timeout_seconds}s)")
+                
+                # Check if we've exceeded the idle timeout
+                if time_since_activity >= call_state.idle_timeout_seconds:
+                    # Check if we've reached max idle messages
+                    if (call_state.max_idle_messages and 
+                        call_state.idle_message_count >= call_state.max_idle_messages):
+                        logger.info(f"Max idle messages ({call_state.max_idle_messages}) reached for call {call_sid}, ending call")
+                        await self.end_call(call_sid, with_twilio=True)
+                        break
+                    
+                    # Send idle message
+                    if call_state.idle_message:
+                        logger.info(f"Sending idle message to call {call_sid} after {time_since_activity:.1f}s of inactivity")
+                        await call_state.tts_service.process_text(
+                            text=call_state.idle_message + "<flush/>",
+                            force_flush=True
+                        )
+                        
+                        # Increment idle message count and reset activity timer
+                        call_state.idle_message_count += 1
+                        call_state.last_activity_time = datetime.now()
+                        
+                        logger.info(f"Sent idle message #{call_state.idle_message_count} to call {call_sid}")
+                        
+        except asyncio.CancelledError:
+            logger.info(f"Idle timeout monitoring cancelled for call {call_sid}")
+        except Exception as e:
+            logger.error(f"Error in idle timeout monitoring for call {call_sid}: {e}", exc_info=True)
+
+    def _reset_idle_timer(self, call_sid: str) -> None:
+        """
+        Reset the idle timer for a call to indicate activity.
+        
+        Args:
+            call_sid: The Twilio call SID
+        """
+        if call_sid in self.active_calls:
+            self.active_calls[call_sid].last_activity_time = datetime.now()
+            logger.debug(f"Reset idle timer for call {call_sid} due to activity")
+
     async def _handle_tts_audio(
         self, call_sid: str, audio_data: bytes, is_final: bool, metadata: Dict[str, Any]
     ) -> None:
@@ -376,6 +477,9 @@ class CallHandler:
             if audio_data and not self.active_calls[call_sid].is_ai_speaking:
                 self.active_calls[call_sid].is_ai_speaking = True
                 self.active_calls[call_sid].ai_speaking_start_time = datetime.now()
+                # Reset idle timer when AI starts speaking meaningful content
+                # Only reset once at the start of speaking, not on every audio chunk
+                self._reset_idle_timer(call_sid)
 
             # Get the call's WebSocket connection
             websocket = self.active_calls[call_sid].websocket
@@ -524,6 +628,9 @@ class CallHandler:
                     text=content,
                     force_flush=is_final,  # Force flush when it's the final response
                 )
+                # Only reset idle timer when AI responds with actual content
+                if content.strip():
+                    self._reset_idle_timer(call_sid)
 
             # Log the response and store final responses as transcripts
             if is_final:
@@ -576,6 +683,11 @@ class CallHandler:
             return
 
         try:
+            # Only reset idle timer on final transcripts with meaningful content
+            # Don't reset on interim results to avoid preventing idle detection
+            if is_final and transcript.strip():
+                self._reset_idle_timer(call_sid)
+            
             # Check if we're in cooldown period
             last_interruption = self.active_calls[call_sid].last_interruption_time
             if last_interruption:
@@ -724,6 +836,9 @@ class CallHandler:
             return False
 
         try:
+            # Note: Don't reset idle timer here as audio packets flow constantly
+            # Only reset on meaningful user activity (speech transcripts)
+            
             # Send audio to Deepgram
             return await self.active_calls[call_sid].deepgram_service.send_audio(
                 audio_data
@@ -749,6 +864,13 @@ class CallHandler:
         try:
             # Mark call as inactive first to prevent new processing
             self.active_calls[call_sid].is_active = False
+
+            # Cancel idle timeout task if it exists
+            if (call_sid in self.active_calls and 
+                self.active_calls[call_sid].idle_timeout_task and 
+                not self.active_calls[call_sid].idle_timeout_task.done()):
+                self.active_calls[call_sid].idle_timeout_task.cancel()
+                logger.info(f"Cancelled idle timeout task for call {call_sid}")
 
             # If we need to end the call with Twilio, use TwilioService
             if with_twilio:

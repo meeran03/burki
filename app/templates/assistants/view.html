@@ -154,6 +154,10 @@
                     <dd class="mt-1 text-sm text-gray-900">{{ assistant.transfer_call_message or "Please hold while I transfer your call. (default)" }}</dd>
                 </div>
                 <div>
+                    <dt class="text-sm font-medium text-gray-500">Idle Message</dt>
+                    <dd class="mt-1 text-sm text-gray-900">{{ assistant.idle_message or "Are you still there? I'm here to help if you need anything. (default)" }}</dd>
+                </div>
+                <div>
                     <dt class="text-sm font-medium text-gray-500">Max Idle Messages</dt>
                     <dd class="mt-1 text-sm text-gray-900">{{ assistant.max_idle_messages or "3 (default)" }}</dd>
                 </div>

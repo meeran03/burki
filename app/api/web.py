@@ -314,6 +314,7 @@ async def create_assistant(
     # Call control settings
     end_call_message: Optional[str] = Form(None),
     transfer_call_message: Optional[str] = Form(None),
+    idle_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
     # Webhook settings
@@ -451,6 +452,7 @@ async def create_assistant(
         # Call control settings
         "end_call_message": end_call_message,
         "transfer_call_message": transfer_call_message,
+        "idle_message": idle_message,
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout,
         # Webhook settings
@@ -647,6 +649,7 @@ async def update_assistant(
     # Call control settings
     end_call_message: Optional[str] = Form(None),
     transfer_call_message: Optional[str] = Form(None),
+    idle_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
     # Webhook settings
@@ -789,6 +792,7 @@ async def update_assistant(
         # Call control settings
         "end_call_message": empty_to_none(end_call_message),
         "transfer_call_message": empty_to_none(transfer_call_message),
+        "idle_message": idle_message,
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout,
         # Webhook settings

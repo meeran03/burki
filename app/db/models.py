@@ -94,6 +94,7 @@ class Assistant(Base):
     # Call control settings
     end_call_message = Column(String(255), nullable=True)
     transfer_call_message = Column(String(255), nullable=True)
+    idle_message = Column(String(255), nullable=True, default="Are you still there? I'm here to help if you need anything.")
     max_idle_messages = Column(Integer, nullable=True)
     idle_timeout = Column(Integer, nullable=True)
 

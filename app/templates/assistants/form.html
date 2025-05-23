@@ -595,6 +595,19 @@
                     </div>
 
                                     <div class="col-span-6 sm:col-span-3">
+                        <label for="idle_message" class="block text-sm font-medium text-gray-700">Idle Message</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <input type="text" name="idle_message" id="idle_message"
+                                value="{{ assistant.idle_message if assistant else 'Are you still there? I\'m here to help if you need anything.' }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="Are you still there? I'm here to help if you need anything.">
+                        </div>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            Message sent when no activity is detected during a call.
+                                        </p>
+                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
                         <label for="max_idle_messages" class="block text-sm font-medium text-gray-700">Max Idle Messages</label>
                                         <div class="mt-1 relative rounded-md shadow-sm">
                             <input type="number" name="max_idle_messages" id="max_idle_messages"
