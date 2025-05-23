@@ -615,6 +615,83 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Webhook Settings -->
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="md:grid md:grid-cols-3 md:gap-6">
+                        <div class="md:col-span-1">
+                            <h3 class="text-lg font-medium leading-6 text-gray-900">Webhook Settings</h3>
+                            <p class="mt-1 text-sm text-gray-500">Configure webhooks for call events and structured data extraction.</p>
+                        </div>
+                        <div class="mt-5 md:mt-0 md:col-span-2">
+                            <!-- Webhook URL -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+                                <h4 class="text-base font-medium text-gray-900 mb-4">Webhook Configuration</h4>
+                                <div class="grid grid-cols-6 gap-6">
+                                    <div class="col-span-6">
+                                        <label for="webhook_url" class="block text-sm font-medium text-gray-700">Webhook URL</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                                            <input type="url" name="webhook_url" id="webhook_url"
+                                                value="{{ assistant.webhook_url if assistant else '' }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="https://your-app.com/webhook">
+                                        </div>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            If provided, webhooks will be sent for call status updates and end-of-call reports.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Structured Data Schema -->
+                            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-base font-medium text-gray-900">Structured Data Schema</h4>
+                                    <button type="button" class="text-sm text-blue-600 hover:text-blue-500" onclick="toggleSection('structured-data-schema')">
+                                        Toggle Schema Editor
+                                    </button>
+                                </div>
+                                <div id="structured-data-schema" class="grid grid-cols-6 gap-6" style="display: none;">
+                                    <div class="col-span-6">
+                                        <label for="structured_data_schema" class="block text-sm font-medium text-gray-700">JSON Schema</label>
+                                        <div class="mt-1">
+                                            <textarea id="structured_data_schema" name="structured_data_schema" rows="12"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono text-sm"
+                                                placeholder='Enter JSON schema here...'>{{ (assistant.custom_settings.structured_data_schema | tojson(indent=2)) if assistant and assistant.custom_settings and assistant.custom_settings.get('structured_data_schema') else default_schema }}</textarea>
+                                        </div>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            Define a JSON schema for extracting structured data from conversations using OpenAI structured outputs.
+                                        </p>
+                                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
+                                            <p class="text-xs font-medium text-gray-700 mb-2">Example Schema:</p>
+                                            <pre class="text-xs text-gray-600 overflow-x-auto"><code id="example-schema">{
+  "type": "object",
+  "properties": {
+    "chat_topic": {
+      "type": "string",
+      "description": "The main topic of the conversation"
+    },
+    "followup_sms": {
+      "type": "string", 
+      "description": "A follow-up SMS message to send to the customer"
+    },
+    "order_created": {
+      "type": "boolean",
+      "description": "Whether an order was successfully created"
+    }
+  },
+  "required": ["chat_topic"]
+}</code></pre>
+                                            <button type="button" class="mt-2 text-xs text-blue-600 hover:text-blue-500" onclick="useExampleSchema()">
+                                                Use this example
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Form Actions -->
@@ -648,10 +725,34 @@ function toggleSection(sectionId) {
     }
 }
 
+// Use example schema
+function useExampleSchema() {
+    const textarea = document.getElementById('structured_data_schema');
+    const exampleSchema = {
+        "type": "object",
+        "properties": {
+            "chat_topic": {
+                "type": "string",
+                "description": "The main topic of the conversation"
+            },
+            "followup_sms": {
+                "type": "string", 
+                "description": "A follow-up SMS message to send to the customer"
+            },
+            "order_created": {
+                "type": "boolean",
+                "description": "Whether an order was successfully created"
+            }
+        },
+        "required": ["chat_topic"]
+    };
+    textarea.value = JSON.stringify(exampleSchema, null, 2);
+}
+
 // Initialize form
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize sections
-    const sections = ['llm-settings', 'tts-settings', 'stt-settings', 'interruption-settings'];
+    const sections = ['llm-settings', 'tts-settings', 'stt-settings', 'interruption-settings', 'structured-data-schema'];
     sections.forEach(section => {
         const element = document.getElementById(section);
         if (element) {

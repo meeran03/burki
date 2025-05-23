@@ -15,6 +15,7 @@ from app.services.deepgram_service import DeepgramService
 from app.services.llm_service import LLMService
 from app.services.tts_service import TTSService
 from app.services.call_service import CallService
+from app.services.webhook_service import WebhookService
 from app.twilio.twilio_service import TwilioService
 
 # Configure logging
@@ -279,8 +280,26 @@ class CallHandler:
             # Send a welcome message via TTS
             await self.active_calls[call_sid].tts_service.process_text(
                 text=welcome_message,
-                force_flush=True,
+                force_flush=True
             )
+
+            # Send initial webhook status update after call starts
+            if assistant:
+                try:
+                    call = await CallService.get_call_by_sid(call_sid)
+                    if call:
+                        asyncio.create_task(
+                            WebhookService.send_status_update_webhook(
+                                assistant=assistant,
+                                call=call,
+                                status="in-progress",
+                                messages=[]
+                            )
+                        )
+                        logger.info(f"Sent initial webhook status update for call {call_sid}")
+                except Exception as e:
+                    logger.error(f"Error sending initial webhook for call {call_sid}: {e}")
+
         else:
             logger.error(f"Failed to start transcription for call: {call_sid}")
 
@@ -760,6 +779,21 @@ class CallHandler:
                 logger.info(f"Updated call {call_sid} status to completed in database")
             except Exception as e:
                 logger.error(f"Error updating call status for {call_sid}: {e}", exc_info=True)
+
+            # Send end-of-call webhook if assistant and webhook URL are configured
+            assistant = self.active_calls[call_sid].assistant
+            if assistant:
+                try:
+                    # Send delayed webhook that waits for recordings to complete
+                    asyncio.create_task(
+                        WebhookService.send_end_of_call_webhook_when_ready(
+                            call_sid=call_sid,
+                            max_wait_seconds=60  # Wait up to 60 seconds for recordings
+                        )
+                    )
+                    logger.info(f"Scheduled delayed end-of-call webhook for call {call_sid}")
+                except Exception as e:
+                    logger.error(f"Error scheduling end-of-call webhook for call {call_sid}: {e}")
 
             # Clean up call state - save a reference for logging before deletion
             call_state = self.active_calls.get(call_sid)

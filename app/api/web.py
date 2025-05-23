@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import timedelta
 import time
 import logging
+import json
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -206,8 +207,6 @@ async def export_transcripts(
     
     elif format == "json":
         # Create JSON format
-        import json
-        
         transcript_data = {
             "call_sid": call.call_sid,
             "started_at": call.started_at.isoformat() if call.started_at else None,
@@ -243,9 +242,30 @@ async def create_assistant_form(request: Request):
     # Get available phone numbers from Twilio
     phone_numbers = TwilioService.get_available_phone_numbers()
 
+    # Default schema for structured data
+    default_schema = json.dumps({
+        "type": "object",
+        "properties": {
+            "chat_topic": {
+                "type": "string",
+                "description": "The main topic of the conversation"
+            },
+            "followup_sms": {
+                "type": "string",
+                "description": "A follow-up SMS message to send to the customer"
+            }
+        },
+        "required": ["chat_topic"]
+    }, indent=2)
+
     return templates.TemplateResponse(
-        "assistants/form.html",
-        {"request": request, "assistant": None, "phone_numbers": phone_numbers},
+        "assistants/form.html", 
+        {
+            "request": request, 
+            "assistant": None, 
+            "phone_numbers": phone_numbers,
+            "default_schema": default_schema
+        }
     )
 
 
@@ -296,18 +316,36 @@ async def create_assistant(
     transfer_call_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
+    # Webhook settings
+    webhook_url: Optional[str] = Form(None),
+    structured_data_schema: Optional[str] = Form(None),
 ):
     """Create a new assistant."""
     # Check if an assistant with this phone number already exists
     existing = await AssistantService.get_assistant_by_phone(phone_number)
     if existing:
         phone_numbers = TwilioService.get_available_phone_numbers()
+        default_schema = json.dumps({
+            "type": "object",
+            "properties": {
+                "chat_topic": {
+                    "type": "string",
+                    "description": "The main topic of the conversation"
+                },
+                "followup_sms": {
+                    "type": "string",
+                    "description": "A follow-up SMS message to send to the customer"
+                }
+            },
+            "required": ["chat_topic"]
+        }, indent=2)
         return templates.TemplateResponse(
             "assistants/form.html",
             {
                 "request": request,
                 "assistant": None,
                 "phone_numbers": phone_numbers,
+                "default_schema": default_schema,
                 "error": f"Assistant with phone number {phone_number} already exists",
             },
             status_code=400,
@@ -414,7 +452,47 @@ async def create_assistant(
         "transfer_call_message": transfer_call_message,
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout,
+        # Webhook settings
+        "webhook_url": empty_to_none(webhook_url),
     }
+
+    # Handle custom settings separately
+    custom_settings = {}
+    if structured_data_schema:
+        try:
+            # Parse the JSON schema
+            schema_data = json.loads(structured_data_schema)
+            custom_settings["structured_data_schema"] = schema_data
+        except json.JSONDecodeError:
+            phone_numbers = TwilioService.get_available_phone_numbers()
+            default_schema = json.dumps({
+                "type": "object",
+                "properties": {
+                    "chat_topic": {
+                        "type": "string",
+                        "description": "The main topic of the conversation"
+                    },
+                    "followup_sms": {
+                        "type": "string",
+                        "description": "A follow-up SMS message to send to the customer"
+                    }
+                },
+                "required": ["chat_topic"]
+            }, indent=2)
+            return templates.TemplateResponse(
+                "assistants/form.html",
+                {
+                    "request": request,
+                    "assistant": None,
+                    "phone_numbers": phone_numbers,
+                    "default_schema": default_schema,
+                    "error": "Invalid JSON schema for structured data",
+                },
+                status_code=400,
+            )
+
+    if custom_settings:
+        assistant_data["custom_settings"] = custom_settings
 
     # Remove None values and empty dictionaries
     assistant_data = {
@@ -428,12 +506,27 @@ async def create_assistant(
         return RedirectResponse(url=f"/assistants/{new_assistant.id}", status_code=302)
     except Exception as e:
         phone_numbers = TwilioService.get_available_phone_numbers()
+        default_schema = json.dumps({
+            "type": "object",
+            "properties": {
+                "chat_topic": {
+                    "type": "string",
+                    "description": "The main topic of the conversation"
+                },
+                "followup_sms": {
+                    "type": "string",
+                    "description": "A follow-up SMS message to send to the customer"
+                }
+            },
+            "required": ["chat_topic"]
+        }, indent=2)
         return templates.TemplateResponse(
             "assistants/form.html",
             {
                 "request": request,
                 "assistant": None,
                 "phone_numbers": phone_numbers,
+                "default_schema": default_schema,
                 "error": f"Error creating assistant: {str(e)}",
             },
             status_code=500,
@@ -476,9 +569,30 @@ async def edit_assistant_form(
     # Get available phone numbers from Twilio
     phone_numbers = TwilioService.get_available_phone_numbers()
 
+    # Default schema for structured data
+    default_schema = json.dumps({
+        "type": "object",
+        "properties": {
+            "chat_topic": {
+                "type": "string",
+                "description": "The main topic of the conversation"
+            },
+            "followup_sms": {
+                "type": "string",
+                "description": "A follow-up SMS message to send to the customer"
+            }
+        },
+        "required": ["chat_topic"]
+    }, indent=2)
+
     return templates.TemplateResponse(
         "assistants/form.html",
-        {"request": request, "assistant": assistant, "phone_numbers": phone_numbers},
+        {
+            "request": request, 
+            "assistant": assistant, 
+            "phone_numbers": phone_numbers,
+            "default_schema": default_schema
+        },
     )
 
 
@@ -530,6 +644,9 @@ async def update_assistant(
     transfer_call_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
+    # Webhook settings
+    webhook_url: Optional[str] = Form(None),
+    structured_data_schema: Optional[str] = Form(None),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id)
@@ -541,12 +658,27 @@ async def update_assistant(
         existing = await AssistantService.get_assistant_by_phone(phone_number)
         if existing:
             phone_numbers = TwilioService.get_available_phone_numbers()
+            default_schema = json.dumps({
+                "type": "object",
+                "properties": {
+                    "chat_topic": {
+                        "type": "string",
+                        "description": "The main topic of the conversation"
+                    },
+                    "followup_sms": {
+                        "type": "string",
+                        "description": "A follow-up SMS message to send to the customer"
+                    }
+                },
+                "required": ["chat_topic"]
+            }, indent=2)
             return templates.TemplateResponse(
                 "assistants/form.html",
                 {
                     "request": request,
                     "assistant": assistant,
                     "phone_numbers": phone_numbers,
+                    "default_schema": default_schema,
                     "error": f"Assistant with phone number {phone_number} already exists",
                 },
                 status_code=400,
@@ -653,7 +785,47 @@ async def update_assistant(
         "transfer_call_message": empty_to_none(transfer_call_message),
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout,
+        # Webhook settings
+        "webhook_url": empty_to_none(webhook_url),
     }
+
+    # Handle custom settings separately
+    custom_settings = {}
+    if structured_data_schema:
+        try:
+            # Parse the JSON schema
+            schema_data = json.loads(structured_data_schema)
+            custom_settings["structured_data_schema"] = schema_data
+        except json.JSONDecodeError:
+            phone_numbers = TwilioService.get_available_phone_numbers()
+            default_schema = json.dumps({
+                "type": "object",
+                "properties": {
+                    "chat_topic": {
+                        "type": "string",
+                        "description": "The main topic of the conversation"
+                    },
+                    "followup_sms": {
+                        "type": "string",
+                        "description": "A follow-up SMS message to send to the customer"
+                    }
+                },
+                "required": ["chat_topic"]
+            }, indent=2)
+            return templates.TemplateResponse(
+                "assistants/form.html",
+                {
+                    "request": request,
+                    "assistant": assistant,
+                    "phone_numbers": phone_numbers,
+                    "default_schema": default_schema,
+                    "error": "Invalid JSON schema for structured data",
+                },
+                status_code=400,
+            )
+
+    if custom_settings:
+        update_data["custom_settings"] = custom_settings
 
     # Remove None values and empty dictionaries
     update_data = {k: v for k, v in update_data.items() if v is not None and v != {}}
@@ -669,12 +841,27 @@ async def update_assistant(
         )
     except Exception as e:
         phone_numbers = TwilioService.get_available_phone_numbers()
+        default_schema = json.dumps({
+            "type": "object",
+            "properties": {
+                "chat_topic": {
+                    "type": "string",
+                    "description": "The main topic of the conversation"
+                },
+                "followup_sms": {
+                    "type": "string",
+                    "description": "A follow-up SMS message to send to the customer"
+                }
+            },
+            "required": ["chat_topic"]
+        }, indent=2)
         return templates.TemplateResponse(
             "assistants/form.html",
             {
                 "request": request,
                 "assistant": assistant,
                 "phone_numbers": phone_numbers,
+                "default_schema": default_schema,
                 "error": f"Error updating assistant: {str(e)}",
             },
             status_code=500,

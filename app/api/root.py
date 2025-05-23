@@ -325,6 +325,39 @@ async def recording_status_callback(request: Request):
         )
 
         logger.info(f"Updated recording {recording_sid} status to {recording_status}")
+        
+        # If recording is completed, check if we should trigger end-of-call webhook
+        if recording_status.lower() == "completed":
+            try:
+                # Get the call to find assistant info
+                call = await CallService.get_call_by_sid(call_sid)
+                if call and call.assistant and call.assistant.webhook_url and call.status == "completed":
+                    # Check if all recordings for this call are now completed
+                    recordings = await CallService.get_call_recordings(call_sid)
+                    all_completed = all(r.status in ["completed", "failed"] for r in recordings)
+                    
+                    if all_completed:
+                        # Send webhook immediately since all recordings are ready
+                        from app.services.webhook_service import WebhookService
+                        
+                        # Get the best recording URL using proper URL construction
+                        best_recording = next((r for r in recordings if r.status == "completed"), None)
+                        recording_url_for_webhook = None
+                        if best_recording:
+                            recording_url_for_webhook = WebhookService._construct_recording_url(best_recording)
+                        
+                        # Send webhook asynchronously - the locking mechanism will prevent duplicates
+                        asyncio.create_task(
+                            WebhookService.send_end_of_call_webhook(
+                                assistant=call.assistant,
+                                call=call,
+                                ended_reason="customer-ended-call",
+                                recording_url=recording_url_for_webhook
+                            )
+                        )
+                        logger.info(f"Triggered immediate end-of-call webhook for completed recording of call {call_sid}")
+            except Exception as e:
+                logger.error(f"Error triggering webhook for recording completion: {e}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Error processing recording status callback: {e}", exc_info=True)

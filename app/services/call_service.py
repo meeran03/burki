@@ -6,6 +6,7 @@ import datetime
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 from app.db.models import Call, Recording, Transcript
 from app.db.database import get_async_db_session
@@ -66,7 +67,7 @@ class CallService:
     @staticmethod
     async def get_call_by_sid(call_sid: str) -> Optional[Call]:
         """
-        Get call by SID.
+        Get call by SID with assistant relationship eagerly loaded.
 
         Args:
             call_sid: Call SID
@@ -75,7 +76,7 @@ class CallService:
             Optional[Call]: Found call or None
         """
         async with await get_async_db_session() as db:
-            query = select(Call).where(Call.call_sid == call_sid)
+            query = select(Call).options(selectinload(Call.assistant)).where(Call.call_sid == call_sid)
             result = await db.execute(query)
             return result.scalar_one_or_none()
 
