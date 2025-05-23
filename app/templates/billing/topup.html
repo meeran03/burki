@@ -1,224 +1,358 @@
 {% extends "base.html" %}
 
-{% block title %}Setup Auto Top-up{% endblock %}
+{% block title %}Setup Auto Top-up - Buraaq Voice AI{% endblock %}
 
 {% block extra_head %}
 <script src="https://js.stripe.com/v3/"></script>
 <style>
     .stripe-card {
-        border: 1px solid #e2e8f0;
-        border-radius: 0.5rem;
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 0.75rem;
         padding: 1rem;
         margin: 1rem 0;
-        background-color: white;
+        backdrop-filter: blur(8px);
     }
+    
     .config-item {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 0.5rem;
-        transition: all 0.2s ease;
-    }
-    .config-item:hover {
-        border-color: #cbd5e0;
-        background: #f1f5f9;
-    }
-    .topup-preview {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: rgba(30, 41, 59, 0.3);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(148, 163, 184, 0.1);
         border-radius: 1rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .config-item:hover {
+        border-color: rgba(139, 92, 246, 0.4);
+        background: rgba(139, 92, 246, 0.1);
+        transform: translateY(-2px);
+    }
+    
+    .topup-preview {
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        color: white;
+        border-radius: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(16px);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .topup-preview::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%, rgba(255, 255, 255, 0.1) 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .topup-preview:hover::before {
+        opacity: 1;
+    }
+
+    .glass-card {
+        background: rgba(30, 41, 59, 0.3);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(148, 163, 184, 0.1);
+        border-radius: 1.5rem;
+    }
+
+    .alert-success {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #34d399;
+    }
+
+    .alert-error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+    }
+
+    .alert-warning {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        color: #fbbf24;
+    }
+
+    .status-enabled {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #34d399;
+    }
+
+    .status-disabled {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        color: #fbbf24;
+    }
+
+    .form-select {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 0.75rem;
+        color: #f1f5f9;
+        backdrop-filter: blur(8px);
+        transition: all 0.3s ease;
+    }
+
+    .form-select:focus {
+        outline: none;
+        border-color: rgba(59, 130, 246, 0.5);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .form-select option {
+        background: #1e293b;
+        color: #f1f5f9;
+    }
+
+    .floating {
+        animation: floating 6s ease-in-out infinite;
+    }
+
+    @keyframes floating {
+        0%, 100% { transform: translateY(0px) scale(1); }
+        50% { transform: translateY(-8px) scale(1.02); }
+    }
+
+    .feature-list {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.2);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8 max-w-2xl">
-    <!-- Header -->
-    <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 mb-4">Setup Auto Top-up</h1>
-        <p class="text-gray-600">
-            Never run out of minutes! Automatically add more when you're running low.
-        </p>
-    </div>
+<div class="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 p-6">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-4xl font-bold text-white mb-4">
+                Setup <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Auto Top-up</span>
+            </h1>
+            <p class="text-xl text-gray-300 max-w-2xl mx-auto">
+                Never run out of minutes! Automatically add more when you're running low.
+            </p>
+        </div>
 
-    <!-- Alert Messages -->
-    {% if success %}
-    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6" role="alert">
-        <strong class="font-bold">Success!</strong>
-        <span class="block sm:inline">{{ success }}</span>
-    </div>
-    {% endif %}
-
-    {% if error %}
-    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6" role="alert">
-        <strong class="font-bold">Error!</strong>
-        <span class="block sm:inline">{{ error }}</span>
-    </div>
-    {% endif %}
-
-    <!-- Current Status -->
-    {% if billing_account.auto_topup_enabled %}
-    <div class="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
-        <div class="flex items-center">
-            <div class="text-green-600 text-2xl mr-4">✅</div>
-            <div class="flex-1">
-                <h3 class="text-lg font-semibold text-green-800">Auto Top-up is Active</h3>
-                <p class="text-green-700 mt-1">
-                    {{ billing_account.topup_amount_minutes }} minutes for ${{ "%.2f"|format(billing_account.topup_price_cents / 100) }}
-                    when you have {{ billing_account.topup_threshold_minutes }} minutes left
-                </p>
+        <!-- Alert Messages -->
+        {% if success %}
+        <div class="alert-success px-6 py-4 rounded-xl max-w-2xl mx-auto" role="alert">
+            <div class="flex items-center">
+                <div class="text-green-400 text-xl mr-3">✅</div>
+                <div>
+                    <strong class="font-bold">Success!</strong>
+                    <span class="block sm:inline ml-2">{{ success }}</span>
+                </div>
             </div>
-            <form method="post" action="/billing/disable-topup" class="ml-4">
-                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
-                    Disable
-                </button>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="alert-error px-6 py-4 rounded-xl max-w-2xl mx-auto" role="alert">
+            <div class="flex items-center">
+                <div class="text-red-400 text-xl mr-3">❌</div>
+                <div>
+                    <strong class="font-bold">Error!</strong>
+                    <span class="block sm:inline ml-2">{{ error }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Current Status -->
+        <div class="max-w-2xl mx-auto">
+            {% if billing_account.auto_topup_enabled %}
+            <div class="status-enabled p-6 rounded-xl">
+                <div class="flex items-center">
+                    <div class="text-green-400 text-3xl mr-4 floating">✅</div>
+                    <div class="flex-1">
+                        <h3 class="text-xl font-semibold text-green-300">Auto Top-up is Active</h3>
+                        <p class="text-green-400 mt-2 text-lg">
+                            {{ billing_account.topup_amount_minutes }} minutes for ${{ "%.2f"|format(billing_account.topup_price_cents / 100) }}
+                            when you have {{ billing_account.topup_threshold_minutes }} minutes left
+                        </p>
+                    </div>
+                    <form method="post" action="/billing/disable-topup" class="ml-4">
+                        <button type="submit" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium">
+                            Disable
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="status-disabled p-6 rounded-xl">
+                <div class="flex items-center">
+                    <div class="text-yellow-400 text-3xl mr-4">⚠️</div>
+                    <div>
+                        <h3 class="text-xl font-semibold text-yellow-300">Auto Top-up is Disabled</h3>
+                        <p class="text-yellow-400 mt-2 text-lg">
+                            Set up auto top-up to avoid service interruption when you run low on minutes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Setup Form -->
+        <div class="glass-card p-8 max-w-2xl mx-auto">
+            <h2 class="text-2xl font-semibold text-white mb-8 flex items-center">
+                <svg class="w-8 h-8 mr-3 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+                </svg>
+                Configure Auto Top-up
+            </h2>
+            
+            <form id="topup-form" method="post" action="/billing/setup-topup">
+                <!-- Configuration Options -->
+                <div class="space-y-6 mb-8">
+                    <!-- Trigger Threshold -->
+                    <div class="config-item p-6">
+                        <label for="threshold_minutes" class="block text-lg font-medium text-white mb-3">
+                            Trigger When Minutes Remaining
+                        </label>
+                        <select name="threshold_minutes" id="threshold_minutes" class="form-select block w-full px-4 py-3 text-lg" onchange="updatePreview()">
+                            <option value="5">5 minutes</option>
+                            <option value="10" selected>10 minutes</option>
+                            <option value="20">20 minutes</option>
+                            <option value="50">50 minutes</option>
+                            <option value="100">100 minutes</option>
+                        </select>
+                        <p class="text-gray-400 mt-2">
+                            Auto top-up will trigger when you have this many minutes left
+                        </p>
+                    </div>
+
+                    <!-- Top-up Amount -->
+                    <div class="config-item p-6">
+                        <label for="topup_amount_minutes" class="block text-lg font-medium text-white mb-3">
+                            Minutes to Add
+                        </label>
+                        <select name="topup_amount_minutes" id="topup_amount_minutes" class="form-select block w-full px-4 py-3 text-lg" onchange="updatePreview()">
+                            <option value="50">50 minutes - $2.50</option>
+                            <option value="100" selected>100 minutes - $5.00</option>
+                            <option value="200">200 minutes - $10.00</option>
+                            <option value="500">500 minutes - $25.00</option>
+                            <option value="1000">1000 minutes - $50.00</option>
+                        </select>
+                        <p class="text-gray-400 mt-2">
+                            Number of minutes to add to your account (charged at $0.05 per minute)
+                        </p>
+                    </div>
+
+                    <!-- Hidden field for price calculation -->
+                    <input type="hidden" name="topup_price_cents" id="topup_price_cents" value="500">
+                </div>
+
+                <!-- Preview -->
+                <div class="topup-preview p-8 mb-8 floating">
+                    <h3 class="text-2xl font-semibold mb-6 flex items-center">
+                        <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                            <path fill-rule="evenodd" d="M4 5a2 2 0 012-2v1a2 2 0 00-2 2v6a2 2 0 002 2h8a2 2 0 002-2V6a2 2 0 00-2-2V3a2 2 0 012-2v1a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" clip-rule="evenodd"/>
+                        </svg>
+                        Preview
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center text-lg">
+                            <span class="text-blue-100">Trigger threshold:</span>
+                            <span id="preview_threshold" class="font-semibold">10 minutes remaining</span>
+                        </div>
+                        <div class="flex justify-between items-center text-lg">
+                            <span class="text-blue-100">Minutes to add:</span>
+                            <span id="preview_minutes" class="font-semibold">100 minutes</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xl font-bold border-t border-white border-opacity-30 pt-4 mt-4">
+                            <span>Charge amount:</span>
+                            <span id="preview_price" class="text-2xl">$5.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Method -->
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold text-white mb-4 flex items-center">
+                        <svg class="w-6 h-6 mr-3 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zM14 6a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2h6zM4 11a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zM7 9a1 1 0 011-1h1a1 1 0 110 2H8a1 1 0 01-1-1z"/>
+                        </svg>
+                        Payment Method
+                    </h3>
+                    <p class="text-gray-300 mb-6 text-lg">
+                        Add a payment method to enable automatic top-ups. We'll securely store this for future top-ups.
+                    </p>
+                    
+                    <!-- Stripe Elements will be inserted here -->
+                    <div id="card-element" class="stripe-card">
+                        <!-- Stripe Elements will create form elements here -->
+                    </div>
+                    
+                    <!-- Used to display form errors -->
+                    <div id="card-errors" role="alert" class="text-red-400 text-sm mt-3"></div>
+                </div>
+
+                <!-- Terms -->
+                <div class="mb-8">
+                    <label class="flex items-start p-4 bg-gray-700/30 rounded-lg border border-gray-600/50">
+                        <input type="checkbox" id="terms_accepted" class="mt-1 mr-4 w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2" required>
+                        <span class="text-gray-300">
+                            I agree to automatic charges when my account balance reaches the specified threshold. 
+                            I can disable auto top-up at any time from my billing dashboard.
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex gap-4">
+                    <a href="/billing" class="flex-1 px-6 py-4 text-center text-gray-300 border border-gray-600 rounded-lg hover:bg-gray-700/50 transition-colors font-medium">
+                        Cancel
+                    </a>
+                    <button type="submit" id="submit-button" class="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium">
+                        <span id="button-text">Setup Auto Top-up</span>
+                        <span id="spinner" class="hidden">Processing...</span>
+                    </button>
+                </div>
+                
+                <input type="hidden" name="payment_method_id" id="payment_method_id">
             </form>
         </div>
-    </div>
-    {% else %}
-    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-8">
-        <div class="flex items-center">
-            <div class="text-yellow-600 text-2xl mr-4">⚠️</div>
-            <div>
-                <h3 class="text-lg font-semibold text-yellow-800">Auto Top-up is Disabled</h3>
-                <p class="text-yellow-700 mt-1">
-                    Set up auto top-up to avoid service interruption when you run low on minutes.
-                </p>
-            </div>
+
+        <!-- Information -->
+        <div class="feature-list rounded-2xl p-8 max-w-2xl mx-auto">
+            <h3 class="text-2xl font-semibold text-blue-200 mb-6 flex items-center">
+                <svg class="w-8 h-8 mr-3 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+                How Auto Top-up Works
+            </h3>
+            <ul class="space-y-4 text-blue-100">
+                <li class="flex items-start">
+                    <span class="text-blue-400 mr-3 text-xl">•</span>
+                    <span class="text-lg">We monitor your account balance in real-time</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-400 mr-3 text-xl">•</span>
+                    <span class="text-lg">When you reach your threshold, we automatically charge your card</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-400 mr-3 text-xl">•</span>
+                    <span class="text-lg">Minutes are added instantly to your account</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-400 mr-3 text-xl">•</span>
+                    <span class="text-lg">You'll receive an email confirmation for each top-up</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="text-blue-400 mr-3 text-xl">•</span>
+                    <span class="text-lg">You can disable or modify settings anytime</span>
+                </li>
+            </ul>
         </div>
-    </div>
-    {% endif %}
-
-    <!-- Setup Form -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-xl font-semibold text-gray-900 mb-6">Configure Auto Top-up</h2>
-        
-        <form id="topup-form" method="post" action="/billing/setup-topup">
-            <!-- Configuration Options -->
-            <div class="space-y-6 mb-8">
-                <!-- Trigger Threshold -->
-                <div class="config-item p-4">
-                    <label for="threshold_minutes" class="block text-sm font-medium text-gray-700 mb-2">
-                        Trigger When Minutes Remaining
-                    </label>
-                    <select name="threshold_minutes" id="threshold_minutes" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" onchange="updatePreview()">
-                        <option value="5">5 minutes</option>
-                        <option value="10" selected>10 minutes</option>
-                        <option value="20">20 minutes</option>
-                        <option value="50">50 minutes</option>
-                        <option value="100">100 minutes</option>
-                    </select>
-                    <p class="text-sm text-gray-500 mt-1">
-                        Auto top-up will trigger when you have this many minutes left
-                    </p>
-                </div>
-
-                <!-- Top-up Amount -->
-                <div class="config-item p-4">
-                    <label for="topup_amount_minutes" class="block text-sm font-medium text-gray-700 mb-2">
-                        Minutes to Add
-                    </label>
-                    <select name="topup_amount_minutes" id="topup_amount_minutes" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" onchange="updatePreview()">
-                        <option value="50">50 minutes - $2.50</option>
-                        <option value="100" selected>100 minutes - $5.00</option>
-                        <option value="200">200 minutes - $10.00</option>
-                        <option value="500">500 minutes - $25.00</option>
-                        <option value="1000">1000 minutes - $50.00</option>
-                    </select>
-                    <p class="text-sm text-gray-500 mt-1">
-                        Number of minutes to add to your account (charged at $0.05 per minute)
-                    </p>
-                </div>
-
-                <!-- Hidden field for price calculation -->
-                <input type="hidden" name="topup_price_cents" id="topup_price_cents" value="500">
-            </div>
-
-            <!-- Preview -->
-            <div class="topup-preview p-6 mb-8">
-                <h3 class="text-lg font-semibold mb-4">Preview</h3>
-                <div class="space-y-2">
-                    <div class="flex justify-between">
-                        <span>Trigger threshold:</span>
-                        <span id="preview_threshold">10 minutes remaining</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Minutes to add:</span>
-                        <span id="preview_minutes">100 minutes</span>
-                    </div>
-                    <div class="flex justify-between font-semibold border-t border-white border-opacity-30 pt-2 mt-3">
-                        <span>Charge amount:</span>
-                        <span id="preview_price">$5.00</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Payment Method -->
-            <div class="mb-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Payment Method</h3>
-                <p class="text-gray-600 mb-4">
-                    Add a payment method to enable automatic top-ups. We'll securely store this for future top-ups.
-                </p>
-                
-                <!-- Stripe Elements will be inserted here -->
-                <div id="card-element" class="stripe-card">
-                    <!-- Stripe Elements will create form elements here -->
-                </div>
-                
-                <!-- Used to display form errors -->
-                <div id="card-errors" role="alert" class="text-red-600 text-sm mt-2"></div>
-            </div>
-
-            <!-- Terms -->
-            <div class="mb-6">
-                <label class="flex items-start">
-                    <input type="checkbox" id="terms_accepted" class="mt-1 mr-3" required>
-                    <span class="text-sm text-gray-600">
-                        I agree to automatic charges when my account balance reaches the specified threshold. 
-                        I can disable auto top-up at any time from my billing dashboard.
-                    </span>
-                </label>
-            </div>
-
-            <!-- Submit Button -->
-            <div class="flex justify-end space-x-4">
-                <a href="/billing" class="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    Cancel
-                </a>
-                <button type="submit" id="submit-button" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                    <span id="button-text">Setup Auto Top-up</span>
-                    <span id="spinner" class="hidden">Processing...</span>
-                </button>
-            </div>
-            
-            <input type="hidden" name="payment_method_id" id="payment_method_id">
-        </form>
-    </div>
-
-    <!-- Information -->
-    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 class="text-lg font-semibold text-blue-800 mb-3">How Auto Top-up Works</h3>
-        <ul class="space-y-2 text-blue-700">
-            <li class="flex items-start">
-                <span class="mr-2">•</span>
-                <span>We monitor your account balance in real-time</span>
-            </li>
-            <li class="flex items-start">
-                <span class="mr-2">•</span>
-                <span>When you reach your threshold, we automatically charge your card</span>
-            </li>
-            <li class="flex items-start">
-                <span class="mr-2">•</span>
-                <span>Minutes are added instantly to your account</span>
-            </li>
-            <li class="flex items-start">
-                <span class="mr-2">•</span>
-                <span>You'll receive an email confirmation for each top-up</span>
-            </li>
-            <li class="flex items-start">
-                <span class="mr-2">•</span>
-                <span>You can disable or modify settings anytime</span>
-            </li>
-        </ul>
     </div>
 </div>
 
@@ -227,15 +361,19 @@
 const stripe = Stripe('{{ stripe_public_key }}');
 const elements = stripe.elements();
 
-// Create card element
+// Create card element with dark theme
 const cardElement = elements.create('card', {
     style: {
         base: {
             fontSize: '16px',
-            color: '#424770',
+            color: '#f1f5f9',
+            backgroundColor: 'transparent',
             '::placeholder': {
-                color: '#aab7c4',
+                color: '#64748b',
             },
+        },
+        invalid: {
+            color: '#f87171',
         },
     },
 });
