@@ -653,6 +653,33 @@
                                 </div>
                                 <div id="structured-data-schema" class="grid grid-cols-6 gap-6" style="display: none;">
                                     <div class="col-span-6">
+                                        <label for="structured_data_prompt" class="block text-sm font-medium text-gray-700">Structured Data Extraction Prompt</label>
+                                        <div class="mt-1">
+                                            <textarea id="structured_data_prompt" name="structured_data_prompt" rows="8"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="Enter custom prompt for structured data extraction...">{{ assistant.custom_settings.structured_data_prompt if assistant and assistant.custom_settings and assistant.custom_settings.get('structured_data_prompt') else '' }}</textarea>
+                                        </div>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            Custom prompt for AI to extract structured data from conversations. If left empty, a default prompt will be used. 
+                                            Use placeholder: {summary} for call summary. Schema is automatically handled by OpenAI structured outputs.
+                                        </p>
+                                        <div class="mt-2 p-3 bg-gray-50 rounded-md">
+                                            <p class="text-xs font-medium text-gray-700 mb-2">Example Prompt:</p>
+                                            <pre class="text-xs text-gray-600 overflow-x-auto"><code>You are an expert sales assistant analyzing customer calls. Extract key information from the conversation.
+
+Focus on:
+- Customer intent and needs
+- Products mentioned
+- Any commitments made
+- Follow-up actions required
+
+Call Summary: {summary}</code></pre>
+                                            <button type="button" class="mt-2 text-xs text-blue-600 hover:text-blue-500" onclick="useExamplePrompt()">
+                                                Use this example
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-span-6">
                                         <label for="structured_data_schema" class="block text-sm font-medium text-gray-700">JSON Schema</label>
                                         <div class="mt-1">
                                             <textarea id="structured_data_schema" name="structured_data_schema" rows="12"
@@ -747,6 +774,13 @@ function useExampleSchema() {
         "required": ["chat_topic"]
     };
     textarea.value = JSON.stringify(exampleSchema, null, 2);
+}
+
+// Use example prompt
+function useExamplePrompt() {
+    const textarea = document.getElementById('structured_data_prompt');
+    const examplePrompt = "You are an expert sales assistant analyzing customer calls. Extract key information from the conversation.\n\nFocus on:\n- Customer intent and needs\n- Products mentioned\n- Any commitments made\n- Follow-up actions required\n\nCall Summary: {summary}";
+    textarea.value = examplePrompt;
 }
 
 // Initialize form

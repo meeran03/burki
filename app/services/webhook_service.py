@@ -299,6 +299,11 @@ class WebhookService:
             if assistant.custom_settings and "structured_data_schema" in assistant.custom_settings:
                 schema = assistant.custom_settings["structured_data_schema"]
             
+            # Get custom structured data prompt from assistant's custom settings
+            custom_prompt = None
+            if assistant.custom_settings and "structured_data_prompt" in assistant.custom_settings:
+                custom_prompt = assistant.custom_settings["structured_data_prompt"]
+            
             # Default schema if none configured
             if not schema:
                 schema = {
@@ -316,6 +321,21 @@ class WebhookService:
                     "required": ["chat_topic"]
                 }
 
+            # Default structured data prompt if none configured
+            if not custom_prompt:
+                custom_prompt = f"""You are an expert at extracting structured data from phone conversations.
+
+Analyze the conversation and extract information according to the configured schema.
+Be accurate and only extract information that is clearly present in the conversation.
+
+Call Summary: {summary}"""
+            else:
+                # Replace placeholders in custom prompt (only {summary} now, schema is handled by OpenAI)
+                custom_prompt = custom_prompt.replace("{summary}", summary)
+                # Remove any {schema} placeholders if they exist (for backward compatibility)
+                if "{schema}" in custom_prompt:
+                    custom_prompt = custom_prompt.replace("{schema}", "[Schema is automatically handled by OpenAI structured outputs]")
+
             client = AsyncOpenAI(api_key=api_key)
             
             # Prepare conversation for analysis
@@ -328,27 +348,19 @@ class WebhookService:
 
             # Generate structured data using OpenAI's structured outputs
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
-                        "content": f"""You are an expert at extracting structured data from phone conversations.
-                        
-Analyze the conversation and extract information according to the provided schema.
-Be accurate and only extract information that is clearly present in the conversation.
-
-Schema:
-{json.dumps(schema, indent=2)}
-
-Conversation Summary: {summary}"""
+                        "content": custom_prompt
                     },
                     {
                         "role": "user",
                         "content": f"Extract structured data from this conversation:\n\n{conversation_text}"
                     }
                 ],
-                max_tokens=500,
-                temperature=0.1,
+                max_tokens=1000,
+                temperature=0.8,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {

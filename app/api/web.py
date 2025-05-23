@@ -319,6 +319,7 @@ async def create_assistant(
     # Webhook settings
     webhook_url: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
+    structured_data_prompt: Optional[str] = Form(None),
 ):
     """Create a new assistant."""
     # Check if an assistant with this phone number already exists
@@ -490,6 +491,10 @@ async def create_assistant(
                 },
                 status_code=400,
             )
+    
+    # Add structured data prompt if provided
+    if structured_data_prompt and structured_data_prompt.strip():
+        custom_settings["structured_data_prompt"] = structured_data_prompt.strip()
 
     if custom_settings:
         assistant_data["custom_settings"] = custom_settings
@@ -647,6 +652,7 @@ async def update_assistant(
     # Webhook settings
     webhook_url: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
+    structured_data_prompt: Optional[str] = Form(None),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id)
@@ -823,6 +829,10 @@ async def update_assistant(
                 },
                 status_code=400,
             )
+
+    # Add structured data prompt if provided
+    if structured_data_prompt and structured_data_prompt.strip():
+        custom_settings["structured_data_prompt"] = structured_data_prompt.strip()
 
     if custom_settings:
         update_data["custom_settings"] = custom_settings
