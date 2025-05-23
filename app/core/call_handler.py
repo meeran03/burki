@@ -5,6 +5,7 @@ This file contains the CallHandler class for managing call state and conversatio
 # pylint: disable=too-many-ancestors,logging-fstring-interpolation,broad-exception-caught
 import logging
 import base64
+import asyncio
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -13,6 +14,7 @@ from fastapi import WebSocket
 from app.services.deepgram_service import DeepgramService
 from app.services.llm_service import LLMService
 from app.services.tts_service import TTSService
+from app.services.call_service import CallService
 from app.twilio.twilio_service import TwilioService
 
 # Configure logging
@@ -97,6 +99,20 @@ class CallHandler:
             metadata: Additional call metadata
             assistant: The assistant to use for this call
         """
+        # Create call record in database
+        if assistant:
+            try:
+                await CallService.create_call(
+                    assistant_id=assistant.id,
+                    call_sid=call_sid,
+                    to_phone_number=to_number or "",
+                    customer_phone_number=from_number or "",
+                    metadata=metadata or {},
+                )
+                logger.info(f"Created call record in database for call {call_sid}")
+            except Exception as e:
+                logger.error(f"Error creating call record for {call_sid}: {e}", exc_info=True)
+
         # Initialize call state
         self.active_calls[call_sid] = CallState(
             call_sid=call_sid,
@@ -243,6 +259,9 @@ class CallHandler:
         if success:
             logger.info(f"Started transcription for call: {call_sid}")
 
+            # Start recording asynchronously (don't wait for it)
+            asyncio.create_task(self._start_call_recording_async(call_sid, assistant, websocket))
+
             # Get welcome message from assistant or use default
             welcome_message = (
                 "Hello! I'm your AI assistant. How can I help you today?<flush/>"
@@ -265,6 +284,51 @@ class CallHandler:
             logger.error(f"Failed to start transcription for call: {call_sid}")
 
         logger.info(f"Started handling call {call_sid}")
+
+    async def _start_call_recording_async(self, call_sid: str, assistant: Any, websocket: WebSocket) -> None:
+        """
+        Start Twilio call recording asynchronously.
+
+        Args:
+            call_sid: The Twilio call SID
+            assistant: The assistant instance
+            websocket: The WebSocket connection to get host info
+        """
+        try:
+            # Get Twilio credentials from assistant or environment
+            account_sid = assistant.twilio_account_sid if assistant else None
+            auth_token = assistant.twilio_auth_token if assistant else None
+
+            # Build recording status callback URL
+            # Get host from WebSocket headers
+            host = websocket.headers.get("host", "localhost:8000")
+            
+            # Determine protocol based on host
+            protocol = "https" if "ngrok" in host or "herokuapp" in host else "http"
+            recording_callback_url = f"{protocol}://{host}/recording-status"
+
+            # Start recording via Twilio API
+            recording_sid = TwilioService.start_call_recording(
+                call_sid=call_sid,
+                recording_channels="dual",
+                recording_status_callback=recording_callback_url,
+                account_sid=account_sid,
+                auth_token=auth_token,
+            )
+
+            if recording_sid:
+                # Create recording record in database
+                await CallService.create_twilio_recording(
+                    call_sid=call_sid,
+                    recording_sid=recording_sid,
+                    status="recording",
+                )
+                logger.info(f"Started Twilio recording {recording_sid} for call {call_sid}")
+            else:
+                logger.error(f"Failed to start Twilio recording for call {call_sid}")
+
+        except Exception as e:
+            logger.error(f"Error starting call recording: {e}", exc_info=True)
 
     async def _handle_tts_audio(
         self, call_sid: str, audio_data: bytes, is_final: bool, metadata: Dict[str, Any]
@@ -360,6 +424,9 @@ class CallHandler:
                 logger.info(
                     f"Processing interrupting speech: {interrupting_transcript}"
                 )
+                
+                # Note: Transcript is already stored in handle_transcript method
+                # Just process with LLM for interruption response
                 await self.active_calls[call_sid].llm_service.process_transcript(
                     transcript=interrupting_transcript,
                     is_final=True,  # Always treat interrupting speech as final
@@ -426,10 +493,24 @@ class CallHandler:
                     force_flush=is_final,  # Force flush when it's the final response
                 )
 
-            # Log the response
+            # Log the response and store final responses as transcripts
             if is_final:
                 response = metadata.get("full_response", "")
                 logger.info(f"Final LLM response for {call_sid}: {response}")
+                
+                # Store assistant response in database asynchronously
+                if response:
+                    # Clean up flush tags and other formatting before storing
+                    cleaned_response = response.replace("<flush/>", "").replace("<flush>", "").strip()
+                    if cleaned_response:  # Only store if there's actual content
+                        asyncio.create_task(
+                            CallService.create_transcript(
+                                call_sid=call_sid,
+                                content=cleaned_response,
+                                is_final=True,
+                                speaker="assistant",
+                            )
+                        )
             else:
                 logger.debug(f"LLM response chunk for {call_sid}: {content}")
 
@@ -491,6 +572,19 @@ class CallHandler:
                         logger.info(
                             f"Processing buffered transcript after cooldown: {buffered_transcript}"
                         )
+                        
+                        # Store buffered transcript in database
+                        if buffered_transcript:
+                            asyncio.create_task(
+                                CallService.create_transcript(
+                                    call_sid=call_sid,
+                                    content=buffered_transcript,
+                                    is_final=True,
+                                    speaker="user",
+                                )
+                            )
+                        
+                        # Process with LLM
                         await self.active_calls[
                             call_sid
                         ].llm_service.process_transcript(
@@ -509,57 +603,57 @@ class CallHandler:
                         self.active_calls[call_sid].is_in_cooldown = False
                     return
 
-            # Only check for interruption on final transcripts to avoid multiple triggers
-            if is_final and self.active_calls[call_sid].is_ai_speaking:
-                # Only consider it an interruption if AI has been speaking for minimum time
-                speaking_start = self.active_calls[call_sid].ai_speaking_start_time
-                if speaking_start:
-                    speaking_duration = (
-                        datetime.now() - speaking_start
-                    ).total_seconds()
-                    if (
-                        speaking_duration
-                        >= self.active_calls[call_sid].min_speaking_time
-                    ):
-                        word_count = len(transcript.strip().split())
-                        if (
-                            word_count
-                            >= self.active_calls[call_sid].interruption_threshold
-                        ):
-                            logger.info(
-                                f"Detected interruption in call {call_sid} with {word_count} words "
-                                f"after {speaking_duration:.2f} seconds of AI speaking"
-                            )
-                            # Update last interruption time
-                            self.active_calls[call_sid].last_interruption_time = (
-                                datetime.now()
-                            )
-                            # Pass the interrupting transcript to handle_interruption
-                            await self._handle_interruption(call_sid, transcript)
-                            return
-                    else:
-                        logger.debug(
-                            f"Ignoring potential interruption after {speaking_duration:.2f} seconds "
-                            f"(minimum {self.active_calls[call_sid].min_speaking_time} seconds required)"
-                        )
-
             # Process with LLM if it's a final transcript and call is still active
             # and not already handled as an interruption
             if is_final and self.active_calls[call_sid].is_active:
                 logger.info(f"Processing final transcript for {call_sid}: {transcript}")
 
-                # Process transcript with LLM
-                await self.active_calls[call_sid].llm_service.process_transcript(
-                    transcript=transcript,
-                    is_final=is_final,
-                    metadata=metadata,
-                    response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
-                        call_sid=call_sid,
-                        content=content,
-                        is_final=is_final,
-                        metadata=response_metadata,
-                    ),
-                )
+                # Clean up transcript content before storing
+                cleaned_transcript = transcript.strip()
+                if cleaned_transcript:  # Only process and store if there's actual content
+                    
+                    # Always store user transcript first (before any interruption processing)
+                    asyncio.create_task(
+                        CallService.create_transcript(
+                            call_sid=call_sid,
+                            content=cleaned_transcript,
+                            is_final=is_final,
+                            speaker="user",
+                            confidence=metadata.get("confidence"),
+                        )
+                    )
+                    
+                    # Check if this should be treated as an interruption
+                    is_interruption = False
+                    if self.active_calls[call_sid].is_ai_speaking:
+                        speaking_start = self.active_calls[call_sid].ai_speaking_start_time
+                        if speaking_start:
+                            speaking_duration = (datetime.now() - speaking_start).total_seconds()
+                            if speaking_duration >= self.active_calls[call_sid].min_speaking_time:
+                                word_count = len(cleaned_transcript.split())
+                                if word_count >= self.active_calls[call_sid].interruption_threshold:
+                                    logger.info(
+                                        f"Detected interruption in call {call_sid} with {word_count} words "
+                                        f"after {speaking_duration:.2f} seconds of AI speaking"
+                                    )
+                                    self.active_calls[call_sid].last_interruption_time = datetime.now()
+                                    await self._handle_interruption(call_sid, cleaned_transcript)
+                                    is_interruption = True
+
+                    # Only process with LLM if it's not an interruption (interruptions are handled separately)
+                    if not is_interruption:
+                        # Process transcript with LLM
+                        await self.active_calls[call_sid].llm_service.process_transcript(
+                            transcript=cleaned_transcript,
+                            is_final=is_final,
+                            metadata=metadata,
+                            response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
+                                call_sid=call_sid,
+                                content=content,
+                                is_final=is_final,
+                                metadata=response_metadata,
+                            ),
+                        )
 
         except Exception as e:
             logger.error(
@@ -640,6 +734,19 @@ class CallHandler:
 
             # End TTS session
             await self.active_calls[call_sid].tts_service.end_session()
+
+            # Update call status in database
+            try:
+                start_time = self.active_calls[call_sid].start_time
+                duration = int((datetime.now() - start_time).total_seconds())
+                await CallService.update_call_status(
+                    call_sid=call_sid,
+                    status="completed",
+                    duration=duration,
+                )
+                logger.info(f"Updated call {call_sid} status to completed in database")
+            except Exception as e:
+                logger.error(f"Error updating call status for {call_sid}: {e}", exc_info=True)
 
             # Clean up call state - save a reference for logging before deletion
             call_state = self.active_calls.get(call_sid)

@@ -2,14 +2,18 @@
 from typing import Optional
 from datetime import timedelta
 import time
+import logging
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+import io
+import os
 
 from app.db.database import get_db
-from app.db.models import Call
+from app.db.models import Call, Recording, Transcript
 from app.services.assistant_service import AssistantService
+from app.services.call_service import CallService
 from app.core.assistant_manager import assistant_manager
 from app.twilio.twilio_service import TwilioService
 
@@ -64,6 +68,173 @@ async def list_assistants(request: Request):
     return templates.TemplateResponse(
         "assistants/index.html", {"request": request, "assistants": assistants}
     )
+
+
+@router.get("/calls/{call_id}/recording/{recording_id}")
+async def download_recording(
+    request: Request, call_id: int, recording_id: int, db: Session = Depends(get_db)
+):
+    """Download or serve recording."""
+    recording = db.query(Recording).filter(
+        Recording.id == recording_id, 
+        Recording.call_id == call_id
+    ).first()
+    
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    
+    # Log debug info
+    logger = logging.getLogger(__name__)
+    logger.info(f"Recording {recording_id}: file_path={recording.file_path}, recording_url={recording.recording_url}, status={recording.status}")
+    
+    # Prefer local file if available
+    if recording.file_path and os.path.exists(recording.file_path):
+        logger.info(f"Serving local file: {recording.file_path}")
+        return FileResponse(
+            path=recording.file_path,
+            media_type="audio/mpeg",
+            filename=f"recording_{recording.recording_sid}.mp3"
+        )
+    elif recording.recording_source == "twilio" and recording.recording_url:
+        # Fallback to Twilio URL if no local file
+        logger.info(f"Redirecting to Twilio URL: {recording.recording_url}")
+        return RedirectResponse(url=recording.recording_url, status_code=302)
+    elif recording.recording_source == "twilio" and recording.recording_sid:
+        # Try to download the file if we have the recording SID but no local file
+        logger.info(f"Attempting to download recording {recording.recording_sid} from Twilio")
+        try:
+            download_result = TwilioService.download_recording_content(recording.recording_sid)
+            
+            if download_result:
+                filename, content = download_result
+                
+                # Save to local recordings directory for future use
+                recordings_dir = os.getenv("RECORDINGS_DIR", "recordings")
+                os.makedirs(recordings_dir, exist_ok=True)
+                
+                # Create call-specific directory
+                call_dir = os.path.join(recordings_dir, recording.call.call_sid)
+                os.makedirs(call_dir, exist_ok=True)
+                
+                # Save the file
+                local_file_path = os.path.join(call_dir, filename)
+                with open(local_file_path, "wb") as f:
+                    f.write(content)
+                
+                # Update the recording with the local file path
+                recording.file_path = local_file_path
+                db.commit()
+                
+                logger.info(f"Downloaded and saved recording to: {local_file_path}")
+                
+                # Return the file
+                return FileResponse(
+                    path=local_file_path,
+                    media_type="audio/mpeg",
+                    filename=f"recording_{recording.recording_sid}.mp3"
+                )
+            else:
+                logger.error(f"Failed to download recording {recording.recording_sid} from Twilio")
+        except Exception as e:
+            logger.error(f"Error downloading recording: {e}")
+    
+    # If all else fails
+    logger.error(f"Recording file not available: file_path={recording.file_path}, recording_url={recording.recording_url}")
+    raise HTTPException(status_code=404, detail="Recording file not available")
+
+
+@router.get("/calls/{call_id}/recording/{recording_id}/play")
+async def play_recording(
+    request: Request, call_id: int, recording_id: int, db: Session = Depends(get_db)
+):
+    """Serve recording for in-browser audio player."""
+    recording = db.query(Recording).filter(
+        Recording.id == recording_id, 
+        Recording.call_id == call_id
+    ).first()
+    
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    
+    # Only serve local files for audio player
+    if recording.file_path and os.path.exists(recording.file_path):
+        return FileResponse(
+            path=recording.file_path,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    else:
+        raise HTTPException(status_code=404, detail="Local recording file not available")
+
+
+@router.get("/calls/{call_id}/transcripts/export")
+async def export_transcripts(
+    request: Request, call_id: int, format: str = "txt", db: Session = Depends(get_db)
+):
+    """Export call transcripts in various formats."""
+    call = db.query(Call).filter(Call.id == call_id).first()
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
+    transcripts = db.query(Transcript).filter(
+        Transcript.call_id == call_id
+    ).order_by(Transcript.created_at).all()
+    
+    if not transcripts:
+        raise HTTPException(status_code=404, detail="No transcripts found")
+    
+    if format == "txt":
+        # Create plain text format
+        content = f"Call Transcript - {call.call_sid}\n"
+        content += f"Started: {call.started_at}\n"
+        content += f"From: {call.customer_phone_number}\n"
+        content += f"To: {call.to_phone_number}\n"
+        content += "=" * 50 + "\n\n"
+        
+        for transcript in transcripts:
+            speaker = transcript.speaker.upper() if transcript.speaker else "UNKNOWN"
+            timestamp = transcript.created_at.strftime("%H:%M:%S")
+            content += f"[{timestamp}] {speaker}: {transcript.content}\n"
+        
+        return Response(
+            content=content,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename=call-{call.call_sid}-transcript.txt"
+            }
+        )
+    
+    elif format == "json":
+        # Create JSON format
+        import json
+        
+        transcript_data = {
+            "call_sid": call.call_sid,
+            "started_at": call.started_at.isoformat() if call.started_at else None,
+            "customer_phone_number": call.customer_phone_number,
+            "to_phone_number": call.to_phone_number,
+            "transcripts": [
+                {
+                    "speaker": t.speaker,
+                    "content": t.content,
+                    "timestamp": t.created_at.isoformat() if t.created_at else None,
+                    "confidence": t.confidence,
+                    "is_final": t.is_final
+                }
+                for t in transcripts
+            ]
+        }
+        
+        return Response(
+            content=json.dumps(transcript_data, indent=2),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename=call-{call.call_sid}-transcript.json"
+            }
+        )
+    
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported format. Use 'txt' or 'json'.")
 
 
 @router.get("/assistants/new", response_class=HTMLResponse)
@@ -529,19 +700,71 @@ async def delete_assistant(
 @router.get("/calls", response_class=HTMLResponse)
 async def list_calls(request: Request, db: Session = Depends(get_db)):
     """List all calls."""
+    # Get all calls with related data
     calls = db.query(Call).order_by(Call.started_at.desc()).all()
+    
+    # Add recording and transcript counts for each call
+    calls_data = []
+    for call in calls:
+        recording_count = db.query(Recording).filter(Recording.call_id == call.id).count()
+        transcript_count = db.query(Transcript).filter(Transcript.call_id == call.id).count()
+        
+        calls_data.append({
+            'call': call,
+            'recording_count': recording_count,
+            'transcript_count': transcript_count,
+            'has_recording': recording_count > 0,
+            'has_transcripts': transcript_count > 0
+        })
+    
     return templates.TemplateResponse(
-        "calls/index.html", {"request": request, "calls": calls}
+        "calls/index.html", {"request": request, "calls_data": calls_data}
     )
 
 
 @router.get("/calls/{call_id}", response_class=HTMLResponse)
 async def view_call(request: Request, call_id: int, db: Session = Depends(get_db)):
-    """View a call."""
+    """View a call with recordings and transcripts."""
     call = db.query(Call).filter(Call.id == call_id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
 
+    # Get recordings for this call
+    recordings = db.query(Recording).filter(Recording.call_id == call_id).all()
+    
+    # Get transcripts for this call, ordered by creation time
+    transcripts = db.query(Transcript).filter(Transcript.call_id == call_id).order_by(Transcript.created_at).all()
+    
+    # Group transcripts by speaker for conversation view
+    conversation = []
+    current_speaker = None
+    current_messages = []
+    
+    for transcript in transcripts:
+        if transcript.speaker != current_speaker:
+            if current_messages:
+                conversation.append({
+                    'speaker': current_speaker,
+                    'messages': current_messages
+                })
+            current_speaker = transcript.speaker
+            current_messages = [transcript]
+        else:
+            current_messages.append(transcript)
+    
+    # Add the last group
+    if current_messages:
+        conversation.append({
+            'speaker': current_speaker,
+            'messages': current_messages
+        })
+
     return templates.TemplateResponse(
-        "calls/view.html", {"request": request, "call": call}
+        "calls/view.html", {
+            "request": request, 
+            "call": call,
+            "recordings": recordings,
+            "transcripts": transcripts,
+            "conversation": conversation
+        }
     )

@@ -7,6 +7,9 @@ import logging
 import json
 import base64
 import os
+import asyncio
+from typing import Optional
+from datetime import datetime
 from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response
 from fastapi import APIRouter
@@ -14,6 +17,8 @@ from twilio.twiml.voice_response import VoiceResponse, Connect
 
 from app.core.call_handler import CallHandler
 from app.core.assistant_manager import AssistantManager
+from app.services.call_service import CallService
+from app.twilio.twilio_service import TwilioService
 
 router = APIRouter()
 # Configure logging
@@ -253,3 +258,76 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except Exception as e:
         logger.error(f"Error in WebSocket connection: {e}", exc_info=True)
+
+
+@router.post("/recording-status")
+async def recording_status_callback(request: Request):
+    """
+    Webhook endpoint for Twilio recording status callbacks.
+    Called when a recording is completed or fails.
+    """
+    form_data = await request.form()
+    recording_sid = form_data.get("RecordingSid")
+    recording_status = form_data.get("RecordingStatus")
+    call_sid = form_data.get("CallSid")
+    recording_url = form_data.get("RecordingUrl")
+    recording_duration = form_data.get("RecordingDuration")
+
+    logger.info(
+        f"Recording status callback: SID={recording_sid}, Status={recording_status}, "
+        f"CallSID={call_sid}, URL={recording_url}, Duration={recording_duration}"
+    )
+
+    if not recording_sid or not call_sid:
+        logger.error("Missing recording SID or call SID in callback")
+        return Response(content="Missing required parameters", status_code=400)
+
+    try:
+        # Convert duration to float if available
+        duration = float(recording_duration) if recording_duration else None
+
+        # If recording is completed, download it locally
+        local_file_path = None
+        if recording_status.lower() == "completed":
+            try:
+                # Download the recording from Twilio
+                download_result = TwilioService.download_recording_content(recording_sid)
+                
+                if download_result:
+                    filename, content = download_result
+                    
+                    # Save to local recordings directory
+                    recordings_dir = os.getenv("RECORDINGS_DIR", "recordings")
+                    os.makedirs(recordings_dir, exist_ok=True)
+                    
+                    # Create call-specific directory
+                    call_dir = os.path.join(recordings_dir, call_sid)
+                    os.makedirs(call_dir, exist_ok=True)
+                    
+                    # Save the file
+                    local_file_path = os.path.join(call_dir, filename)
+                    with open(local_file_path, "wb") as f:
+                        f.write(content)
+                    
+                    logger.info(f"Downloaded and saved recording {recording_sid} to {local_file_path}")
+                else:
+                    logger.error(f"Failed to download recording {recording_sid}")
+            except Exception as e:
+                logger.error(f"Error downloading recording {recording_sid}: {e}", exc_info=True)
+
+        # Update recording status in database
+        await CallService.update_recording_status(
+            recording_sid=recording_sid,
+            status=recording_status.lower(),
+            recording_url=recording_url,
+            duration=duration,
+            local_file_path=local_file_path,  # Add the local file path
+        )
+
+        logger.info(f"Updated recording {recording_sid} status to {recording_status}")
+
+    except Exception as e:
+        logger.error(f"Error processing recording status callback: {e}", exc_info=True)
+        return Response(content="Error processing callback", status_code=500)
+
+    return Response(content="OK", status_code=200)

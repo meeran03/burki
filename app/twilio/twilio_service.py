@@ -1,6 +1,7 @@
 import os
 import logging
-from typing import Optional, List, Dict, Any
+import requests
+from typing import Optional, List, Dict, Any, Tuple
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 
@@ -246,4 +247,141 @@ class TwilioService:
             return False
         except Exception as e:
             logger.error(f"Unexpected error transferring call: {e}")
-            return False 
+            return False
+
+    @staticmethod
+    def start_call_recording(
+        call_sid: str,
+        recording_channels: str = "dual",
+        recording_status_callback: Optional[str] = None,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Start recording a Twilio call.
+        
+        Args:
+            call_sid: The Twilio Call SID to record
+            recording_channels: Recording channels (mono, dual)
+            recording_status_callback: URL for recording status callbacks
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            Optional[str]: Recording SID if successful, None otherwise
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            logger.error("Could not get Twilio client to start recording")
+            return None
+        
+        try:
+            # Start recording with best quality settings
+            recording = client.calls(call_sid).recordings.create(
+                recording_channels=recording_channels,
+                recording_status_callback=recording_status_callback,
+                recording_status_callback_event=["completed", "failed"],
+            )
+            
+            logger.info(f"Started recording for call {call_sid}, recording SID: {recording.sid}")
+            return recording.sid
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error starting recording: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error starting recording: {e}")
+            return None
+
+    @staticmethod
+    def get_recording_info(
+        recording_sid: str,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get information about a recording.
+        
+        Args:
+            recording_sid: The Recording SID
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            Optional[Dict[str, Any]]: Recording information or None if not found
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            logger.error("Could not get Twilio client to fetch recording info")
+            return None
+        
+        try:
+            recording = client.recordings(recording_sid).fetch()
+            
+            return {
+                "sid": recording.sid,
+                "call_sid": recording.call_sid,
+                "duration": recording.duration,
+                "date_created": recording.date_created,
+                "status": recording.status,
+                "uri": recording.uri,
+                "channels": recording.channels,
+                "source": recording.source,
+            }
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error fetching recording info: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching recording info: {e}")
+            return None
+
+    @staticmethod
+    def download_recording_content(
+        recording_sid: str,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> Optional[Tuple[str, bytes]]:
+        """
+        Download the content of a recording from Twilio.
+        
+        Args:
+            recording_sid: The Recording SID
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            Optional[Tuple[str, bytes]]: Recording filename and content if successful, None otherwise
+        """
+        # Use provided credentials or fall back to environment variables
+        account_sid = account_sid or os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = auth_token or os.getenv("TWILIO_AUTH_TOKEN")
+        
+        if not account_sid or not auth_token:
+            logger.error("Missing Twilio credentials for downloading recording")
+            return None
+        
+        try:
+            # Construct the recording download URL
+            recording_url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Recordings/{recording_sid}.mp3"
+            
+            # Download the recording with authentication
+            response = requests.get(
+                recording_url,
+                auth=(account_sid, auth_token),
+                timeout=30
+            )
+            response.raise_for_status()
+            
+            # Generate filename
+            filename = f"recording_{recording_sid}.mp3"
+            
+            logger.info(f"Successfully downloaded recording {recording_sid}")
+            return filename, response.content
+            
+        except requests.RequestException as e:
+            logger.error(f"Error downloading recording content: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error downloading recording content: {e}")
+            return None 

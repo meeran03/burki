@@ -164,10 +164,14 @@ class Recording(Base):
 
     id = Column(Integer, primary_key=True)
     call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
-    file_path = Column(String(255), nullable=False)
+    recording_sid = Column(String(100), nullable=True)  # Twilio Recording SID
+    file_path = Column(String(255), nullable=True)  # Local file path (optional)
+    recording_url = Column(String(500), nullable=True)  # Twilio recording URL
     duration = Column(Float, nullable=True)  # Duration in seconds
     format = Column(String(20), nullable=True)  # wav, mp3, etc.
-    recording_type = Column(String(20), nullable=True)  # full, segment
+    recording_type = Column(String(20), nullable=True, default="full")  # full, segment
+    recording_source = Column(String(20), nullable=True, default="twilio")  # twilio, local
+    status = Column(String(20), nullable=True, default="recording")  # recording, completed, failed
     created_at = Column(DateTime, nullable=True, default=datetime.datetime.utcnow)
 
     # Relationships
@@ -175,7 +179,7 @@ class Recording(Base):
 
     def __repr__(self):
         return (
-            f"<Recording(id={self.id}, call_id={self.call_id}, format='{self.format}')>"
+            f"<Recording(id={self.id}, call_id={self.call_id}, recording_sid='{self.recording_sid}')>"
         )
 
 
