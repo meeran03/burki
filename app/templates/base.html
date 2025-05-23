@@ -143,6 +143,18 @@
                         <i class="fas fa-phone w-4"></i>
                         <span class="font-medium">Calls</span>
                     </a>
+                    <a href="/docs" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
+                        <i class="fas fa-book w-4"></i>
+                        <span class="font-medium">API Docs</span>
+                    </a>
+                </div>
+                {% else %}
+                <!-- Unauthenticated users can still access docs -->
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="/docs" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
+                        <i class="fas fa-book w-4"></i>
+                        <span class="font-medium">API Docs</span>
+                    </a>
                 </div>
                 {% endif %}
 
@@ -274,6 +286,18 @@
                 </a>
                 <a href="/calls" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/calls') %}bg-blue-600/20 text-blue-400{% endif %}">
                     <i class="fas fa-phone w-4 mr-3"></i>Calls
+                </a>
+                <a href="/docs" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
+                    <i class="fas fa-book w-4 mr-3"></i>API Docs
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <!-- Mobile menu for unauthenticated users -->
+        <div id="mobile-menu" class="hidden md:hidden bg-gray-800/95 backdrop-blur-md border-t border-gray-700">
+            <div class="px-4 py-4 space-y-2">
+                <a href="/docs" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
+                    <i class="fas fa-book w-4 mr-3"></i>API Docs
                 </a>
             </div>
         </div>

@@ -20,6 +20,7 @@ from app.api.web.auth import router as web_auth_router
 from app.api.web.assistant import router as web_assistant_router
 from app.api.web.call import router as web_call_router
 from app.api.web.billing import router as web_billing_router
+from app.api.web.docs import router as web_docs_router
 from app.api.root import router as root_router
 from app.services.billing_service import BillingService
 
@@ -53,14 +54,18 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+# Include routers
 app.include_router(root_router)
 app.include_router(web_router)
 app.include_router(web_auth_router)
 app.include_router(web_assistant_router)
 app.include_router(web_call_router)
 app.include_router(web_billing_router)
-app.include_router(assistants_router, prefix="/api")
-app.include_router(calls_router, prefix="/api")
+app.include_router(web_docs_router)
+
+# API routers - no additional prefix needed since they include full path
+app.include_router(assistants_router)
+app.include_router(calls_router)
 
 # Initialize state and handlers
 call_manager = CallManager()
