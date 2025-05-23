@@ -231,19 +231,33 @@ class Assistant(Base):
     phone_number = Column(String(20), unique=True, nullable=False)
     description = Column(Text, nullable=True)
 
-    # API Keys
+    # LLM Provider Configuration
+    llm_provider = Column(String(50), nullable=False, default="openai")  # openai, anthropic, gemini, xai, groq
+    llm_provider_config = Column(JSON, nullable=True, default=lambda: {
+        "api_key": None,
+        "base_url": None,
+        "model": "gpt-4o-mini",
+        "custom_config": {}
+    })
+
+    # Legacy API Keys (for backward compatibility - will be deprecated)
     openai_api_key = Column(String(255), nullable=True)
     custom_llm_url = Column(String(255), nullable=True)
+
+    # Other service API keys
     deepgram_api_key = Column(String(255), nullable=True)
     elevenlabs_api_key = Column(String(255), nullable=True)
     twilio_account_sid = Column(String(255), nullable=True)
     twilio_auth_token = Column(String(255), nullable=True)
 
     llm_settings = Column(JSON, nullable=True, default=lambda: {
-        "model": "gpt-4o-mini",
         "temperature": 0.5,
         "max_tokens": 1000,
         "system_prompt": "You are a helpful assistant that can answer questions and help with tasks.",
+        "top_p": 1.0,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0,
+        "stop_sequences": [],
     })
 
     # Webhook settings

@@ -203,62 +203,103 @@
                     <!-- LLM Tab Content -->
                     <div id="llm-content" class="ai-tab-content p-6">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div>
+                            <!-- LLM Provider Selection -->
+                            <div class="lg:col-span-2">
                                 <div class="flex items-center space-x-2 mb-2">
                                     <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                                     </svg>
-                                    <label for="llm_model" class="block text-sm font-medium text-gray-300">Language Model</label>
+                                    <label for="llm_provider" class="block text-sm font-medium text-gray-300">LLM Provider</label>
                                     <div class="group relative">
                                         <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                         <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
-                                            <div class="font-semibold mb-2">Choose Your AI Brain 🧠</div>
+                                            <div class="font-semibold mb-2">Choose Your AI Provider 🤖</div>
                                             <div class="space-y-2 text-xs">
-                                                <div><strong>GPT-4 Turbo:</strong> Most advanced, best for complex conversations (Recommended)</div>
-                                                <div><strong>GPT-4:</strong> Excellent quality, slightly slower</div>
-                                                <div><strong>GPT-3.5 Turbo:</strong> Fast and cost-effective, good for simple tasks</div>
+                                                <div><strong>OpenAI:</strong> GPT-4o, GPT-3.5 - Reliable, general purpose</div>
+                                                <div><strong>Anthropic:</strong> Claude models - Advanced reasoning, safety-focused</div>
+                                                <div><strong>Google Gemini:</strong> Latest Google models - Multimodal capabilities</div>
+                                                <div><strong>xAI Grok:</strong> Real-time data, less restrictive</div>
+                                                <div><strong>Groq:</strong> Ultra-fast inference speed</div>
+                                                <div><strong>Custom:</strong> Your own API endpoint</div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                <select name="llm_model" id="llm_model"
-                                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                                    <option value="gpt-4-turbo-preview" {% if assistant and assistant.llm_settings and assistant.llm_settings.model == 'gpt-4-turbo-preview' %}selected{% endif %}>🚀 GPT-4 Turbo (Recommended)</option>
-                                    <option value="gpt-4" {% if assistant and assistant.llm_settings and assistant.llm_settings.model == 'gpt-4' %}selected{% endif %}>⭐ GPT-4</option>
-                                    <option value="gpt-3.5-turbo" {% if assistant and assistant.llm_settings and assistant.llm_settings.model == 'gpt-3.5-turbo' %}selected{% endif %}>⚡ GPT-3.5 Turbo</option>
-                                    <option value="custom">🔧 Custom Model</option>
+                                <select name="llm_provider" id="llm_provider" required
+                                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                    onchange="updateProviderOptions()">
+                                    <option value="openai" {% if assistant and assistant.llm_provider == 'openai' %}selected{% endif %}>🚀 OpenAI (GPT Models)</option>
+                                    <option value="anthropic" {% if assistant and assistant.llm_provider == 'anthropic' %}selected{% endif %}>🧠 Anthropic (Claude Models)</option>
+                                    <option value="gemini" {% if assistant and assistant.llm_provider == 'gemini' %}selected{% endif %}>🌟 Google Gemini</option>
+                                    <option value="xai" {% if assistant and assistant.llm_provider == 'xai' %}selected{% endif %}>⚡ xAI (Grok Models)</option>
+                                    <option value="groq" {% if assistant and assistant.llm_provider == 'groq' %}selected{% endif %}>🔥 Groq (Ultra Fast)</option>
+                                    <option value="custom" {% if assistant and assistant.llm_provider == 'custom' %}selected{% endif %}>🔧 Custom Endpoint</option>
                                 </select>
-                                <div id="custom_llm_model_container" class="mt-3 hidden">
-                                    <input type="text" id="custom_llm_model" placeholder="Enter custom model name"
-                                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                                </div>
                             </div>
 
+                            <!-- Provider API Key -->
+                            <div>
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                    </svg>
+                                    <label for="llm_provider_api_key" class="block text-sm font-medium text-gray-300">API Key</label>
+                                    <span class="text-xs text-gray-500 italic">Required</span>
+                                </div>
+                                <input type="password" name="llm_provider_api_key" id="llm_provider_api_key"
+                                    value="{{ assistant.llm_provider_config.api_key if assistant and assistant.llm_provider_config else '' }}"
+                                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                    placeholder="Enter your API key">
+                                <p id="api-key-help" class="mt-2 text-xs text-gray-400">
+                                    Enter your OpenAI API key
+                                </p>
+                            </div>
+
+                            <!-- Provider Model -->
                             <div>
                                 <div class="flex items-center space-x-2 mb-2">
                                     <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1C9.716 21 3 14.284 3 6V5z"></path>
                                     </svg>
-                                    <label for="custom_llm_url" class="block text-sm font-medium text-gray-300">Custom LLM URL</label>
-                                    <span class="text-xs text-gray-500 italic">Optional</span>
+                                    <label for="llm_provider_model" class="block text-sm font-medium text-gray-300">Model</label>
                                     <div class="group relative">
                                         <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                         <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
-                                            <div class="font-semibold mb-2">Custom AI Model Endpoint 🔗</div>
-                                            <div class="text-xs">
-                                                Use your own AI model or alternative providers like Anthropic, Cohere, etc. Leave empty to use OpenAI's servers.
+                                            <div class="font-semibold mb-2">Choose Your Model 🧠</div>
+                                            <div id="model-help-content" class="space-y-2 text-xs">
+                                                <div><strong>GPT-4o:</strong> Most advanced, best for complex tasks</div>
+                                                <div><strong>GPT-4o-mini:</strong> Faster and cheaper, good balance</div>
+                                                <div><strong>GPT-3.5-turbo:</strong> Fast and cost-effective</div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                <input type="text" name="custom_llm_url" id="custom_llm_url"
-                                    value="{{ assistant.custom_llm_url if assistant else '' }}"
+                                <select name="llm_provider_model" id="llm_provider_model"
+                                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                    <!-- Options will be populated by JavaScript -->
+                                </select>
+                            </div>
+
+                            <!-- Custom Base URL (for some providers) -->
+                            <div id="base-url-container" class="lg:col-span-2 hidden">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                    </svg>
+                                    <label for="llm_provider_base_url" class="block text-sm font-medium text-gray-300">Base URL</label>
+                                    <span class="text-xs text-gray-500 italic">Optional</span>
+                                </div>
+                                <input type="text" name="llm_provider_base_url" id="llm_provider_base_url"
+                                    value="{{ assistant.llm_provider_config.base_url if assistant and assistant.llm_provider_config else '' }}"
                                     class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                                    placeholder="https://api.example.com/v1/chat/completions">
+                                    placeholder="https://api.example.com/v1">
+                                <p id="base-url-help" class="mt-2 text-xs text-gray-400">
+                                    Custom API endpoint URL (leave blank for default)
+                                </p>
                             </div>
 
                             <div>
@@ -1352,6 +1393,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize data extraction builder
     initializeDataFields();
     
+    // Initialize LLM provider options
+    updateProviderOptions();
+    
     // Handle STT model changes for keywords/keyterms visibility
     const sttModelSelect = document.getElementById('stt_model');
     const keywordsSection = document.getElementById('keywords-section');
@@ -1425,6 +1469,179 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// LLM Provider management functions
+function updateProviderOptions() {
+    const provider = document.getElementById('llm_provider').value;
+    const modelSelect = document.getElementById('llm_provider_model');
+    const apiKeyHelp = document.getElementById('api-key-help');
+    const baseUrlContainer = document.getElementById('base-url-container');
+    const baseUrlHelp = document.getElementById('base-url-help');
+    const modelHelpContent = document.getElementById('model-help-content');
+    
+    // Clear existing options
+    modelSelect.innerHTML = '';
+    
+    // Provider-specific configurations
+    const providerConfigs = {
+        openai: {
+            models: [
+                { value: 'gpt-4o', label: '🚀 GPT-4o (Most Advanced)' },
+                { value: 'gpt-4o-mini', label: '⚡ GPT-4o Mini (Fast & Efficient)' },
+                { value: 'gpt-3.5-turbo', label: '💰 GPT-3.5 Turbo (Cost Effective)' }
+            ],
+            apiKeyHelp: 'Enter your OpenAI API key from platform.openai.com',
+            showBaseUrl: false,
+            baseUrlHelp: '',
+            modelHelp: [
+                '<div><strong>GPT-4o:</strong> Most advanced, best for complex conversations</div>',
+                '<div><strong>GPT-4o-mini:</strong> Faster and cheaper, good balance</div>',
+                '<div><strong>GPT-3.5-turbo:</strong> Fast and cost-effective for simple tasks</div>'
+            ]
+        },
+        anthropic: {
+            models: [
+                { value: 'claude-3-5-sonnet-latest', label: '🧠 Claude 3.5 Sonnet (Recommended)' },
+                { value: 'claude-3-haiku-20240307', label: '⚡ Claude 3 Haiku (Fast)' }
+            ],
+            apiKeyHelp: 'Enter your Anthropic API key from console.anthropic.com',
+            showBaseUrl: false,
+            baseUrlHelp: '',
+            modelHelp: [
+                '<div><strong>Claude 3.5 Sonnet:</strong> Advanced reasoning and safety</div>',
+                '<div><strong>Claude 3 Haiku:</strong> Fast and efficient</div>'
+            ]
+        },
+        gemini: {
+            models: [
+                { value: 'gemini-2.0-flash', label: '🌟 Gemini 2.0 Flash (Latest)' },
+                { value: 'gemini-1.5-pro', label: '⭐ Gemini 1.5 Pro' }
+            ],
+            apiKeyHelp: 'Enter your Google AI API key from aistudio.google.com',
+            showBaseUrl: true,
+            baseUrlHelp: 'Google Gemini OpenAI-compatible endpoint (auto-filled)',
+            modelHelp: [
+                '<div><strong>Gemini 2.0 Flash:</strong> Latest Google model with multimodal capabilities</div>',
+                '<div><strong>Gemini 1.5 Pro:</strong> Powerful reasoning and long context</div>'
+            ]
+        },
+        xai: {
+            models: [
+                { value: 'grok-beta', label: '⚡ Grok Beta (Recommended)' },
+                { value: 'grok-2-1212', label: '🚀 Grok 2 (Latest)' }
+            ],
+            apiKeyHelp: 'Enter your xAI API key from console.x.ai',
+            showBaseUrl: true,
+            baseUrlHelp: 'xAI API endpoint (auto-filled)',
+            modelHelp: [
+                '<div><strong>Grok Beta:</strong> Real-time information and less restrictive</div>',
+                '<div><strong>Grok 2:</strong> Latest and most capable Grok model</div>'
+            ]
+        },
+        groq: {
+            models: [
+                { value: 'llama-3.3-70b-versatile', label: '🔥 Llama 3.3 70B (Recommended)' },
+                { value: 'llama-3.1-8b-instant', label: '⚡ Llama 3.1 8B (Ultra Fast)' }
+            ],
+            apiKeyHelp: 'Enter your Groq API key from console.groq.com',
+            showBaseUrl: false,
+            baseUrlHelp: '',
+            modelHelp: [
+                '<div><strong>Llama 3.3 70B:</strong> High quality with ultra-fast inference</div>',
+                '<div><strong>Llama 3.1 8B:</strong> Extremely fast for simple tasks</div>'
+            ]
+        },
+        custom: {
+            models: [
+                { value: '', label: 'Enter custom model name' }
+            ],
+            apiKeyHelp: 'Enter API key if required by your custom endpoint',
+            showBaseUrl: true,
+            baseUrlHelp: 'Your custom API endpoint URL (e.g., https://api.yourservice.com/v1)',
+            modelHelp: [
+                '<div><strong>Custom Model:</strong> Specify your model name or leave blank</div>'
+            ]
+        }
+    };
+    
+    const config = providerConfigs[provider] || providerConfigs.openai;
+    
+    // Populate model options
+    config.models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.value;
+        option.textContent = model.label;
+        modelSelect.appendChild(option);
+    });
+    
+    // Set selected model if editing existing assistant
+    if (ASSISTANT_DATA.model && ASSISTANT_DATA.provider === provider) {
+        const currentModel = ASSISTANT_DATA.model;
+        if (modelSelect.querySelector(`option[value="${currentModel}"]`)) {
+            modelSelect.value = currentModel;
+        }
+    }
+    
+    // Update help text
+    apiKeyHelp.textContent = config.apiKeyHelp;
+    baseUrlHelp.textContent = config.baseUrlHelp;
+    modelHelpContent.innerHTML = config.modelHelp.join('');
+    
+    // Show/hide base URL field
+    if (config.showBaseUrl) {
+        baseUrlContainer.classList.remove('hidden');
+        // Auto-fill base URL for some providers
+        if (provider === 'gemini' && !document.getElementById('llm_provider_base_url').value) {
+            document.getElementById('llm_provider_base_url').value = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+        } else if (provider === 'xai' && !document.getElementById('llm_provider_base_url').value) {
+            document.getElementById('llm_provider_base_url').value = 'https://api.x.ai/v1';
+        }
+    } else {
+        baseUrlContainer.classList.add('hidden');
+    }
+    
+    // For custom provider, make model input text instead of select
+    if (provider === 'custom') {
+        modelSelect.innerHTML = '<option value="">Enter model name...</option>';
+        // Convert to text input
+        const modelInput = document.createElement('input');
+        modelInput.type = 'text';
+        modelInput.name = 'llm_provider_model';
+        modelInput.id = 'llm_provider_model';
+        modelInput.className = modelSelect.className;
+        modelInput.placeholder = 'Enter your custom model name';
+        if (ASSISTANT_DATA.provider === 'custom' && ASSISTANT_DATA.model) {
+            modelInput.value = ASSISTANT_DATA.model;
+        }
+        modelSelect.parentNode.replaceChild(modelInput, modelSelect);
+    } else {
+        // Ensure we have a select element (not text input)
+        const currentModelField = document.getElementById('llm_provider_model');
+        if (currentModelField.tagName === 'INPUT') {
+            const newSelect = document.createElement('select');
+            newSelect.name = 'llm_provider_model';
+            newSelect.id = 'llm_provider_model';
+            newSelect.className = currentModelField.className;
+            currentModelField.parentNode.replaceChild(newSelect, currentModelField);
+            
+            // Re-populate options
+            config.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.value;
+                option.textContent = model.label;
+                newSelect.appendChild(option);
+            });
+            
+            // Set selected model if editing existing assistant
+            if (ASSISTANT_DATA.model && ASSISTANT_DATA.provider === provider) {
+                const currentModel = ASSISTANT_DATA.model;
+                if (newSelect.querySelector(`option[value="${currentModel}"]`)) {
+                    newSelect.value = currentModel;
+                }
+            }
+        }
+    }
+}
+
 function initializeDataFields() {
     try {
         // Check if there's existing schema data
@@ -1495,5 +1712,13 @@ function removeEnumOption(button) {
     optionContainer.remove();
     updateSchema();
 }
+
+// Template variables
+const ASSISTANT_DATA = {
+    provider: {% if assistant and assistant.llm_provider %}'{{ assistant.llm_provider }}'{% else %}'openai'{% endif %},
+    model: {% if assistant and assistant.llm_provider_config and assistant.llm_provider_config.model %}'{{ assistant.llm_provider_config.model }}'{% else %}null{% endif %},
+    apiKey: {% if assistant and assistant.llm_provider_config and assistant.llm_provider_config.api_key %}'{{ assistant.llm_provider_config.api_key }}'{% else %}''{% endif %},
+    baseUrl: {% if assistant and assistant.llm_provider_config and assistant.llm_provider_config.base_url %}'{{ assistant.llm_provider_config.base_url }}'{% else %}''{% endif %}
+};
 </script>
 {% endblock %} 

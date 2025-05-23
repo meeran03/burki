@@ -8,9 +8,6 @@
     <!-- Tailwind CSS CDN with dark mode support -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -24,36 +21,8 @@
     
     <!-- Custom styles -->
     <style>
-        :root {
-            --gradient-primary: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            --gradient-secondary: linear-gradient(135deg, #6366f1, #3b82f6);
-            --gradient-accent: linear-gradient(135deg, #8b5cf6, #ec4899);
-            --glass-bg: rgba(30, 41, 59, 0.3);
-            --glass-border: rgba(148, 163, 184, 0.1);
-            --shadow-primary: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            --shadow-secondary: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        
         * {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        
-        .gradient-primary {
-            background: var(--gradient-primary);
-        }
-        
-        .gradient-secondary {
-            background: var(--gradient-secondary);
-        }
-        
-        .gradient-accent {
-            background: var(--gradient-accent);
-        }
-        
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--glass-border);
         }
         
         .glow-hover {
@@ -63,27 +32,6 @@
         .glow-hover:hover {
             box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
             transform: translateY(-2px);
-        }
-        
-        .nav-item {
-            position: relative;
-            transition: all 0.3s ease;
-        }
-        
-        .nav-item::after {
-            content: '';
-            position: absolute;
-            bottom: -1px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--gradient-accent);
-            transition: width 0.3s ease;
-        }
-        
-        .nav-item:hover::after,
-        .nav-item.active::after {
-            width: 100%;
         }
         
         .fade-in {
@@ -121,174 +69,20 @@
         ::-webkit-scrollbar-thumb:hover {
             background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
         }
-        
-        /* Bootstrap dark theme overrides */
-        body {
-            background-color: #111827 !important;
-            color: #f9fafb !important;
-        }
-        
-        .navbar-dark {
-            background-color: rgba(31, 41, 55, 0.8) !important;
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(75, 85, 99, 0.5);
-        }
-        
+
+        /* Dropdown animation */
         .dropdown-menu {
-            background-color: #374151;
-            border: 1px solid #4b5563;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+            pointer-events: none;
         }
         
-        .dropdown-item {
-            color: #d1d5db;
-        }
-        
-        .dropdown-item:hover {
-            background-color: #4b5563;
-            color: #f9fafb;
-        }
-        
-        .btn-outline-light {
-            border-color: #6b7280;
-            color: #d1d5db;
-        }
-        
-        .btn-outline-light:hover {
-            background-color: #374151;
-            border-color: #9ca3af;
-            color: #f9fafb;
-        }
-        
-        /* Navigation hover effects */
-        .nav-link:hover {
-            background: rgba(55, 65, 81, 0.6) !important;
-            transform: translateY(-1px);
-        }
-        
-        .hover-primary:hover {
-            background: rgba(59, 130, 246, 0.1) !important;
-            color: #60a5fa !important;
-        }
-        
-        .hover-danger:hover {
-            background: rgba(239, 68, 68, 0.1) !important;
-            color: #f87171 !important;
-        }
-        
-        /* Dropdown menu styling */
-        .dropdown-menu.glass-card .dropdown-item:hover {
-            background: rgba(59, 130, 246, 0.1);
-            border-radius: 0.5rem;
-            margin: 0 0.5rem;
-            width: auto;
-        }
-        
-        /* Gradient backgrounds */
-        .gradient-primary {
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        }
-        
-        /* Transition utilities */
-        .transition-all {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        /* Sidebar Styling */
-        .sidebar {
-            position: fixed;
-            top: 80px;
-            left: 0;
-            bottom: 0;
-            z-index: 1000;
-            overflow-y: auto;
-            scrollbar-width: thin;
-        }
-        
-        .sidebar::-webkit-scrollbar {
-            width: 4px;
-        }
-        
-        .sidebar::-webkit-scrollbar-track {
-            background: rgba(75, 85, 99, 0.2);
-        }
-        
-        .sidebar::-webkit-scrollbar-thumb {
-            background: rgba(59, 130, 246, 0.5);
-            border-radius: 2px;
-        }
-        
-        .sidebar-link {
-            color: rgba(255, 255, 255, 0.7) !important;
-            font-weight: 500;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid transparent;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .sidebar-link::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
-            transition: left 0.6s;
-        }
-        
-        .sidebar-link:hover {
-            color: rgba(255, 255, 255, 0.95) !important;
-            background: rgba(59, 130, 246, 0.1) !important;
-            border-color: rgba(59, 130, 246, 0.2);
-            transform: translateX(4px);
-        }
-        
-        .sidebar-link:hover::before {
-            left: 100%;
-        }
-        
-        .sidebar-link.active {
-            color: #ffffff !important;
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2)) !important;
-            border-color: rgba(59, 130, 246, 0.3);
-            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
-        }
-        
-        .sidebar-link.active i {
-            color: #60a5fa;
-        }
-        
-        .sidebar-link i {
-            transition: all 0.3s ease;
-        }
-        
-        .sidebar-link:hover i {
-            color: #60a5fa;
-            transform: scale(1.1);
-        }
-        
-        /* Mobile Responsiveness */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
-            }
-            
-            .sidebar.show {
-                transform: translateX(0);
-            }
-            
-            .main-content {
-                margin-left: 0 !important;
-            }
-        }
-        
-        /* Desktop: Ensure main content doesn't overlap sidebar */
-        @media (min-width: 769px) {
-            .main-content-with-sidebar {
-                margin-left: 280px;
-            }
+        .dropdown:hover .dropdown-menu,
+        .dropdown-menu.show {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
         }
     </style>
     
@@ -317,337 +111,245 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-gray-900 text-white min-h-screen font-inter">
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark position-sticky top-0 py-3" style="z-index: 1050; backdrop-filter: blur(20px); background: rgba(15, 23, 42, 0.9); border-bottom: 1px solid rgba(148, 163, 184, 0.1);">
-        <div class="container-fluid">
-            <!-- Brand -->
-            <a class="navbar-brand d-flex align-items-center" href="/">
-                <div class="me-3 d-flex align-items-center justify-content-center rounded-3 gradient-primary text-white fw-bold floating" style="width: 40px; height: 40px; font-size: 20px;">
-                    ب
-                </div>
-                <div>
-                    <span class="fs-3 fw-bold bg-gradient text-white">Buraaq</span>
-                    <small class="d-block text-muted" style="font-size: 0.75rem; margin-top: -2px;">Voice AI Infrastructure</small>
-                </div>
-            </a>
-
-            <!-- Toggler for mobile -->
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" style="box-shadow: none;">
-                <i class="fas fa-bars text-white"></i>
-            </button>
-
-            <!-- Navigation Items -->
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    {% if session.user_id %}
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-3 mx-1 transition-all" href="/dashboard" style="transition: all 0.3s ease;">
-                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-3 mx-1 transition-all" href="/assistants" style="transition: all 0.3s ease;">
-                            <i class="fas fa-robot me-2"></i>Assistants
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-3 mx-1 transition-all" href="/analytics" style="transition: all 0.3s ease;">
-                            <i class="fas fa-chart-line me-2"></i>Analytics
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-
-                <!-- Right side navigation -->
-                <ul class="navbar-nav ms-auto">
-                    {% if not session.user_id %}
-                    <!-- Unauthenticated users -->
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-3 mx-1 text-white-50 hover-primary" href="/auth/login" style="transition: all 0.3s ease;">
-                            <i class="fas fa-sign-in-alt me-2"></i>Sign In
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-3 mx-1" href="/auth/register" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6); transition: all 0.3s ease;">
-                            <i class="fas fa-user-plus me-2"></i>Sign Up
-                        </a>
-                    </li>
-                    {% else %}
-                    <!-- Organization Info -->
-                    {% if session.organization_name %}
-                    <li class="nav-item me-3">
-                        <div class="d-flex align-items-center glass-card px-3 py-2 rounded-3" style="background: rgba(55, 65, 81, 0.4); border: 1px solid rgba(75, 85, 99, 0.3);">
-                            <i class="fas fa-building text-primary me-2" style="font-size: 0.875rem;"></i>
-                            <div>
-                                <div class="text-white fw-semibold" style="font-size: 0.875rem;">{{ session.organization_name }}</div>
-                                <div class="text-muted" style="font-size: 0.75rem;">{{ session.organization_slug }}</div>
-                            </div>
+    <!-- Modern Top Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-md border-b border-gray-800">
+        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-14">
+                <!-- Brand -->
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="flex items-center space-x-3 group">
+                        <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center font-bold text-white floating">
+                            ب
                         </div>
-                    </li>
+                        <div class="hidden sm:block">
+                            <div class="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">Buraaq</div>
+                            <div class="text-xs text-gray-400 -mt-1">Voice AI Infrastructure</div>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Center Navigation (Desktop) -->
+                {% if session.user_id %}
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="/dashboard" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path == '/dashboard' %}bg-blue-600/20 text-blue-400{% endif %}">
+                        <i class="fas fa-tachometer-alt w-4"></i>
+                        <span class="font-medium">Dashboard</span>
+                    </a>
+                    <a href="/assistants" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/assistants') %}bg-blue-600/20 text-blue-400{% endif %}">
+                        <i class="fas fa-robot w-4"></i>
+                        <span class="font-medium">Assistants</span>
+                    </a>
+                    <a href="/calls" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/calls') %}bg-blue-600/20 text-blue-400{% endif %}">
+                        <i class="fas fa-phone w-4"></i>
+                        <span class="font-medium">Calls</span>
+                    </a>
+                </div>
+                {% endif %}
+
+                <!-- Right Side -->
+                <div class="flex items-center space-x-4">
+                    {% if not session.user_id %}
+                    <!-- Unauthenticated -->
+                    <a href="/auth/login" class="text-gray-300 hover:text-white transition-colors">Sign In</a>
+                    <a href="/auth/register" class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200">
+                        Sign Up
+                    </a>
+                    {% else %}
+                    <!-- Organization Badge -->
+                    {% if session.organization_name %}
+                    <div class="hidden lg:flex items-center space-x-2 bg-gray-800/50 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-700">
+                        <i class="fas fa-building text-blue-400 text-sm"></i>
+                        <div class="text-sm">
+                            <div class="font-medium text-white">{{ session.organization_name }}</div>
+                            <div class="text-gray-400 text-xs">{{ session.organization_slug }}</div>
+                        </div>
+                    </div>
                     {% endif %}
 
                     <!-- API Keys -->
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-3 mx-1 transition-all position-relative" href="/api-keys" style="transition: all 0.3s ease;">
-                            <i class="fas fa-key me-2"></i>API Keys
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary" style="font-size: 0.65rem;">
-                                {{ session.api_key_count or 0 }}
-                            </span>
-                        </a>
-                    </li>
+                    <a href="/auth/api-keys" class="relative flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200">
+                        <i class="fas fa-key w-4"></i>
+                        <span class="hidden sm:inline font-medium">API Keys</span>
+                        {% if session.api_key_count > 0 %}
+                        <span class="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                            {{ session.api_key_count }}
+                        </span>
+                        {% endif %}
+                    </a>
 
-                    <!-- User Profile Dropdown -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center px-3 py-2 rounded-3 mx-1" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="background: rgba(55, 65, 81, 0.4); border: 1px solid rgba(75, 85, 99, 0.3); transition: all 0.3s ease;">
-                            <div class="me-2 d-flex align-items-center justify-content-center rounded-circle gradient-primary text-white fw-bold" style="width: 32px; height: 32px; font-size: 14px;">
+                    <!-- User Menu -->
+                    <div class="relative dropdown">
+                        <button class="flex items-center space-x-3 bg-gray-800/50 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white text-sm">
                                 {{ session.user_first_name[0] if session.user_first_name else 'U' }}{{ session.user_last_name[0] if session.user_last_name else '' }}
                             </div>
-                            <div class="d-none d-md-block">
-                                <div class="text-white fw-semibold" style="font-size: 0.875rem;">
-                                    {{ session.user_first_name }} {{ session.user_last_name }}
-                                </div>
-                                <div class="text-muted" style="font-size: 0.75rem;">
-                                    {{ session.user_email }}
-                                </div>
+                            <div class="hidden md:block text-left">
+                                <div class="font-medium text-white text-sm">{{ session.user_first_name }} {{ session.user_last_name }}</div>
+                                <div class="text-gray-400 text-xs">{{ session.user_email }}</div>
                             </div>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end glass-card" style="background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 1rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); min-width: 280px;">
+                            <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                        </button>
+                        
+                        <!-- Dropdown Menu -->
+                        <div class="dropdown-menu absolute right-0 mt-2 w-64 bg-gray-800/95 backdrop-blur-md rounded-xl border border-gray-700 shadow-2xl">
                             <!-- User Info Header -->
-                            <li class="px-4 py-3 border-bottom" style="border-color: rgba(148, 163, 184, 0.2) !important;">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3 d-flex align-items-center justify-content-center rounded-circle gradient-primary text-white fw-bold" style="width: 48px; height: 48px; font-size: 18px;">
+                            <div class="px-4 py-3 border-b border-gray-700">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white">
                                         {{ session.user_first_name[0] if session.user_first_name else 'U' }}{{ session.user_last_name[0] if session.user_last_name else '' }}
                                     </div>
                                     <div>
-                                        <div class="text-white fw-semibold">
-                                            {{ session.user_first_name }} {{ session.user_last_name }}
-                                        </div>
-                                        <div class="text-muted small">{{ session.user_email }}</div>
+                                        <div class="font-medium text-white">{{ session.user_first_name }} {{ session.user_last_name }}</div>
+                                        <div class="text-gray-400 text-sm">{{ session.user_email }}</div>
                                         {% if session.organization_name %}
-                                        <div class="badge bg-primary mt-1" style="font-size: 0.7rem;">
+                                        <div class="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded-md text-xs font-medium mt-1">
                                             {{ session.organization_name }}
                                         </div>
                                         {% endif %}
                                     </div>
                                 </div>
-                            </li>
+                            </div>
                             
-                            <!-- Navigation Links -->
-                            <li><a class="dropdown-item d-flex align-items-center py-3 px-4 text-white-50 hover-primary" href="/profile" style="transition: all 0.3s ease;">
-                                <i class="fas fa-user-circle me-3 text-primary"></i>
-                                <span>Profile Settings</span>
-                            </a></li>
-                            
-                            <li><a class="dropdown-item d-flex align-items-center py-3 px-4 text-white-50 hover-primary" href="/organization" style="transition: all 0.3s ease;">
-                                <i class="fas fa-building me-3 text-primary"></i>
-                                <span>Organization</span>
-                            </a></li>
-                            
-                            <li><a class="dropdown-item d-flex align-items-center py-3 px-4 text-white-50 hover-primary" href="/auth/api-keys" style="transition: all 0.3s ease;">
-                                <i class="fas fa-key me-3 text-primary"></i>
-                                <span>API Keys</span>
-                                <span class="badge bg-secondary ms-auto">{{ session.api_key_count or 0 }}</span>
-                            </a></li>
-                            
-                            <li><a class="dropdown-item d-flex align-items-center py-3 px-4 text-white-50 hover-primary" href="/billing" style="transition: all 0.3s ease;">
-                                <i class="fas fa-credit-card me-3 text-primary"></i>
-                                <span>Billing & Usage</span>
-                            </a></li>
-                            
-                            <li><hr class="dropdown-divider" style="border-color: rgba(148, 163, 184, 0.2);"></li>
-                            
-                            <li><a class="dropdown-item d-flex align-items-center py-3 px-4 text-white-50 hover-primary" href="/settings" style="transition: all 0.3s ease;">
-                                <i class="fas fa-cog me-3 text-muted"></i>
-                                <span>Settings</span>
-                            </a></li>
-                            
-                            <li><a class="dropdown-item d-flex align-items-center py-3 px-4 text-white-50 hover-primary" href="/help" style="transition: all 0.3s ease;">
-                                <i class="fas fa-question-circle me-3 text-muted"></i>
-                                <span>Help & Support</span>
-                            </a></li>
-                            
-                            <li><hr class="dropdown-divider" style="border-color: rgba(148, 163, 184, 0.2);"></li>
-                            
-                            <li><a class="dropdown-item d-flex align-items-center py-3 px-4 text-danger hover-danger" href="/auth/logout" style="transition: all 0.3s ease;">
-                                <i class="fas fa-sign-out-alt me-3"></i>
-                                <span>Sign Out</span>
-                            </a></li>
-                        </ul>
-                    </li>
+                            <!-- Menu Items -->
+                            <div class="py-2">
+                                <a href="/profile" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
+                                    <i class="fas fa-user-circle text-blue-400"></i>
+                                    <span>Profile Settings</span>
+                                </a>
+                                <a href="/organization" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
+                                    <i class="fas fa-building text-blue-400"></i>
+                                    <span>Organization</span>
+                                </a>
+                                <a href="/auth/api-keys" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
+                                    <i class="fas fa-key text-blue-400"></i>
+                                    <span>API Keys</span>
+                                    {% if session.api_key_count > 0 %}
+                                    <span class="ml-auto bg-blue-600 text-white text-xs rounded-full px-2 py-1">{{ session.api_key_count }}</span>
+                                    {% endif %}
+                                </a>
+                                <a href="/billing" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
+                                    <i class="fas fa-credit-card text-blue-400"></i>
+                                    <span>Billing & Usage</span>
+                                </a>
+                                
+                                <div class="border-t border-gray-700 my-2"></div>
+                                
+                                <a href="/settings" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
+                                    <i class="fas fa-cog text-gray-500"></i>
+                                    <span>Settings</span>
+                                </a>
+                                <a href="/help" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
+                                    <i class="fas fa-question-circle text-gray-500"></i>
+                                    <span>Help & Support</span>
+                                </a>
+                                
+                                <div class="border-t border-gray-700 my-2"></div>
+                                
+                                <a href="/auth/logout" class="flex items-center space-x-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    <span>Sign Out</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Menu Button -->
+                    <button class="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" onclick="toggleMobileMenu()">
+                        <i class="fas fa-bars"></i>
+                    </button>
                     {% endif %}
-                </ul>
+                </div>
             </div>
         </div>
+
+        <!-- Mobile Menu -->
+        {% if session.user_id %}
+        <div id="mobile-menu" class="hidden md:hidden bg-gray-800/95 backdrop-blur-md border-t border-gray-700">
+            <div class="px-4 py-4 space-y-2">
+                <a href="/dashboard" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path == '/dashboard' %}bg-blue-600/20 text-blue-400{% endif %}">
+                    <i class="fas fa-tachometer-alt w-4 mr-3"></i>Dashboard
+                </a>
+                <a href="/assistants" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/assistants') %}bg-blue-600/20 text-blue-400{% endif %}">
+                    <i class="fas fa-robot w-4 mr-3"></i>Assistants
+                </a>
+                <a href="/calls" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/calls') %}bg-blue-600/20 text-blue-400{% endif %}">
+                    <i class="fas fa-phone w-4 mr-3"></i>Calls
+                </a>
+            </div>
+        </div>
+        {% endif %}
     </nav>
 
     <!-- Main content -->
-    <main class="d-flex" style="min-height: calc(100vh - 80px);">
-        {% if session.user_id %}
-        <!-- Sidebar -->
-        <nav class="sidebar d-flex flex-column p-0" style="width: 280px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px); border-right: 1px solid rgba(148, 163, 184, 0.1);">
-            <!-- Sidebar Header -->
-            <div class="sidebar-header p-4 border-bottom" style="border-color: rgba(148, 163, 184, 0.1) !important;">
-                <div class="d-flex align-items-center">
-                    <div class="me-3 d-flex align-items-center justify-content-center rounded-3 gradient-primary text-white fw-bold" style="width: 40px; height: 40px; font-size: 18px;">
-                        ب
-                    </div>
-                    <div>
-                        <div class="text-white fw-bold">{{ session.organization_name or 'Organization' }}</div>
-                        <div class="text-muted small">{{ session.organization_slug or 'org' }}</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Navigation Items -->
-            <div class="flex-grow-1 p-3">
-                <ul class="nav flex-column nav-pills">
-                    <li class="nav-item mb-1">
-                        <a class="nav-link d-flex align-items-center py-3 px-3 rounded-3 sidebar-link {% if request.url.path == '/dashboard' %}active{% endif %}" href="/dashboard">
-                            <i class="fas fa-tachometer-alt me-3" style="width: 20px;"></i>
-                            <span>Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="nav-item mb-1">
-                        <a class="nav-link d-flex align-items-center py-3 px-3 rounded-3 sidebar-link {% if request.url.path.startswith('/assistants') %}active{% endif %}" href="/assistants">
-                            <i class="fas fa-robot me-3" style="width: 20px;"></i>
-                            <span>Assistants</span>
-                        </a>
-                    </li>
-                    <li class="nav-item mb-1">
-                        <a class="nav-link d-flex align-items-center py-3 px-3 rounded-3 sidebar-link {% if request.url.path.startswith('/calls') %}active{% endif %}" href="/calls">
-                            <i class="fas fa-phone me-3" style="width: 20px;"></i>
-                            <span>Calls</span>
-                        </a>
-                    </li>
-                    <li class="nav-item mb-1">
-                        <a class="nav-link d-flex align-items-center py-3 px-3 rounded-3 sidebar-link {% if request.url.path.startswith('/analytics') %}active{% endif %}" href="/analytics">
-                            <i class="fas fa-chart-line me-3" style="width: 20px;"></i>
-                            <span>Analytics</span>
-                        </a>
-                    </li>
-                </ul>
-
-                <!-- Divider -->
-                <hr class="my-4" style="border-color: rgba(148, 163, 184, 0.2);">
-
-                <!-- Secondary Navigation -->
-                <ul class="nav flex-column nav-pills">
-                    <li class="nav-item mb-1">
-                        <a class="nav-link d-flex align-items-center py-3 px-3 rounded-3 sidebar-link {% if request.url.path.startswith('/profile') %}active{% endif %}" href="/profile">
-                            <i class="fas fa-user-circle me-3" style="width: 20px;"></i>
-                            <span>Profile</span>
-                        </a>
-                    </li>
-                    <li class="nav-item mb-1">
-                        <a class="nav-link d-flex align-items-center py-3 px-3 rounded-3 sidebar-link position-relative {% if request.url.path.startswith('/auth/api-keys') %}active{% endif %}" href="/auth/api-keys">
-                            <i class="fas fa-key me-3" style="width: 20px;"></i>
-                            <span>API Keys</span>
-                            {% if session.api_key_count > 0 %}
-                            <span class="badge bg-primary ms-auto" style="font-size: 0.7rem;">{{ session.api_key_count }}</span>
-                            {% endif %}
-                        </a>
-                    </li>
-                    <li class="nav-item mb-1">
-                        <a class="nav-link d-flex align-items-center py-3 px-3 rounded-3 sidebar-link {% if request.url.path.startswith('/settings') %}active{% endif %}" href="/settings">
-                            <i class="fas fa-cog me-3" style="width: 20px;"></i>
-                            <span>Settings</span>
-                        </a>
-                    </li>
-                </ul>
-            </div>
-
-            <!-- User Profile Section -->
-            <div class="mt-auto p-3 border-top" style="border-color: rgba(148, 163, 184, 0.1) !important;">
-                <div class="d-flex align-items-center glass-card p-3 rounded-3" style="background: rgba(55, 65, 81, 0.4); border: 1px solid rgba(75, 85, 99, 0.3);">
-                    <div class="me-3 d-flex align-items-center justify-content-center rounded-circle gradient-primary text-white fw-bold" style="width: 40px; height: 40px; font-size: 16px;">
-                        {{ session.user_first_name[0] if session.user_first_name else 'U' }}{{ session.user_last_name[0] if session.user_last_name else '' }}
-                    </div>
-                    <div class="flex-grow-1 me-2" style="min-width: 0;">
-                        <div class="text-white fw-semibold text-truncate" style="font-size: 0.9rem;">
-                            {{ session.user_first_name }} {{ session.user_last_name }}
-                        </div>
-                        <div class="text-muted text-truncate" style="font-size: 0.8rem;">
-                            {{ session.user_email }}
-                        </div>
-                    </div>
-                    <div class="dropdown">
-                        <button class="btn btn-link text-white p-1" type="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-ellipsis-v"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end glass-card" style="background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 1rem;">
-                            <li><a class="dropdown-item text-white-50" href="/profile"><i class="fas fa-user me-2"></i>Profile</a></li>
-                            <li><a class="dropdown-item text-white-50" href="/settings"><i class="fas fa-cog me-2"></i>Settings</a></li>
-                            <li><hr class="dropdown-divider" style="border-color: rgba(148, 163, 184, 0.2);"></li>
-                            <li><a class="dropdown-item text-danger" href="/auth/logout"><i class="fas fa-sign-out-alt me-2"></i>Sign Out</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </nav>
-        {% endif %}
-
+    <main class="pt-14" style="min-height: calc(100vh - 56px);">
         <!-- Main Content Area -->
-        <div class="flex-grow-1 main-content {% if session.user_id %}main-content-with-sidebar{% endif %} py-4 pe-4">
-            {% if session.user_id %}
-            <!-- Mobile Sidebar Toggle -->
-            <div class="d-md-none mb-3">
-                <button class="btn btn-outline-primary" type="button" onclick="toggleSidebar()">
-                    <i class="fas fa-bars me-2"></i>Menu
-                </button>
-            </div>
-            {% endif %}
-            
+        <div class="w-full p-6">            
             {% block content %}{% endblock %}
         </div>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 mt-5 py-4 border-top" style="background-color: rgba(31, 41, 55, 0.3) !important; border-top: 1px solid rgba(75, 85, 99, 0.5) !important;">
-        <div class="container-fluid max-w-7xl mx-auto px-3">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <p class="text-muted mb-0 small">
-                        &copy; 2025 Buraaq. Voice AI Infrastructure Platform.
-                    </p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <div class="d-flex justify-content-md-end gap-3">
-                        <a href="/docs" class="text-muted small text-decoration-none">Documentation</a>
-                        <a href="/api" class="text-muted small text-decoration-none">API Reference</a>
-                        <a href="/support" class="text-muted small text-decoration-none">Support</a>
-                    </div>
+    <footer class="bg-gray-900/50 backdrop-blur-md border-t border-gray-800 py-6">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row items-center justify-between">
+                <p class="text-gray-400 text-sm">
+                    &copy; 2025 Buraaq. Voice AI Infrastructure Platform.
+                </p>
+                <div class="flex space-x-6 mt-4 md:mt-0">
+                    <a href="/docs" class="text-gray-400 hover:text-white text-sm transition-colors">Documentation</a>
+                    <a href="/api" class="text-gray-400 hover:text-white text-sm transition-colors">API Reference</a>
+                    <a href="/support" class="text-gray-400 hover:text-white text-sm transition-colors">Support</a>
                 </div>
             </div>
         </div>
     </footer>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Sidebar Toggle Script -->
-    <script>
-        function toggleSidebar() {
-            const sidebar = document.querySelector('.sidebar');
-            if (sidebar) {
-                sidebar.classList.toggle('show');
+    <!-- Scripts -->
+    <script>        
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            if (menu) {
+                menu.classList.toggle('hidden');
             }
         }
         
-        // Close sidebar when clicking outside on mobile
+        // Close dropdowns when clicking outside
         document.addEventListener('click', function(event) {
-            const sidebar = document.querySelector('.sidebar');
-            const toggleButton = event.target.closest('button[onclick="toggleSidebar()"]');
+            const dropdowns = document.querySelectorAll('.dropdown');
+            dropdowns.forEach(dropdown => {
+                if (!dropdown.contains(event.target)) {
+                    const menu = dropdown.querySelector('.dropdown-menu');
+                    if (menu) {
+                        menu.classList.remove('show');
+                    }
+                }
+            });
             
-            if (sidebar && !sidebar.contains(event.target) && !toggleButton && window.innerWidth <= 768) {
-                sidebar.classList.remove('show');
+            // Close mobile menu when clicking outside
+            const mobileMenu = document.getElementById('mobile-menu');
+            const menuButton = event.target.closest('button[onclick="toggleMobileMenu()"]');
+            if (mobileMenu && !mobileMenu.contains(event.target) && !menuButton) {
+                mobileMenu.classList.add('hidden');
             }
+        });
+        
+        // Add click handlers for dropdowns
+        document.querySelectorAll('.dropdown > button').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const menu = this.parentElement.querySelector('.dropdown-menu');
+                if (menu) {
+                    menu.classList.toggle('show');
+                }
+            });
         });
         
         // Handle window resize
         window.addEventListener('resize', function() {
-            const sidebar = document.querySelector('.sidebar');
-            if (sidebar && window.innerWidth > 768) {
-                sidebar.classList.remove('show');
+            const mobileMenu = document.getElementById('mobile-menu');
+            
+            if (window.innerWidth > 768 && mobileMenu) {
+                mobileMenu.classList.add('hidden');
             }
         });
     </script>

@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Profile Settings - Buraaq Voice AI{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Profile Settings</h1>
+            <p class="text-gray-400">Manage your personal account settings and preferences</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white text-lg">
+                {{ session.user_first_name[0] if session.user_first_name else 'U' }}{{ session.user_last_name[0] if session.user_last_name else '' }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Information Card -->
+    <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-semibold text-white">Personal Information</h2>
+            <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                <i class="fas fa-edit mr-2"></i>Edit Profile
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Basic Info -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Full Name</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ current_user.first_name }} {{ current_user.last_name }}
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ current_user.email }}
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Role</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        <span class="inline-block bg-blue-600/20 text-blue-400 px-3 py-1 rounded-md text-sm font-medium capitalize">
+                            {{ current_user.role }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Account Stats -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Member Since</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ current_user.created_at.strftime('%B %d, %Y') if current_user.created_at else 'N/A' }}
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Last Login</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ current_user.last_login_at.strftime('%B %d, %Y at %I:%M %p') if current_user.last_login_at else 'First time' }}
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Login Count</label>
+                    <div class="bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-3 text-white">
+                        {{ current_user.login_count or 0 }} logins
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Organization Info Card -->
+    <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-6">Organization</h2>
+        
+        <div class="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-building text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-white">{{ organization.name if organization else 'No Organization' }}</h3>
+                    <p class="text-gray-400 text-sm">{{ organization.slug if organization else 'N/A' }}</p>
+                    {% if organization and organization.description %}
+                    <p class="text-gray-500 text-sm mt-1">{{ organization.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="/organization" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors">
+                <i class="fas fa-cog mr-2"></i>Manage
+            </a>
+        </div>
+    </div>
+
+    <!-- Security Settings Card -->
+    <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-6">Security & Access</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Password -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-green-600/20 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-lock text-green-400"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-white">Password</h3>
+                            <p class="text-gray-400 text-sm">Last updated: Recently</p>
+                        </div>
+                    </div>
+                    <button class="px-3 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-sm font-medium transition-colors">
+                        Change
+                    </button>
+                </div>
+            </div>
+            
+            <!-- API Keys -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-key text-blue-400"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-white">API Keys</h3>
+                            <p class="text-gray-400 text-sm">{{ session.api_key_count or 0 }} active keys</p>
+                        </div>
+                    </div>
+                    <a href="/auth/api-keys" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+                        Manage
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Status Card -->
+    <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-white mb-6">Account Status</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Account Status -->
+            <div class="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg">
+                <div class="w-10 h-10 bg-green-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-check-circle text-green-400"></i>
+                </div>
+                <div>
+                    <h3 class="font-medium text-white">Active</h3>
+                    <p class="text-gray-400 text-sm">Account is active</p>
+                </div>
+            </div>
+            
+            <!-- Email Verification -->
+            <div class="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg">
+                <div class="w-10 h-10 bg-{{ 'green' if current_user.is_verified else 'yellow' }}-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-{{ 'shield-alt' if current_user.is_verified else 'exclamation-triangle' }} text-{{ 'green' if current_user.is_verified else 'yellow' }}-400"></i>
+                </div>
+                <div>
+                    <h3 class="font-medium text-white">{{ 'Verified' if current_user.is_verified else 'Unverified' }}</h3>
+                    <p class="text-gray-400 text-sm">Email {{ 'verified' if current_user.is_verified else 'not verified' }}</p>
+                </div>
+            </div>
+            
+            <!-- Google Integration -->
+            <div class="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg">
+                <div class="w-10 h-10 bg-{{ 'blue' if current_user.google_id else 'gray' }}-600/20 rounded-lg flex items-center justify-center">
+                    <i class="fab fa-google text-{{ 'blue' if current_user.google_id else 'gray' }}-400"></i>
+                </div>
+                <div>
+                    <h3 class="font-medium text-white">{{ 'Connected' if current_user.google_id else 'Not Connected' }}</h3>
+                    <p class="text-gray-400 text-sm">Google OAuth</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Danger Zone Card -->
+    <div class="bg-red-900/20 border border-red-700/50 rounded-xl p-6">
+        <h2 class="text-xl font-semibold text-red-400 mb-4">Danger Zone</h2>
+        <p class="text-gray-400 mb-6">These actions cannot be undone. Please proceed with caution.</p>
+        
+        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+            <button class="px-4 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded-lg font-medium hover:bg-red-600/30 transition-colors">
+                <i class="fas fa-user-times mr-2"></i>Deactivate Account
+            </button>
+            <button class="px-4 py-2 bg-red-600/20 border border-red-600/50 text-red-400 rounded-lg font-medium hover:bg-red-600/30 transition-colors">
+                <i class="fas fa-trash mr-2"></i>Delete Account
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -104,10 +104,20 @@
                 
                 <!-- CTA Buttons -->
                 <div class="flex items-center space-x-4">
-                    <a href="/auth/login" class="text-gray-300 hover:text-white transition-colors">Sign In</a>
-                    <a href="/auth/register" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all duration-300 shadow-lg">
-                        Get Started
-                    </a>
+                    {% if session.user_id %}
+                        <!-- User is authenticated -->
+                        <span class="text-gray-300">Welcome, {{ session.user_first_name or session.user_email.split('@')[0] }}!</span>
+                        <a href="/dashboard" class="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all duration-300 shadow-lg">
+                            Dashboard
+                        </a>
+                        <a href="/auth/logout" class="text-gray-300 hover:text-white transition-colors">Logout</a>
+                    {% else %}
+                        <!-- User is not authenticated -->
+                        <a href="/auth/login" class="text-gray-300 hover:text-white transition-colors">Sign In</a>
+                        <a href="/auth/register" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all duration-300 shadow-lg">
+                            Get Started
+                        </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -139,12 +149,23 @@
             
             <!-- CTA Buttons -->
             <div class="fade-in delay-200 flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6 mb-12">
-                <a href="/auth/register" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
-                    Start Free Trial
-                </a>
-                <a href="#features" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
-                    Explore Features
-                </a>
+                {% if session.user_id %}
+                    <!-- User is authenticated -->
+                    <a href="/dashboard" class="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
+                        Go to Dashboard
+                    </a>
+                    <a href="/assistants" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
+                        Manage Assistants
+                    </a>
+                {% else %}
+                    <!-- User is not authenticated -->
+                    <a href="/auth/register" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
+                        Start Free Trial
+                    </a>
+                    <a href="#features" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
+                        Explore Features
+                    </a>
+                {% endif %}
             </div>
             
             <!-- Hero Stats -->
@@ -400,25 +421,45 @@
     <section id="demo" class="py-20 relative">
         <div class="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10"></div>
         <div class="relative z-10 max-w-4xl mx-auto px-6 lg:px-8 text-center">
-            <h2 class="text-4xl md:text-5xl font-bold mb-6">
-                Ready to Transform Your <span class="gradient-text">Voice Experience</span>?
-            </h2>
-            <p class="text-xl text-gray-400 mb-8">
-                Join leading enterprises who trust Buraaq Voice AI for their critical communications
-            </p>
-            
-            <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
-                <a href="/auth/register" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
-                    Start Your Free Trial
-                </a>
-                <a href="/auth/login" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
-                    Already Have Account?
-                </a>
-            </div>
-            
-            <p class="text-sm text-gray-500 mt-6">
-                No credit card required • 14-day free trial • Full enterprise features
-            </p>
+            {% if session.user_id %}
+                <!-- User is authenticated -->
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                    Welcome back, <span class="gradient-text">{{ session.user_first_name or session.user_email.split('@')[0] }}</span>!
+                </h2>
+                <p class="text-xl text-gray-400 mb-8">
+                    Continue managing your voice AI assistants and monitor your analytics
+                </p>
+                
+                <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
+                    <a href="/dashboard" class="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
+                        Go to Dashboard
+                    </a>
+                    <a href="/assistants" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
+                        Manage Assistants
+                    </a>
+                </div>
+            {% else %}
+                <!-- User is not authenticated -->
+                <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                    Ready to Transform Your <span class="gradient-text">Voice Experience</span>?
+                </h2>
+                <p class="text-xl text-gray-400 mb-8">
+                    Join leading enterprises who trust Buraaq Voice AI for their critical communications
+                </p>
+                
+                <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
+                    <a href="/auth/register" class="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-xl glow-hover">
+                        Start Your Free Trial
+                    </a>
+                    <a href="/auth/login" class="px-8 py-4 glass-morphism text-white rounded-xl font-semibold hover:bg-gray-700/30 transition-all duration-300">
+                        Already Have Account?
+                    </a>
+                </div>
+                
+                <p class="text-sm text-gray-500 mt-6">
+                    No credit card required • 14-day free trial • Full enterprise features
+                </p>
+            {% endif %}
         </div>
     </section>
 
@@ -446,7 +487,11 @@
                         <li><a href="#features" class="hover:text-white transition-colors">Features</a></li>
                         <li><a href="#analytics" class="hover:text-white transition-colors">Analytics</a></li>
                         <li><a href="#enterprise" class="hover:text-white transition-colors">Enterprise</a></li>
-                        <li><a href="/auth/login" class="hover:text-white transition-colors">Sign In</a></li>
+                        {% if session.user_id %}
+                            <li><a href="/dashboard" class="hover:text-white transition-colors">Dashboard</a></li>
+                        {% else %}
+                            <li><a href="/auth/login" class="hover:text-white transition-colors">Sign In</a></li>
+                        {% endif %}
                     </ul>
                 </div>
                 

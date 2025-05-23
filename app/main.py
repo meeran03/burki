@@ -15,7 +15,10 @@ from app.core.call_manager import CallManager
 from app.core.assistant_manager import assistant_manager
 from app.api.assistants import router as assistants_router
 from app.api.calls import router as calls_router
-from app.api.web import router as web_router
+from app.api.web.index import router as web_router
+from app.api.web.auth import router as web_auth_router
+from app.api.web.assistant import router as web_assistant_router
+from app.api.web.call import router as web_call_router
 from app.api.root import router as root_router
 
 load_dotenv()
@@ -50,6 +53,9 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(root_router)
 app.include_router(web_router)
+app.include_router(web_auth_router)
+app.include_router(web_assistant_router)
+app.include_router(web_call_router)
 app.include_router(assistants_router, prefix="/api")
 app.include_router(calls_router, prefix="/api")
 

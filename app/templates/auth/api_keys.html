@@ -1,267 +1,472 @@
 {% extends "base.html" %}
 
-{% block title %}API Keys - Diwaar Voice AI{% endblock %}
+{% block title %}API Keys - Buraaq Voice AI{% endblock %}
 
-{% block extra_head %}
-<style>
-    .api-key-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        transition: all 0.3s ease;
-    }
-    .api-key-card:hover {
-        border-color: #d1d5db;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    .key-preview {
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        background: #f8fafc;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 14px;
-        border: 1px solid #e5e7eb;
-    }
-    .usage-badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-    }
-    .copy-btn {
-        transition: all 0.2s ease;
-    }
-    .copy-btn:hover {
-        transform: scale(1.05);
-    }
-    .modal-body {
-        background: #f8fafc;
-    }
-    .new-key-display {
-        background: #dcfce7;
-        border: 2px solid #16a34a;
-        border-radius: 8px;
-        padding: 15px;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 14px;
-        word-break: break-all;
-    }
-    .warning-box {
-        background: #fef3c7;
-        border: 1px solid #f59e0b;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
-    }
-</style>
-{% endblock %}
+{% set active_keys_count = api_keys | selectattr('is_active') | list | length %}
+{% set total_usage_count = api_keys | sum(attribute='usage_count') %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-12">
-            <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h2>API Keys</h2>
-                    <p class="text-muted">Manage your API keys for programmatic access to Diwaar Voice AI</p>
+<div class="space-y-8">
+    <!-- Header Section -->
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-white">API Keys</h1>
+            <p class="mt-2 text-gray-400">Manage your API keys for programmatic access to Buraaq Voice AI</p>
+        </div>
+        <div class="mt-4 lg:mt-0">
+            <button onclick="showCreateModal()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all duration-200 glow-hover">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Create New Key
+            </button>
+        </div>
+    </div>
+
+    <!-- Success/Error Messages -->
+    {% if success %}
+    <div class="bg-green-500/20 text-green-400 border border-green-500/30 rounded-xl p-4 fade-in">
+        <div class="flex items-center">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>{{ success }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl p-4 fade-in">
+        <div class="flex items-center">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <!-- Total Keys -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-white">{{ api_keys|length }}</div>
+                        <div class="text-sm text-gray-400">Total</div>
+                    </div>
                 </div>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createKeyModal">
-                    <i class="fas fa-plus me-2"></i>Create New Key
-                </button>
+                <div>
+                    <h3 class="text-gray-300 font-medium mb-2">API Keys</h3>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-500">Active keys</span>
+                        <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div class="w-full h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            {% if success %}
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ success }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <!-- Active Keys -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-green-500/10 to-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-white">{{ active_keys_count }}</div>
+                        <div class="text-sm text-gray-400">Active</div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-gray-300 font-medium mb-2">Active Keys</h3>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-500">Ready to use</span>
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                            <div class="w-1.5 h-1.5 rounded-full bg-green-400 mr-2"></div>
+                            Online
+                        </span>
+                    </div>
+                </div>
             </div>
-            {% endif %}
+        </div>
 
-            {% if error %}
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                {{ error }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <!-- Total Usage -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-white">{{ total_usage_count }}</div>
+                        <div class="text-sm text-gray-400">Requests</div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-gray-300 font-medium mb-2">Total Usage</h3>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-500">All time</span>
+                        <div class="flex items-center space-x-1">
+                            <span class="text-xs text-purple-400">+12%</span>
+                            <svg class="w-3 h-3 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
             </div>
-            {% endif %}
+        </div>
 
-            <!-- API Keys List -->
-            {% if api_keys %}
-            <div class="row">
-                {% for key in api_keys %}
-                <div class="col-md-6 col-lg-4 mb-4">
-                    <div class="api-key-card p-4 h-100">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <h5 class="card-title mb-0">{{ key.name }}</h5>
-                            <div class="dropdown">
-                                <button class="btn btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
-                                    <i class="fas fa-ellipsis-v"></i>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <button class="dropdown-item text-danger" onclick="deleteKey({{ key.id }}, '{{ key.name }}')">
-                                            <i class="fas fa-trash me-2"></i>Delete
-                                        </button>
-                                    </li>
-                                </ul>
+        <!-- Security Score -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
+            <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-3xl font-bold text-emerald-400">98%</div>
+                        <div class="text-sm text-gray-400">Score</div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-gray-300 font-medium mb-2">Security</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-gray-500">Overall health</span>
+                        <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div class="w-full h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full"></div>
+                        </div>
+                    </div>
+                    <span class="text-emerald-400 text-xs font-medium">Excellent</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Keys List -->
+    {% if api_keys %}
+    <div class="space-y-6">
+        <!-- Section Header -->
+        <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold text-white">Your API Keys</h2>
+            <div class="flex items-center space-x-2">
+                <span class="text-sm text-gray-400">{{ api_keys|length }} keys total</span>
+                <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+            </div>
+        </div>
+
+        <!-- Keys Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {% for key in api_keys %}
+            <div class="group relative overflow-hidden rounded-xl bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 p-6 hover:bg-gray-800/50 transition-all duration-300">
+                <div class="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div class="relative z-10">
+                    <!-- Header -->
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-white">{{ key.name }}</h3>
+                                <p class="text-xs text-gray-400">Created {{ key.created_at.strftime('%b %d, %Y') }}</p>
                             </div>
                         </div>
+                        <div class="relative">
+                            <button onclick="toggleDropdown({{ key.id }})" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01"></path>
+                                </svg>
+                            </button>
+                            <div id="dropdown-{{ key.id }}" class="hidden absolute right-0 mt-2 w-48 bg-gray-800/95 backdrop-blur-md rounded-lg border border-gray-700 shadow-xl z-10">
+                                <button onclick="deleteKey({{ key.id }}, '{{ key.name }}')" class="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors rounded-lg">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                    <span>Delete Key</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-                        <div class="key-preview mb-3">
-                            <strong>{{ key.key_prefix }}</strong>
-                            <button class="btn btn-sm btn-outline-secondary ms-2 copy-btn" 
-                                    onclick="copyToClipboard('{{ key.key_prefix }}')" 
-                                    title="Copy prefix">
-                                <i class="fas fa-copy"></i>
+                    <!-- Key Preview -->
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-400 mb-2">API Key Preview</label>
+                        <div class="flex items-center space-x-2 bg-gray-700/50 rounded-lg p-3 border border-gray-600">
+                            <code class="flex-1 text-sm text-gray-300 font-mono">{{ key.key_prefix }}</code>
+                            <button onclick="copyToClipboard('{{ key.key_prefix }}')" class="p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors" title="Copy prefix">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                </svg>
                             </button>
                         </div>
+                    </div>
 
-                        <div class="row mb-3">
-                            <div class="col-6">
-                                <small class="text-muted">Usage Count</small>
-                                <div class="fw-bold">{{ key.usage_count }}</div>
-                            </div>
-                            <div class="col-6">
-                                <small class="text-muted">Status</small>
-                                <div>
-                                    {% if key.is_active %}
-                                    <span class="badge bg-success usage-badge">Active</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary usage-badge">Inactive</span>
-                                    {% endif %}
-                                </div>
-                            </div>
+                    <!-- Status & Stats -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Status</label>
+                            {% if key.is_active %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                                <div class="w-1.5 h-1.5 rounded-full bg-green-400 mr-2"></div>
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                                <div class="w-1.5 h-1.5 rounded-full bg-gray-400 mr-2"></div>
+                                Inactive
+                            </span>
+                            {% endif %}
                         </div>
-
-                        <div class="row mb-3">
-                            <div class="col-12">
-                                <small class="text-muted">Last Used</small>
-                                <div class="small">
-                                    {% if key.last_used_at %}
-                                    {{ key.last_used_at.strftime('%Y-%m-%d %H:%M UTC') }}
-                                    {% else %}
-                                    Never
-                                    {% endif %}
-                                </div>
-                            </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-400 mb-1">Usage Count</label>
+                            <div class="text-lg font-bold text-white">{{ key.usage_count }}</div>
                         </div>
+                    </div>
 
-                        <div class="text-muted small">
-                            Created: {{ key.created_at.strftime('%Y-%m-%d') }}
+                    <!-- Last Used -->
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Last Used</label>
+                        <div class="text-sm text-gray-300">
+                            {% if key.last_used_at %}
+                            {{ key.last_used_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                            {% else %}
+                            <span class="text-gray-500">Never used</span>
+                            {% endif %}
                         </div>
+                    </div>
 
-                        <!-- Permissions -->
-                        <div class="mt-3">
-                            <small class="text-muted">Permissions</small>
-                            <div class="mt-1">
-                                {% if key.permissions.get('read', False) %}
-                                <span class="badge bg-primary me-1">Read</span>
-                                {% endif %}
-                                {% if key.permissions.get('write', False) %}
-                                <span class="badge bg-warning me-1">Write</span>
-                                {% endif %}
-                                {% if key.permissions.get('admin', False) %}
-                                <span class="badge bg-danger me-1">Admin</span>
-                                {% endif %}
-                            </div>
+                    <!-- Permissions -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-2">Permissions</label>
+                        <div class="flex flex-wrap gap-2">
+                            {% if key.permissions.get('read', False) %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                                Read
+                            </span>
+                            {% endif %}
+                            {% if key.permissions.get('write', False) %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                                Write
+                            </span>
+                            {% endif %}
+                            {% if key.permissions.get('admin', False) %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                                Admin
+                            </span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
-                {% endfor %}
             </div>
-            {% else %}
-            <!-- No API Keys -->
-            <div class="text-center py-5">
-                <i class="fas fa-key fa-3x text-muted mb-3"></i>
-                <h4 class="text-muted">No API Keys</h4>
-                <p class="text-muted mb-4">You haven't created any API keys yet. Create your first key to get started with programmatic access.</p>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createKeyModal">
-                    Create Your First API Key
-                </button>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-12">
+        <div class="text-center">
+            <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1721 9z"></path>
+                </svg>
             </div>
-            {% endif %}
+            <h3 class="text-xl font-semibold text-white mb-2">No API Keys Yet</h3>
+            <p class="text-gray-400 mb-6 max-w-md mx-auto">
+                You haven't created any API keys yet. Create your first key to get started with programmatic access to Buraaq Voice AI.
+            </p>
+            <button onclick="showCreateModal()" class="inline-flex items-center px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all duration-200 glow-hover">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Create Your First API Key
+            </button>
+        </div>
+    </div>
+    {% endif %}
 
-            <!-- API Usage Information -->
-            <div class="mt-5">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-info-circle me-2"></i>API Usage Information
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6>Authentication</h6>
-                                <p class="small text-muted">Include your API key in the Authorization header:</p>
-                                <div class="key-preview">
-                                    Authorization: Bearer YOUR_API_KEY
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <h6>Base URL</h6>
-                                <p class="small text-muted">All API requests should be made to:</p>
-                                <div class="key-preview">
-                                    {{ request.url_root }}api/v1/
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <a href="/docs" class="btn btn-outline-primary btn-sm" target="_blank">
-                                <i class="fas fa-book me-2"></i>View API Documentation
-                            </a>
-                        </div>
+    <!-- API Documentation Section -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+        <div class="px-6 py-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-b border-gray-700/50">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">API Usage Information</h3>
+                    <p class="text-sm text-gray-400">Learn how to use your API keys</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div>
+                    <h4 class="text-base font-semibold text-white mb-3">Authentication</h4>
+                    <p class="text-sm text-gray-400 mb-3">Include your API key in the Authorization header:</p>
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <code class="text-sm text-gray-300 font-mono">Authorization: Bearer YOUR_API_KEY</code>
+                        <button onclick="copyToClipboard('Authorization: Bearer YOUR_API_KEY')" class="ml-2 p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
+                <div>
+                    <h4 class="text-base font-semibold text-white mb-3">Base URL</h4>
+                    <p class="text-sm text-gray-400 mb-3">All API requests should be made to:</p>
+                    <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                        <code class="text-sm text-gray-300 font-mono">{{ request.url_root }}api/v1/</code>
+                        <button onclick="copyToClipboard('{{ request.url_root }}api/v1/')" class="ml-2 p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 pt-6 border-t border-gray-700/50">
+                <a href="/docs" target="_blank" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                    </svg>
+                    View Full API Documentation
+                </a>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Create API Key Modal -->
-<div class="modal fade" id="createKeyModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Create New API Key</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
+<div id="createModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex min-h-screen items-center justify-center px-4 py-6">
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onclick="hideCreateModal()"></div>
+        <div class="relative w-full max-w-md bg-gray-800/95 backdrop-blur-md rounded-xl border border-gray-700 shadow-2xl">
             <form method="post" action="/auth/api-keys/create">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="keyName" class="form-label">Key Name</label>
-                        <input type="text" class="form-control" id="keyName" name="name" required
-                               placeholder="e.g., Production App, Development, Mobile App">
-                        <div class="form-text">Choose a descriptive name to help you identify this key later.</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Permissions</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="permRead" name="permissions" value="read" checked>
-                            <label class="form-check-label" for="permRead">
-                                <strong>Read</strong> - View assistants, calls, transcripts, and recordings
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="permWrite" name="permissions" value="write" checked>
-                            <label class="form-check-label" for="permWrite">
-                                <strong>Write</strong> - Create and modify assistants, make calls
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="permAdmin" name="permissions" value="admin">
-                            <label class="form-check-label" for="permAdmin">
-                                <strong>Admin</strong> - Full access including user management
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="warning-box">
-                        <strong><i class="fas fa-exclamation-triangle me-2"></i>Important:</strong>
-                        You'll only be able to see the full API key once after creation. Make sure to copy and store it securely.
+                <div class="px-6 py-4 border-b border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-white">Create New API Key</h3>
+                        <button type="button" onclick="hideCreateModal()" class="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create API Key</button>
+                
+                <div class="p-6 space-y-6">
+                    <!-- Key Name -->
+                    <div>
+                        <label for="keyName" class="block text-sm font-medium text-gray-300 mb-2">Key Name</label>
+                        <input type="text" id="keyName" name="name" required
+                               class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                               placeholder="e.g., Production App, Development">
+                        <p class="mt-2 text-xs text-gray-400">Choose a descriptive name to help you identify this key later.</p>
+                    </div>
+
+                    <!-- Permissions -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-3">Permissions</label>
+                        <div class="space-y-3">
+                            <label class="flex items-start space-x-3 cursor-pointer group">
+                                <input type="checkbox" name="permissions" value="read" checked
+                                       class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 rounded bg-gray-700">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                        <span class="text-sm font-medium text-white">Read</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1">View assistants, calls, transcripts, and recordings</p>
+                                </div>
+                            </label>
+                            
+                            <label class="flex items-start space-x-3 cursor-pointer group">
+                                <input type="checkbox" name="permissions" value="write" checked
+                                       class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 rounded bg-gray-700">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                        </svg>
+                                        <span class="text-sm font-medium text-white">Write</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1">Create and modify assistants, make calls</p>
+                                </div>
+                            </label>
+                            
+                            <label class="flex items-start space-x-3 cursor-pointer group">
+                                <input type="checkbox" name="permissions" value="admin"
+                                       class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 rounded bg-gray-700">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                        </svg>
+                                        <span class="text-sm font-medium text-white">Admin</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1">Full access including user management</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Warning -->
+                    <div class="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg p-4">
+                        <div class="flex items-start space-x-3">
+                            <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                            <div>
+                                <p class="text-sm font-medium">Important Security Notice</p>
+                                <p class="text-xs mt-1">You'll only be able to see the full API key once after creation. Make sure to copy and store it securely.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-end space-x-3 px-6 py-4 border-t border-gray-700">
+                    <button type="button" onclick="hideCreateModal()" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all duration-200">
+                        Create API Key
+                    </button>
                 </div>
             </form>
         </div>
@@ -270,37 +475,62 @@
 
 <!-- New Key Display Modal -->
 {% if new_key %}
-<div class="modal fade show" id="newKeyModal" tabindex="-1" style="display: block;" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-check-circle me-2"></i>API Key Created Successfully
-                </h5>
+<div id="newKeyModal" class="fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex min-h-screen items-center justify-center px-4 py-6">
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm"></div>
+        <div class="relative w-full max-w-lg bg-gray-800/95 backdrop-blur-md rounded-xl border border-gray-700 shadow-2xl">
+            <div class="px-6 py-4 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-b border-gray-700 rounded-t-xl">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">API Key Created Successfully</h3>
+                        <p class="text-sm text-green-400">{{ new_key_name }}</p>
+                    </div>
+                </div>
             </div>
-            <div class="modal-body">
-                <div class="warning-box">
-                    <strong><i class="fas fa-exclamation-triangle me-2"></i>Save this key now!</strong>
-                    This is the only time you'll be able to see the full key. Copy it and store it securely.
+            
+            <div class="p-6 space-y-6">
+                <!-- Warning -->
+                <div class="bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg p-4">
+                    <div class="flex items-start space-x-3">
+                        <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <div>
+                            <p class="text-sm font-medium">Save this key now!</p>
+                            <p class="text-xs mt-1">This is the only time you'll be able to see the full key. Copy it and store it securely.</p>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Your new API key:</label>
-                    <div class="new-key-display">
-                        {{ new_key }}
+                <!-- API Key Display -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-3">Your new API key:</label>
+                    <div class="bg-green-500/10 border-2 border-green-500/30 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <code class="text-sm text-green-400 font-mono break-all">{{ new_key }}</code>
+                            <button onclick="copyToClipboard('{{ new_key }}')" class="ml-3 p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-lg transition-colors flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <button class="btn btn-success mt-2" onclick="copyToClipboard('{{ new_key }}')">
-                        <i class="fas fa-copy me-2"></i>Copy to Clipboard
+                    <button onclick="copyToClipboard('{{ new_key }}')" class="mt-3 w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                        Copy to Clipboard
                     </button>
                 </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Key Name:</label>
-                    <div>{{ new_key_name }}</div>
-                </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary" onclick="closeNewKeyModal()">
+            
+            <div class="flex justify-end px-6 py-4 border-t border-gray-700">
+                <button onclick="closeNewKeyModal()" class="px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all duration-200">
                     I've Saved the Key
                 </button>
             </div>
@@ -310,25 +540,47 @@
 {% endif %}
 
 <!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteKeyModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title text-danger">
-                    <i class="fas fa-exclamation-triangle me-2"></i>Delete API Key
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete the API key "<strong id="deleteKeyName"></strong>"?</p>
-                <div class="alert alert-warning">
-                    <strong>Warning:</strong> This action cannot be undone. Any applications using this key will lose access immediately.
+<div id="deleteModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="flex min-h-screen items-center justify-center px-4 py-6">
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onclick="hideDeleteModal()"></div>
+        <div class="relative w-full max-w-md bg-gray-800/95 backdrop-blur-md rounded-xl border border-gray-700 shadow-2xl">
+            <div class="px-6 py-4 border-b border-gray-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Delete API Key</h3>
+                        <p class="text-sm text-gray-400">This action cannot be undone</p>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            
+            <div class="p-6">
+                <p class="text-gray-300 mb-4">Are you sure you want to delete the API key "<strong id="deleteKeyName" class="text-white"></strong>"?</p>
+                <div class="bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg p-4">
+                    <div class="flex items-start space-x-3">
+                        <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <div>
+                            <p class="text-sm font-medium">Warning</p>
+                            <p class="text-xs mt-1">Any applications using this key will lose access immediately.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-end space-x-3 px-6 py-4 border-t border-gray-700">
+                <button onclick="hideDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
+                    Cancel
+                </button>
                 <form method="post" style="display: inline;" id="deleteKeyForm">
-                    <button type="submit" class="btn btn-danger">Delete Key</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">
+                        Delete Key
+                    </button>
                 </form>
             </div>
         </div>
@@ -336,71 +588,131 @@
 </div>
 
 <script>
+// Utility Functions
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(function() {
-        // Show success message
-        const toast = document.createElement('div');
-        toast.className = 'toast align-items-center text-white bg-success border-0';
-        toast.style.position = 'fixed';
-        toast.style.top = '20px';
-        toast.style.right = '20px';
-        toast.style.zIndex = '1000';
-        toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="fas fa-check me-2"></i>Copied to clipboard!
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
-            </div>
-        `;
-        document.body.appendChild(toast);
-        
-        // Auto-remove after 3 seconds
+        showToast('Copied to clipboard!', 'success');
+    }).catch(function(err) {
+        console.error('Could not copy text: ', err);
+        showToast('Failed to copy to clipboard', 'error');
+    });
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-white font-medium transition-all duration-300 transform translate-x-full`;
+    
+    if (type === 'success') {
+        toast.classList.add('bg-green-600');
+    } else if (type === 'error') {
+        toast.classList.add('bg-red-600');
+    }
+    
+    toast.innerHTML = `
+        <div class="flex items-center space-x-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+        toast.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
         setTimeout(() => {
             if (toast.parentElement) {
                 toast.remove();
             }
-        }, 3000);
-    }).catch(function(err) {
-        console.error('Could not copy text: ', err);
-        alert('Failed to copy to clipboard');
-    });
+        }, 300);
+    }, 3000);
+}
+
+// Modal Functions
+function showCreateModal() {
+    document.getElementById('createModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function hideCreateModal() {
+    document.getElementById('createModal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+}
+
+function hideDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
 }
 
 function deleteKey(keyId, keyName) {
     document.getElementById('deleteKeyName').textContent = keyName;
     document.getElementById('deleteKeyForm').action = `/auth/api-keys/${keyId}/delete`;
-    
-    const deleteModal = new bootstrap.Modal(document.getElementById('deleteKeyModal'));
-    deleteModal.show();
+    document.getElementById('deleteModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
 }
 
 function closeNewKeyModal() {
     const modal = document.getElementById('newKeyModal');
     if (modal) {
-        modal.style.display = 'none';
-        modal.classList.remove('show');
-        
-        // Remove backdrop
-        const backdrop = document.querySelector('.modal-backdrop');
-        if (backdrop) {
-            backdrop.remove();
-        }
-        
-        // Re-enable body scroll
-        document.body.classList.remove('modal-open');
-        document.body.style.paddingRight = '';
+        modal.remove();
+        document.body.style.overflow = 'auto';
         
         // Reload page to clear the new_key from URL
         window.location.href = '/auth/api-keys';
     }
 }
 
+// Dropdown Functions
+function toggleDropdown(keyId) {
+    const dropdown = document.getElementById(`dropdown-${keyId}`);
+    const allDropdowns = document.querySelectorAll('[id^="dropdown-"]');
+    
+    // Close all other dropdowns
+    allDropdowns.forEach(d => {
+        if (d.id !== `dropdown-${keyId}`) {
+            d.classList.add('hidden');
+        }
+    });
+    
+    // Toggle current dropdown
+    dropdown.classList.toggle('hidden');
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(event) {
+    if (!event.target.closest('[onclick^="toggleDropdown"]')) {
+        const dropdowns = document.querySelectorAll('[id^="dropdown-"]');
+        dropdowns.forEach(dropdown => {
+            dropdown.classList.add('hidden');
+        });
+    }
+});
+
+// Escape key handling
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        hideCreateModal();
+        hideDeleteModal();
+        
+        // Close all dropdowns
+        const dropdowns = document.querySelectorAll('[id^="dropdown-"]');
+        dropdowns.forEach(dropdown => {
+            dropdown.classList.add('hidden');
+        });
+    }
+});
+
 // Auto-show new key modal if new key exists
 {% if new_key %}
 document.addEventListener('DOMContentLoaded', function() {
-    // Disable body scroll for backdrop
-    document.body.classList.add('modal-open');
+    document.body.style.overflow = 'hidden';
 });
 {% endif %}
 </script>
