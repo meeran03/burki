@@ -1,0 +1,26 @@
+version: 1.0
+runtime: python3
+build:
+  commands:
+    build:
+      - echo "Installing Python dependencies"
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+  env:
+    - name: NODE_ENV
+      value: production
+    - name: PYTHONPATH
+      value: .
+run:
+  runtime-version: 3.11
+  command: gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000 --timeout 120
+  network:
+    port: 8000
+    env: PORT
+  env:
+    - name: PORT
+      value: "8000"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: ENVIRONMENT
+      value: production 

@@ -54,6 +54,12 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+# Health check endpoint for production monitoring
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for load balancers and monitoring."""
+    return {"status": "healthy", "service": "buraaq-voice-ai"}
+
 # Include routers
 app.include_router(root_router)
 app.include_router(web_router)

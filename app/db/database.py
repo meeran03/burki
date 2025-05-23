@@ -7,18 +7,28 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 logger = logging.getLogger(__name__)
 
-# Get database URL from environment variable
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://meeran:toor@localhost:5432/volt")
+# Get database configuration from environment variables
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_USER = os.getenv("DB_USER", "meeran")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "toor")
+DB_NAME = os.getenv("DB_NAME", "volt")
+
+# Construct database URL from individual components
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Convert the PostgreSQL URL to async format for asyncpg
-DATABASE_URL_ASYNC = (
-    DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-    if DATABASE_URL.startswith("postgresql://")
-    else None
-)
+DATABASE_URL_ASYNC = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
-# Create SQLAlchemy engine
-engine = create_engine(DATABASE_URL, pool_recycle=3600, pool_pre_ping=True)
+# Create SQLAlchemy engine with connection pooling that doesn't fail on import
+engine = create_engine(
+    DATABASE_URL, 
+    pool_recycle=3600, 
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    connect_args={"connect_timeout": 10}
+)
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -105,6 +115,8 @@ async def get_async_db():
         finally:
             await session.close()
 
+
+def init_db():
     """
     Initialize the database.
     Creates all tables if they don't exist.
