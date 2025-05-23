@@ -71,6 +71,7 @@ class AssistantBase(BaseModel):
     
     # Call control settings
     end_call_message: Optional[str] = None
+    transfer_call_message: Optional[str] = None
     max_idle_messages: Optional[int] = None
     idle_timeout: Optional[int] = None
     
@@ -113,6 +114,7 @@ class AssistantUpdate(BaseModel):
     
     # Call control settings
     end_call_message: Optional[str] = None
+    transfer_call_message: Optional[str] = None
     max_idle_messages: Optional[int] = None
     idle_timeout: Optional[int] = None
     

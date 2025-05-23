@@ -31,6 +31,7 @@ class LLMService:
         from_number: Optional[str] = None,
         custom_llm_url: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        assistant: Optional[Any] = None,
     ):
         """
         Initialize the LLM service.
@@ -41,11 +42,13 @@ class LLMService:
             from_number: The caller's phone number
             custom_llm_url: Optional URL for custom LLM endpoint. If provided, this will be used instead of OpenAI.
             system_prompt: Optional custom system prompt to use for this call
+            assistant: Optional assistant object containing custom messages and settings
         """
         self.call_sid = call_sid
         self.to_number = to_number
         self.from_number = from_number
         self.custom_llm_url = custom_llm_url
+        self.assistant = assistant
 
         # Initialize OpenAI client only if custom_llm_url is not provided
         if not custom_llm_url:
@@ -160,7 +163,19 @@ class LLMService:
 
                             if current_tool_call["name"] == "endCall":
                                 logger.info("Processing endCall tool call")
-                                # Send special metadata to indicate call should end
+                                # Get custom end call message from assistant
+                                end_call_message = "Thank you for calling. Goodbye!"
+                                if self.assistant and self.assistant.end_call_message:
+                                    end_call_message = self.assistant.end_call_message
+                                
+                                # First send the custom message to be spoken
+                                await response_callback(
+                                    end_call_message,
+                                    False,  # Not final yet, speak the message first
+                                    {"call_sid": self.call_sid, "speak_before_action": True}
+                                )
+                                
+                                # Then send the action to end the call
                                 await response_callback(
                                     "",
                                     True,
@@ -171,7 +186,19 @@ class LLMService:
                                 logger.info("Processing transferCall tool call")
                                 destination = args.get("destination")
                                 if destination:
-                                    # Send special metadata for call transfer
+                                    # Get custom transfer call message from assistant
+                                    transfer_call_message = "Please hold while I transfer your call."
+                                    if self.assistant and self.assistant.transfer_call_message:
+                                        transfer_call_message = self.assistant.transfer_call_message
+                                    
+                                    # First send the custom message to be spoken
+                                    await response_callback(
+                                        transfer_call_message,
+                                        False,  # Not final yet, speak the message first
+                                        {"call_sid": self.call_sid, "speak_before_action": True}
+                                    )
+                                    
+                                    # Then send the action to transfer the call
                                     await response_callback(
                                         "",
                                         True,

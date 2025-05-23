@@ -293,6 +293,7 @@ async def create_assistant(
     interruption_cooldown: Optional[float] = Form(None),
     # Call control settings
     end_call_message: Optional[str] = Form(None),
+    transfer_call_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
 ):
@@ -410,6 +411,7 @@ async def create_assistant(
         ),
         # Call control settings
         "end_call_message": end_call_message,
+        "transfer_call_message": transfer_call_message,
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout,
     }
@@ -525,6 +527,7 @@ async def update_assistant(
     interruption_cooldown: Optional[float] = Form(None),
     # Call control settings
     end_call_message: Optional[str] = Form(None),
+    transfer_call_message: Optional[str] = Form(None),
     max_idle_messages: Optional[int] = Form(None),
     idle_timeout: Optional[int] = Form(None),
 ):
@@ -647,6 +650,7 @@ async def update_assistant(
         ),
         # Call control settings
         "end_call_message": empty_to_none(end_call_message),
+        "transfer_call_message": empty_to_none(transfer_call_message),
         "max_idle_messages": max_idle_messages,
         "idle_timeout": idle_timeout,
     }

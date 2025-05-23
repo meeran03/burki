@@ -157,6 +157,7 @@ class CallHandler:
             from_number=from_number,
             custom_llm_url=custom_llm_url,
             system_prompt=system_prompt,
+            assistant=assistant,
         )
 
         # Get Deepgram configuration from assistant
@@ -458,6 +459,18 @@ class CallHandler:
         """
         try:
             if call_sid not in self.active_calls:
+                return
+
+            # Check if this is a message that should be spoken before an action
+            if metadata.get("speak_before_action"):
+                if content:
+                    logger.info(f"Speaking message before action for {call_sid}: {content}")
+                    await self.active_calls[call_sid].tts_service.process_text(
+                        text=content,
+                        force_flush=True,  # Force flush to ensure message is spoken
+                    )
+                    # Wait a bit for the message to be spoken before continuing
+                    await asyncio.sleep(1.0)
                 return
 
             # Check for special actions

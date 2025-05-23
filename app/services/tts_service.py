@@ -234,17 +234,21 @@ class TTSService:
                     data = json.loads(message)
 
                     # Extract audio data
-                    if "audio" in data:
-                        # Decode the base64-encoded audio data
-                        audio_data = base64.b64decode(data["audio"])
-
-                        # Call the audio callback if available
-                        if self.audio_callback:
-                            await self.audio_callback(
-                                audio_data,
-                                False,
-                                {"call_sid": self.call_sid},  # Not final
-                            )
+                    if "audio" in data and data["audio"] is not None:
+                        try:
+                            # Decode the base64-encoded audio data
+                            audio_data = base64.b64decode(data["audio"])
+                            
+                            # Only process if we actually have audio data
+                            if audio_data and self.audio_callback:
+                                await self.audio_callback(
+                                    audio_data,
+                                    False,
+                                    {"call_sid": self.call_sid},  # Not final
+                                )
+                        except (ValueError, TypeError) as decode_error:
+                            logger.warning(f"Failed to decode audio data for call {self.call_sid}: {decode_error}")
+                            continue
 
                     # Handle the end of the stream
                     if data.get("isFinal", False) and self.audio_callback:

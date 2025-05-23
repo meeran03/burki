@@ -585,6 +585,16 @@
                     </div>
 
                                     <div class="col-span-6 sm:col-span-3">
+                        <label for="transfer_call_message" class="block text-sm font-medium text-gray-700">Transfer Call Message</label>
+                                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <input type="text" name="transfer_call_message" id="transfer_call_message"
+                                value="{{ assistant.transfer_call_message if assistant else 'Please hold while I transfer your call.' }}"
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                placeholder="Please hold while I transfer your call.">
+                        </div>
+                    </div>
+
+                                    <div class="col-span-6 sm:col-span-3">
                         <label for="max_idle_messages" class="block text-sm font-medium text-gray-700">Max Idle Messages</label>
                                         <div class="mt-1 relative rounded-md shadow-sm">
                             <input type="number" name="max_idle_messages" id="max_idle_messages"
