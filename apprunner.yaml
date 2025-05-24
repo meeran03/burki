@@ -14,7 +14,7 @@ run:
   runtime-version: "3.11.10"
   pre-run:
     - pip3 install --no-cache-dir -r requirements.txt
-  command: python3 -m gunicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
+  command: python3 -m gunicorn app.main:app --bind 0.0.0.0:8000 --log-level info
   network:
     port: 8000
   env:
@@ -74,7 +74,7 @@ run:
 
     # Security Keys
     - name: SECRET_KEY
-      value: "sadlsasdadsadsadsadsadsadasd"
+      value: "sadlsasdadsadsadsadsadasd"
     - name: JWT_SECRET_KEY
       value: "ysadksajdskaldjsakl12321321312"
 
