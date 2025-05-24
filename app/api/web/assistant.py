@@ -664,7 +664,11 @@ async def create_assistant(
 
     # Create the assistant
     try:
-        new_assistant = await AssistantService.create_assistant(assistant_data)
+        new_assistant = await AssistantService.create_assistant(
+            assistant_data, 
+            current_user.id, 
+            current_user.organization_id
+        )
         await assistant_manager.load_assistants()
         return RedirectResponse(url=f"/assistants/{new_assistant.id}", status_code=302)
     except Exception as e:
