@@ -101,3 +101,5 @@ run:
       value: "100"
     - name: KEEP_ALIVE
       value: "2"
+    - name: WEBHOOK_BASE_URL
+      value: "https://dweqaag6rm.us-east-2.awsapprunner.com"
