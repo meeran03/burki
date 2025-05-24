@@ -69,22 +69,11 @@ class CallHandler:
     and conversation state.
     """
 
-    def __init__(
-        self,
-        system_prompt: Optional[str] = None,
-        custom_llm_url: Optional[str] = None,
-    ):
+    def __init__(self):
         """
         Initialize the call handler.
-
-        Args:
-            system_prompt: Optional custom system prompt for the LLM
-            custom_llm_url: Optional URL for custom LLM endpoint
+        Configuration is now handled per-call through assistant objects.
         """
-        # Store configuration for call-specific service instances
-        self.system_prompt = system_prompt
-        self.custom_llm_url = custom_llm_url
-
         # Track active calls
         self.active_calls: Dict[str, CallState] = {}
 
@@ -154,27 +143,12 @@ class CallHandler:
                 "Are you still there? I'm here to help if you need anything."
             )
 
-        # Get LLM configuration from assistant
-        custom_llm_url = None
-        system_prompt = None
-        llm_settings = {}
-
-        if assistant:
-            # Use custom LLM URL from assistant if available
-            custom_llm_url = assistant.custom_llm_url or self.custom_llm_url
-
-            # Get LLM settings from assistant
-            if assistant.llm_settings:
-                llm_settings = assistant.llm_settings
-                system_prompt = llm_settings.get("system_prompt", self.system_prompt)
-
         # Create a dedicated LLM service instance for this call
+        # The new multi-provider LLMService handles configuration through the assistant object
         self.active_calls[call_sid].llm_service = LLMService(
             call_sid=call_sid,
             to_number=to_number,
             from_number=from_number,
-            custom_llm_url=custom_llm_url,
-            system_prompt=system_prompt,
             assistant=assistant,
         )
 
@@ -195,9 +169,7 @@ class CallHandler:
             language=stt_settings.get("language", "en-US"),
             punctuate=stt_settings.get("punctuate", True),
             interim_results=stt_settings.get("interim_results", True),
-            endpointing=stt_settings.get("endpointing", {}).get(
-                "silence_threshold", 100
-            ),
+            endpointing=stt_settings.get("endpointing", {}).get("silence_threshold", 100),
             utterance_end_ms=stt_settings.get("utterance_end_ms", 1000),
             smart_format=stt_settings.get("smart_format", True),
             keywords=stt_settings.get("keywords", []),
