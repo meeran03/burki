@@ -448,8 +448,7 @@ async def create_assistant(
         "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
-        "organization_id": current_user.organization_id,
-        "user_id": current_user.id,
+        # Note: organization_id and user_id are passed as separate parameters to create_assistant
         # LLM Provider Configuration
         "llm_provider": llm_provider,
         "llm_provider_api_key": empty_to_none(llm_provider_api_key),
