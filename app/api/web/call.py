@@ -393,7 +393,11 @@ async def list_calls(
     success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
 
     # Get available assistants for filter dropdown
-    assistants = await AssistantService.get_assistants(active_only=False)
+    organization_id = request.session.get("organization_id")
+    if organization_id:
+        assistants = await AssistantService.get_assistants(organization_id=organization_id, active_only=False)
+    else:
+        assistants = []
 
     return templates.TemplateResponse(
         "calls/index.html",
@@ -452,6 +456,9 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
         .all()
     )
 
+    # Calculate dynamic metrics from actual data
+    metrics = calculate_call_metrics(call, transcripts)
+
     # Group transcripts by speaker for conversation view
     conversation = []
     current_speaker = None
@@ -480,8 +487,88 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
             recordings=recordings,
             transcripts=transcripts,
             conversation=conversation,
+            metrics=metrics,
         ),
     )
+
+
+def calculate_call_metrics(call, transcripts):
+    """Calculate dynamic metrics from call and transcript data."""
+    if not transcripts:
+        return {
+            "avg_response_time": 0,
+            "fastest_response_time": 0,
+            "response_consistency": 0,
+            "conversation_flow_score": 0,
+            "engagement_score": 0,
+            "quality_score": 0,
+            "user_percentage": 50,
+            "ai_percentage": 50,
+            "user_turns": 0,
+            "ai_turns": 0,
+        }
+
+    # Separate transcripts by speaker
+    user_transcripts = [t for t in transcripts if t.speaker == 'user']
+    ai_transcripts = [t for t in transcripts if t.speaker == 'assistant']
+    
+    # Calculate response times
+    response_times = []
+    if user_transcripts and ai_transcripts:
+        for i in range(min(len(user_transcripts) - 1, len(ai_transcripts))):
+            if (user_transcripts[i].segment_end and 
+                i < len(ai_transcripts) and 
+                ai_transcripts[i].segment_start):
+                response_time = ai_transcripts[i].segment_start - user_transcripts[i].segment_end
+                if response_time > 0:
+                    response_times.append(response_time)
+    
+    # Calculate average and fastest response times
+    avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+    fastest_response_time = min(response_times) if response_times else 0
+    
+    # Calculate response consistency (percentage of responses within 2s of average)
+    if response_times:
+        consistent_responses = sum(1 for rt in response_times if abs(rt - avg_response_time) <= 2.0)
+        response_consistency = (consistent_responses / len(response_times)) * 100
+    else:
+        response_consistency = 0
+    
+    # Calculate speaking time distribution
+    user_time = len(user_transcripts) * 3  # Approximate 3 seconds per segment
+    ai_time = len(ai_transcripts) * 3
+    total_time = user_time + ai_time
+    
+    if total_time > 0:
+        user_percentage = round((user_time / total_time) * 100)
+        ai_percentage = round((ai_time / total_time) * 100)
+    else:
+        user_percentage = 50
+        ai_percentage = 50
+    
+    # Calculate quality score from confidence levels
+    confidences = [t.confidence for t in transcripts if t.confidence is not None]
+    quality_score = round(sum(confidences) / len(confidences) * 100) if confidences else 0
+    
+    # Calculate conversation flow score (based on turn-taking pattern)
+    conversation_flow_score = min(95, max(50, 100 - abs(len(user_transcripts) - len(ai_transcripts)) * 5))
+    
+    # Calculate engagement score (based on transcript length and frequency)
+    avg_transcript_length = sum(len(t.content) for t in transcripts) / len(transcripts) if transcripts else 0
+    engagement_score = min(100, max(30, (avg_transcript_length / 50) * 100))
+    
+    return {
+        "avg_response_time": round(avg_response_time, 2),
+        "fastest_response_time": round(fastest_response_time, 2),
+        "response_consistency": round(response_consistency),
+        "conversation_flow_score": round(conversation_flow_score),
+        "engagement_score": round(engagement_score),
+        "quality_score": quality_score,
+        "user_percentage": user_percentage,
+        "ai_percentage": ai_percentage,
+        "user_turns": len(user_transcripts),
+        "ai_turns": len(ai_transcripts),
+    }
 
 
 @router.get("/calls/export", response_class=Response)

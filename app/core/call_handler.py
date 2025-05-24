@@ -330,6 +330,10 @@ class CallHandler:
             
             # Determine protocol based on host
             protocol = "https" if "ngrok" in host or "herokuapp" in host else "http"
+            if "https" in host:
+                protocol = "https"
+            else:
+                protocol = "http"
             recording_callback_url = f"{protocol}://{host}/recording-status"
 
             # Start recording via Twilio API
