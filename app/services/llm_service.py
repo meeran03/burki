@@ -350,12 +350,17 @@ class CustomLLMProvider(BaseLLMProvider):
     ) -> None:
         """Process transcript using custom LLM endpoint."""
         try:
+            # Extract call metadata from settings
+            to_number = settings.get("to_number", "")
+            from_number = settings.get("from_number", "")
+            call_sid = settings.get("call_sid", "")
+            
             payload = {
                 "messages": messages,
-                "phoneNumber": {"number": ""},
+                "phoneNumber": {"number": to_number or ""},
                 "call": {
-                    "phoneCallProviderId": "",
-                    "customer": {"number": ""},
+                    "phoneCallProviderId": call_sid or "",
+                    "customer": {"number": from_number or ""},
                 },
             }
 
@@ -528,15 +533,24 @@ class LLMService:
             if self.assistant:
                 llm_settings = getattr(self.assistant, 'llm_settings', {})
 
+            # Add call metadata to settings for custom LLM providers that need it
+            enhanced_settings = llm_settings.copy()
+            enhanced_settings.update({
+                "call_sid": self.call_sid,
+                "to_number": self.to_number,
+                "from_number": self.from_number,
+                "assistant": self.assistant,
+            })
+
             # Add call metadata to response callback
             enhanced_callback = self._create_enhanced_callback(response_callback)
 
             # Process using the configured provider
             await self.provider.process_transcript(
                 self.conversation_history,
-                llm_settings,
+                enhanced_settings,
                 enhanced_callback
-                    )
+            )
 
         except Exception as e:
             logger.error(
