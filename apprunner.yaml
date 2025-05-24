@@ -34,7 +34,7 @@ run:
 
     # Database Configuration
     - name: DB_HOST
-      value: "buraaqdb.cjgswuawssqe.us-east-2.rds.amazonaws.com"
+      value: "buraaq.cjgswuawssqe.us-east-2.rds.amazonaws.com"
     - name: DB_PORT
       value: "5432"
     - name: DB_USER
