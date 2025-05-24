@@ -1,5 +1,5 @@
 version: 1.0
-runtime: python3
+runtime: python311
 build:
   commands:
     build:
@@ -15,7 +15,7 @@ build:
     - name: APP_ENV
       value: "production"
 run:
-  runtime-version: "3.11"
+  runtime-version: "3.11.12"
   command: python -m gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --log-level info
   network:
     port: 8000
