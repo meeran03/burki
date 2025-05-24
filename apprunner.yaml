@@ -5,14 +5,18 @@ build:
     build:
       - pip3 install --upgrade pip
       - pip3 install -r requirements.txt
+      - python3 -c "import fastapi; print(f'Build verification: FastAPI {fastapi.__version__} installed successfully')"
   env:
     - name: PYTHONUNBUFFERED
       value: "1"
     - name: APP_ENV
       value: "production"
+    - name: PYTHONPATH
+      value: "/app"
 run:
   runtime-version: "3.11.10"
-  command: python3 app/main.py
+  command: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --keep-alive 2 --log-level info --access-logfile - --error-logfile -
+  # Alternative command if the above doesn't work: ./app_runner_start.sh
   network:
     port: 8000
   env:
@@ -25,6 +29,10 @@ run:
       value: "false"
     - name: SERVER_TYPE
       value: "gunicorn"
+    - name: PYTHONPATH
+      value: "/app"
+    - name: PYTHONUNBUFFERED
+      value: "1"
     
     # Database Configuration
     - name: DB_HOST
@@ -68,7 +76,7 @@ run:
     
     # Security Keys
     - name: SECRET_KEY
-      value: "sadlsasdadsadsadsadsadsadsadsadasd"
+      value: "sadlsasdadsadsadsadsadsadasd"
     - name: JWT_SECRET_KEY
       value: "ysadksajdskaldjsakl12321321312"
     
