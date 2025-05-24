@@ -37,10 +37,8 @@ Keep responses concise, clear, and focused on resolving customer needs."""
 # Get custom LLM URL from environment variable if available
 CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "http://localhost:8001/ai/chat/completions")
 
-call_handler = CallHandler(
-    system_prompt=DEFAULT_SYSTEM_PROMPT,
-    custom_llm_url=CUSTOM_LLM_URL,
-)
+# Initialize call handler - configuration is now handled per-call through assistant objects
+call_handler = CallHandler()
 assistant_manager = AssistantManager()
 
 
