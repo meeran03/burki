@@ -451,9 +451,11 @@ async def create_assistant(
         # Note: organization_id and user_id are passed as separate parameters to create_assistant
         # LLM Provider Configuration
         "llm_provider": llm_provider,
-        "llm_provider_api_key": empty_to_none(llm_provider_api_key),
-        "llm_provider_model": empty_to_none(llm_provider_model),
-        "llm_provider_base_url": empty_to_none(llm_provider_base_url),
+        "llm_provider_config": {
+            "api_key": empty_to_none(llm_provider_api_key),
+            "model": empty_to_none(llm_provider_model),
+            "base_url": empty_to_none(llm_provider_base_url),
+        },
         # Service API Keys
         "deepgram_api_key": empty_to_none(deepgram_api_key),
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
