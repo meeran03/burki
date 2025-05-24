@@ -86,30 +86,7 @@
                         Response Time Intelligence
                     </h3>
                     <div class="text-right">
-                        {% set user_transcripts = transcripts|selectattr('speaker', 'equalto', 'user')|list %}
-                        {% set ai_transcripts = transcripts|selectattr('speaker', 'equalto', 'assistant')|list %}
-                        {% if user_transcripts and ai_transcripts %}
-                            <!-- Calculate average response time -->
-                            {% set total_response_time = 0 %}
-                            {% set response_count = 0 %}
-                            {% for i in range(user_transcripts|length - 1) %}
-                                {% if user_transcripts[i].segment_end and ai_transcripts[i].segment_start %}
-                                    {% set response_time = ai_transcripts[i].segment_start - user_transcripts[i].segment_end %}
-                                    {% if response_time > 0 %}
-                                        {% set total_response_time = total_response_time + response_time %}
-                                        {% set response_count = response_count + 1 %}
-                                    {% endif %}
-                                {% endif %}
-                            {% endfor %}
-                            {% if response_count > 0 %}
-                                {% set avg_response_time = (total_response_time / response_count)|round(2) %}
-                            {% else %}
-                                {% set avg_response_time = 1.2 %}
-                            {% endif %}
-                        {% else %}
-                            {% set avg_response_time = 1.2 %}
-                        {% endif %}
-                        <div class="text-2xl font-bold text-white">{{ avg_response_time }}s</div>
+                        <div class="text-2xl font-bold text-white">{{ metrics.avg_response_time }}s</div>
                         <div class="text-sm text-gray-400">Avg Response</div>
                     </div>
             </div>
@@ -119,7 +96,7 @@
                         <div class="flex items-center justify-between">
                     <div>
                                 <div class="text-sm text-blue-300 mb-1">Fastest Response</div>
-                                <div class="text-xl font-bold text-white">0.8s</div>
+                                <div class="text-xl font-bold text-white">{{ metrics.fastest_response_time }}s</div>
                     </div>
                             <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                                 <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,7 +110,7 @@
                         <div class="flex items-center justify-between">
                     <div>
                                 <div class="text-sm text-green-300 mb-1">Response Consistency</div>
-                                <div class="text-xl font-bold text-white">94%</div>
+                                <div class="text-xl font-bold text-white">{{ metrics.response_consistency }}%</div>
                     </div>
                             <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
                                 <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +124,7 @@
                         <div class="flex items-center justify-between">
                     <div>
                                 <div class="text-sm text-purple-300 mb-1">Processing Latency</div>
-                                <div class="text-xl font-bold text-white">{{ avg_response_time }}s</div>
+                                <div class="text-xl font-bold text-white">{{ metrics.avg_response_time }}s</div>
                             </div>
                             <div class="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
                                 <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,34 +151,22 @@
                     <!-- Speaking Time Distribution -->
                     <div class="space-y-4">
                         <h4 class="text-sm font-medium text-gray-300">Speaking Time Distribution</h4>
-                        {% set user_segments = transcripts|selectattr('speaker', 'equalto', 'user')|list %}
-                        {% set ai_segments = transcripts|selectattr('speaker', 'equalto', 'assistant')|list %}
-                        {% set user_time = user_segments|length * 3 %}
-                        {% set ai_time = ai_segments|length * 3 %}
-                        {% set total_time = user_time + ai_time %}
-                        {% if total_time > 0 %}
-                            {% set user_percentage = (user_time / total_time * 100)|round|int %}
-                            {% set ai_percentage = (ai_time / total_time * 100)|round|int %}
-                        {% else %}
-                            {% set user_percentage = 50 %}
-                            {% set ai_percentage = 50 %}
-                        {% endif %}
                         
                         <div class="space-y-3">
                             <div class="flex items-center justify-between">
                                 <span class="text-sm text-gray-400">Customer</span>
-                                <span class="text-sm text-white">{{ user_percentage }}%</span>
+                                <span class="text-sm text-white">{{ metrics.user_percentage }}%</span>
                             </div>
                             <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style="width: {{ user_percentage }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style="width: {{ metrics.user_percentage }}%"></div>
                         </div>
                         
                             <div class="flex items-center justify-between">
                                 <span class="text-sm text-gray-400">AI Assistant</span>
-                                <span class="text-sm text-white">{{ ai_percentage }}%</span>
+                                <span class="text-sm text-white">{{ metrics.ai_percentage }}%</span>
                             </div>
                             <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-1000" style="width: {{ ai_percentage }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-1000" style="width: {{ metrics.ai_percentage }}%"></div>
                             </div>
                         </div>
                         </div>
@@ -211,23 +176,17 @@
                         <h4 class="text-sm font-medium text-gray-300">Conversation Dynamics</h4>
                         <div class="grid grid-cols-2 gap-4">
                             <div class="text-center p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                                <div class="text-xl font-bold text-blue-400">{{ transcripts|selectattr('speaker', 'equalto', 'user')|list|length }}</div>
+                                <div class="text-xl font-bold text-blue-400">{{ metrics.user_turns }}</div>
                                 <div class="text-xs text-gray-400 mt-1">Customer Turns</div>
                             </div>
                             <div class="text-center p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                                <div class="text-xl font-bold text-green-400">{{ transcripts|selectattr('speaker', 'equalto', 'assistant')|list|length }}</div>
+                                <div class="text-xl font-bold text-green-400">{{ metrics.ai_turns }}</div>
                                 <div class="text-xs text-gray-400 mt-1">AI Responses</div>
                             </div>
                         </div>
                         
                         <div class="text-center p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                            {% set avg_confidence = transcripts|map(attribute='confidence')|select|list %}
-                            {% if avg_confidence %}
-                                {% set quality = (avg_confidence|sum / avg_confidence|length * 100)|round|int %}
-                                {% else %}
-                                {% set quality = 95 %}
-                                {% endif %}
-                            <div class="text-xl font-bold text-purple-400">{{ quality }}%</div>
+                            <div class="text-xl font-bold text-purple-400">{{ metrics.quality_score }}%</div>
                             <div class="text-xs text-gray-400 mt-1">Confidence Score</div>
                         </div>
                         </div>
@@ -455,30 +414,30 @@
                     <div>
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-gray-400 text-sm">Response Accuracy</span>
-                            <span class="text-white text-sm">{{ quality }}%</span>
+                            <span class="text-white text-sm">{{ metrics.quality_score }}%</span>
                                 </div>
                         <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all duration-1000" style="width: {{ quality }}%"></div>
+                            <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all duration-1000" style="width: {{ metrics.quality_score }}%"></div>
                         </div>
                         </div>
                         
                     <div>
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-gray-400 text-sm">Conversation Flow</span>
-                            <span class="text-white text-sm">92%</span>
+                            <span class="text-white text-sm">{{ metrics.conversation_flow_score }}%</span>
                         </div>
                         <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style="width: 92%"></div>
+                            <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style="width: {{ metrics.conversation_flow_score }}%"></div>
                         </div>
                             </div>
                     
                     <div>
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-gray-400 text-sm">Engagement Score</span>
-                            <span class="text-white text-sm">88%</span>
+                            <span class="text-white text-sm">{{ metrics.engagement_score }}%</span>
                         </div>
                         <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full transition-all duration-1000" style="width: 88%"></div>
+                            <div class="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full transition-all duration-1000" style="width: {{ metrics.engagement_score }}%"></div>
                         </div>
                     </div>
                 </div>
@@ -588,21 +547,15 @@
         <div class="mt-6 pt-4 border-t border-gray-700/50">
             <div class="grid grid-cols-3 gap-4 text-center">
                 <div>
-                    <div class="text-xl font-bold text-blue-400">{{ transcripts|selectattr('speaker', 'equalto', 'user')|list|length }}</div>
+                    <div class="text-xl font-bold text-blue-400">{{ metrics.user_turns }}</div>
                     <div class="text-xs text-gray-500">Customer</div>
                             </div>
                 <div>
-                    <div class="text-xl font-bold text-green-400">{{ transcripts|selectattr('speaker', 'equalto', 'assistant')|list|length }}</div>
+                    <div class="text-xl font-bold text-green-400">{{ metrics.ai_turns }}</div>
                     <div class="text-xs text-gray-500">Assistant</div>
                         </div>
                 <div>
-                    {% set avg_confidence = transcripts|map(attribute='confidence')|select|list %}
-                    {% if avg_confidence %}
-                        {% set quality = (avg_confidence|sum / avg_confidence|length * 100)|round|int %}
-                    {% else %}
-                        {% set quality = 95 %}
-                    {% endif %}
-                    <div class="text-xl font-bold text-purple-400">{{ quality }}%</div>
+                    <div class="text-xl font-bold text-purple-400">{{ metrics.quality_score }}%</div>
                     <div class="text-xs text-gray-500">Accuracy</div>
                 </div>
             </div>
@@ -629,8 +582,8 @@
     "call_sid": {{ call.call_sid|tojson }},
     "status": {{ call.status|tojson }},
     "duration": {{ call.duration|tojson if call.duration else 'null' }},
-    "response_time": {{ avg_response_time|tojson }},
-    "quality": {{ quality|tojson }},
+    "response_time": {{ metrics.avg_response_time|tojson }},
+    "quality": {{ metrics.quality_score|tojson }},
     "transcripts_count": {{ transcripts|length|tojson }},
     "assistant_name": {{ call.assistant.name|tojson if call.assistant else 'null' }},
     "customer_phone": {{ call.customer_phone_number|tojson }}
