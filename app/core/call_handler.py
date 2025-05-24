@@ -100,16 +100,19 @@ class CallHandler:
         # Create call record in database
         if assistant:
             try:
-                await CallService.create_call(
-                    assistant_id=assistant.id,
-                    call_sid=call_sid,
-                    to_phone_number=to_number or "",
-                    customer_phone_number=from_number or "",
-                    metadata=metadata or {},
+                # Run database operation as background task to reduce latency
+                asyncio.create_task(
+                    CallService.create_call(
+                        assistant_id=assistant.id,
+                        call_sid=call_sid,
+                        to_phone_number=to_number or "",
+                        customer_phone_number=from_number or "",
+                        metadata=metadata or {},
+                    )
                 )
-                logger.info(f"Created call record in database for call {call_sid}")
+                logger.info(f"Scheduled call record creation in database for call {call_sid}")
             except Exception as e:
-                logger.error(f"Error creating call record for {call_sid}: {e}", exc_info=True)
+                logger.error(f"Error scheduling call record creation for {call_sid}: {e}", exc_info=True)
 
         # Initialize call state
         self.active_calls[call_sid] = CallState(
@@ -219,63 +222,88 @@ class CallHandler:
         ) -> None:
             await self._handle_tts_audio(call_sid, audio_data, is_final, audio_metadata)
 
-        # Start TTS session with configured options
+        # Start TTS session with configured options - critical for first message
         await self.active_calls[call_sid].tts_service.start_session(
             audio_callback=audio_callback,
             metadata={"call_sid": call_sid},
         )
 
-        # Start Deepgram transcription
-        sample_rate = int(metadata.get("media_format", {}).get("rate", 8000))
-        channels = int(metadata.get("media_format", {}).get("channels", 1))
-
-        # Define transcription callback
-        async def transcription_callback(
-            transcript: str, is_final: bool, metadata: dict
-        ) -> None:
-            await self.handle_transcript(
-                call_sid=call_sid,
-                transcript=transcript,
-                is_final=is_final,
-                metadata=metadata,
+        # Get welcome message first to reduce latency
+        welcome_message = (
+            "Hello! I'm your AI assistant. How can I help you today?<flush/>"
+        )
+        if (
+            assistant
+            and assistant.llm_settings
+            and "welcome_message" in assistant.llm_settings
+        ):
+            welcome_message = (
+                assistant.llm_settings.get("welcome_message") + "<flush/>"
             )
 
-        # Start transcription with sample rate and channels from media format
-        success = await self.active_calls[
-            call_sid
-        ].deepgram_service.start_transcription(
-            transcript_callback=transcription_callback,
-            sample_rate=sample_rate,
-            channels=channels,
+        # Send welcome message immediately for faster response
+        await self.active_calls[call_sid].tts_service.process_text(
+            text=welcome_message,
+            force_flush=True
         )
 
-        if success:
-            logger.info(f"Started transcription for call: {call_sid}")
+        # Start non-critical services in background for better latency
+        asyncio.create_task(self._start_background_services(call_sid, metadata, assistant, websocket))
+
+        logger.info(f"Started handling call {call_sid} with optimized initialization")
+
+    async def _start_background_services(
+        self, 
+        call_sid: str, 
+        metadata: Dict[str, Any], 
+        assistant: Any, 
+        websocket: WebSocket
+    ) -> None:
+        """
+        Start non-critical services in background to improve first message latency.
+        
+        Args:
+            call_sid: The Twilio call SID
+            metadata: Call metadata
+            assistant: Assistant instance
+            websocket: WebSocket connection
+        """
+        try:
+            # Start Deepgram transcription
+            sample_rate = int(metadata.get("media_format", {}).get("rate", 8000))
+            channels = int(metadata.get("media_format", {}).get("channels", 1))
+
+            # Define transcription callback
+            async def transcription_callback(
+                transcript: str, is_final: bool, metadata: dict
+            ) -> None:
+                await self.handle_transcript(
+                    call_sid=call_sid,
+                    transcript=transcript,
+                    is_final=is_final,
+                    metadata=metadata,
+                )
+
+            # Start transcription with sample rate and channels from media format
+            success = await self.active_calls[
+                call_sid
+            ].deepgram_service.start_transcription(
+                transcript_callback=transcription_callback,
+                sample_rate=sample_rate,
+                channels=channels,
+            )
+
+            if success:
+                logger.info(f"Started transcription for call: {call_sid}")
+            else:
+                logger.error(f"Failed to start transcription for call: {call_sid}")
 
             # Start recording asynchronously (don't wait for it)
             asyncio.create_task(self._start_call_recording_async(call_sid, assistant, websocket))
 
-            # Get welcome message from assistant or use default
-            welcome_message = (
-                "Hello! I'm your AI assistant. How can I help you today?<flush/>"
-            )
-            if (
-                assistant
-                and assistant.llm_settings
-                and "welcome_message" in assistant.llm_settings
-            ):
-                welcome_message = (
-                    assistant.llm_settings.get("welcome_message") + "<flush/>"
-                )
-
-            # Send a welcome message via TTS
-            await self.active_calls[call_sid].tts_service.process_text(
-                text=welcome_message,
-                force_flush=True
-            )
-
             # Start idle timeout monitoring if configured
-            if (self.active_calls[call_sid].idle_timeout_seconds and 
+            if (call_sid in self.active_calls and 
+                self.active_calls[call_sid].idle_timeout_seconds and 
                 self.active_calls[call_sid].idle_timeout_seconds > 0):
                 self.active_calls[call_sid].idle_timeout_task = asyncio.create_task(
                     self._monitor_idle_timeout(call_sid)
@@ -305,10 +333,8 @@ class CallHandler:
                 except Exception as e:
                     logger.error(f"Error sending initial webhook for call {call_sid}: {e}")
 
-        else:
-            logger.error(f"Failed to start transcription for call: {call_sid}")
-
-        logger.info(f"Started handling call {call_sid}")
+        except Exception as e:
+            logger.error(f"Error starting background services for call {call_sid}: {e}", exc_info=True)
 
     async def _start_call_recording_async(self, call_sid: str, assistant: Any, websocket: WebSocket) -> None:
         """
@@ -328,12 +354,17 @@ class CallHandler:
             # Get host from WebSocket headers
             host = websocket.headers.get("host", "localhost:8000")
             
-            # Determine protocol based on host
-            protocol = "https" if "ngrok" in host or "herokuapp" in host else "http"
-            if "https" in host:
+            # Determine protocol based on host - fix for Railway
+            protocol = "http"  # default
+            
+            # Check for HTTPS indicators
+            if (websocket.headers.get("x-forwarded-proto") == "https" or 
+                "ngrok" in host or 
+                "herokuapp" in host or 
+                "railway.app" in host or
+                host.startswith("https")):
                 protocol = "https"
-            else:
-                protocol = "http"
+            
             recording_callback_url = f"{protocol}://{host}/recording-status"
 
             # Start recording via Twilio API
@@ -346,11 +377,13 @@ class CallHandler:
             )
 
             if recording_sid:
-                # Create recording record in database
-                await CallService.create_twilio_recording(
-                    call_sid=call_sid,
-                    recording_sid=recording_sid,
-                    status="recording",
+                # Create recording record in database as background task
+                asyncio.create_task(
+                    CallService.create_twilio_recording(
+                        call_sid=call_sid,
+                        recording_sid=recording_sid,
+                        status="recording",
+                    )
                 )
                 logger.info(f"Started Twilio recording {recording_sid} for call {call_sid}")
             else:
@@ -871,14 +904,17 @@ class CallHandler:
             try:
                 start_time = self.active_calls[call_sid].start_time
                 duration = int((datetime.now() - start_time).total_seconds())
-                await CallService.update_call_status(
-                    call_sid=call_sid,
-                    status="completed",
-                    duration=duration,
+                # Run database operation as background task
+                asyncio.create_task(
+                    CallService.update_call_status(
+                        call_sid=call_sid,
+                        status="completed",
+                        duration=duration,
+                    )
                 )
-                logger.info(f"Updated call {call_sid} status to completed in database")
+                logger.info(f"Scheduled call {call_sid} status update to completed in database")
             except Exception as e:
-                logger.error(f"Error updating call status for {call_sid}: {e}", exc_info=True)
+                logger.error(f"Error scheduling call status update for {call_sid}: {e}", exc_info=True)
 
             # Send end-of-call webhook if assistant and webhook URL are configured
             assistant = self.active_calls[call_sid].assistant
