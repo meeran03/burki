@@ -3,34 +3,18 @@ runtime: python311
 build:
   commands:
     build:
-      - echo "Build started on `date`"
-      - echo "Python version: $(python --version)"
-      - echo "Pip version: $(pip --version)"
-      - python -m pip install --upgrade pip
-      - echo "Installing Python dependencies..."
+      - pip install --upgrade pip
       - pip install -r requirements.txt
   env:
-    - name: PORT
-      value: "8000"
     - name: PYTHONUNBUFFERED
       value: "1"
     - name: APP_ENV
       value: "production"
 run:
   runtime-version: "3.11.10"
-  command: python -m gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --log-level info
+  command: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000
   network:
     port: 8000
   env:
     - name: PORT
-      value: "8000"
-    - name: APP_ENV
-      value: "production"
-    - name: WORKERS
-      value: "2"
-    - name: WORKER_CONNECTIONS
-      value: "1000"
-    - name: TIMEOUT
-      value: "300"
-    - name: LOG_LEVEL
-      value: "info" 
+      value: "8000" 
