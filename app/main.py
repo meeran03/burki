@@ -7,6 +7,10 @@ import logging
 import os
 import subprocess
 import sys
+
+# Add current directory to Python path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -178,17 +182,20 @@ if __name__ == "__main__":
     debug = os.getenv("DEBUG", "false").lower() == "true"
     
     logger.info(f"Starting server with {server_type}")
+    logger.info(f"Server will run on {host}:{port}")
     
     if server_type == "gunicorn":
+        logger.info("Starting application with Gunicorn...")
         run_with_gunicorn()
     else:
-        # Run with uvicorn
+        # Run with uvicorn (following the web examples pattern)
+        logger.info("Starting application with Uvicorn...")
         import uvicorn
         uvicorn.run(
-            "app.main:app",
+            app,  # Pass the app directly instead of string reference
             host=host,
             port=port,
             reload=debug,
-            workers=workers if not debug else 1,
-            log_level=log_level
+            log_level=log_level,
+            proxy_headers=True  # Following the blog example
         )
