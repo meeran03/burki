@@ -4,8 +4,10 @@ build:
   commands:
     build:
       - echo "Build started on `date`"
+      - echo "Python version: $(python --version)"
+      - echo "Pip version: $(pip --version)"
+      - python -m pip install --upgrade pip
       - echo "Installing Python dependencies..."
-      - pip install --upgrade pip
       - pip install -r requirements.txt
   env:
     - name: PORT
@@ -15,7 +17,7 @@ build:
     - name: APP_ENV
       value: "production"
 run:
-  runtime-version: "3.11.12"
+  runtime-version: "3.11.10"
   command: python -m gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --log-level info
   network:
     port: 8000
