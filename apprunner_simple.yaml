@@ -15,7 +15,6 @@ build:
 run:
   runtime-version: "3.11.10"
   command: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --keep-alive 2 --log-level info --access-logfile - --error-logfile -
-  # Alternative command if the above doesn't work: ./app_runner_start.sh
   network:
     port: 8000
   env:
@@ -45,7 +44,7 @@ run:
     - name: DB_NAME
       value: "buraaqdb"
     
-    # API Keys (Consider using AWS Secrets Manager for these in production)
+    # API Keys
     - name: TWILIO_ACCOUNT_SID
       value: "ACdb78e3b6f06d47ad5179e378638ff080"
     - name: TWILIO_AUTH_TOKEN
