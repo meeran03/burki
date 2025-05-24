@@ -402,7 +402,7 @@ async def create_assistant(
 ):
     """Create a new assistant."""
     # Check if an assistant with this phone number already exists
-    existing = await AssistantService.get_assistant_by_phone(phone_number)
+    existing = await AssistantService.get_assistant_by_phone(phone_number, current_user.organization_id)
     if existing:
         phone_numbers = TwilioService.get_available_phone_numbers()
         default_schema = json.dumps(
@@ -706,10 +706,10 @@ async def create_assistant(
 
 @router.get("/assistants/{assistant_id}", response_class=HTMLResponse)
 async def view_assistant(
-    request: Request, assistant_id: int, db: Session = Depends(get_db)
+    request: Request, assistant_id: int, current_user: User = Depends(require_auth), db: Session = Depends(get_db)
 ):
     """View an assistant."""
-    assistant = await AssistantService.get_assistant_by_id(assistant_id)
+    assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
@@ -729,9 +729,9 @@ async def view_assistant(
 
 
 @router.get("/assistants/{assistant_id}/edit", response_class=HTMLResponse)
-async def edit_assistant_form(request: Request, assistant_id: int):
+async def edit_assistant_form(request: Request, assistant_id: int, current_user: User = Depends(require_auth)):
     """Show the edit assistant form."""
-    assistant = await AssistantService.get_assistant_by_id(assistant_id)
+    assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
@@ -772,6 +772,7 @@ async def edit_assistant_form(request: Request, assistant_id: int):
 async def update_assistant(
     request: Request,
     assistant_id: int,
+    current_user: User = Depends(require_auth),
     name: str = Form(...),
     phone_number: str = Form(...),
     description: Optional[str] = Form(None),
@@ -827,13 +828,13 @@ async def update_assistant(
     structured_data_prompt: Optional[str] = Form(None),
 ):
     """Update an assistant."""
-    assistant = await AssistantService.get_assistant_by_id(assistant_id)
+    assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
     # Check if the phone number is being changed and if it already exists
     if phone_number != assistant.phone_number:
-        existing = await AssistantService.get_assistant_by_phone(phone_number)
+        existing = await AssistantService.get_assistant_by_phone(phone_number, current_user.organization_id)
         if existing:
             phone_numbers = TwilioService.get_available_phone_numbers()
             default_schema = json.dumps(
@@ -1086,7 +1087,7 @@ async def update_assistant(
     # Update the assistant
     try:
         updated_assistant = await AssistantService.update_assistant(
-            assistant_id, update_data
+            assistant_id, update_data, current_user.organization_id
         )
         await assistant_manager.load_assistants()
         return RedirectResponse(
@@ -1125,15 +1126,15 @@ async def update_assistant(
 
 
 @router.get("/assistants/{assistant_id}/delete")
-async def delete_assistant(request: Request, assistant_id: int):
+async def delete_assistant(request: Request, assistant_id: int, current_user: User = Depends(require_auth)):
     """Delete an assistant."""
     # Check if assistant exists
-    assistant = await AssistantService.get_assistant_by_id(assistant_id)
+    assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
     # Delete the assistant
-    await AssistantService.delete_assistant(assistant_id)
+    await AssistantService.delete_assistant(assistant_id, current_user.organization_id)
 
     # Reload the assistants cache
     await assistant_manager.load_assistants()
