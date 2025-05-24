@@ -11,7 +11,8 @@ build:
     - name: APP_ENV
       value: "production"
 run:
-  pre-run: pip3 install --no-cache-dir -r requirements.txt
+  pre-run:
+    - pip3 install --no-cache-dir -r requirements.txt
   runtime-version: "3.11.10"
   command: python3 -m gunicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
   network:
@@ -30,7 +31,7 @@ run:
       value: "/app"
     - name: PYTHONUNBUFFERED
       value: "1"
-    
+
     # Database Configuration
     - name: DB_HOST
       value: "buraaqdb.cjgswuawssqe.us-east-2.rds.amazonaws.com"
@@ -42,7 +43,7 @@ run:
       value: "Diwaar2025"
     - name: DB_NAME
       value: "buraaqdb"
-    
+
     # API Keys
     - name: TWILIO_ACCOUNT_SID
       value: "ACdb78e3b6f06d47ad5179e378638ff080"
@@ -58,7 +59,7 @@ run:
       value: "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"
     - name: ELEVENLABS_API_KEY
       value: "sk_74a2e5f933d9d4f238c37ac7a56d6c6acb7adb971ae51e80"
-    
+
     # LLM settings
     - name: OPENAI_MODEL
       value: "gpt-4-turbo"
@@ -66,17 +67,17 @@ run:
       value: "0.7"
     - name: OPENAI_MAX_TOKENS
       value: "500"
-    
+
     # TTS settings
     - name: ELEVENLABS_VOICE_ID
       value: "21m00Tcm4TlvDq8ikWAM"
-    
+
     # Security Keys
     - name: SECRET_KEY
       value: "sadlsasdadsadsadsadsadsadasd"
     - name: JWT_SECRET_KEY
       value: "ysadksajdskaldjsakl12321321312"
-    
+
     # Google OAuth Configuration
     - name: GOOGLE_CLIENT_ID
       value: "463735058792-jtgdnjoa38fkpj0iq0fef857j8eikeaa.apps.googleusercontent.com"
@@ -84,7 +85,7 @@ run:
       value: "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"
     - name: GOOGLE_REDIRECT_URI
       value: "http://localhost:8000/auth/google/callback"
-    
+
     # Server Performance Settings
     - name: WORKERS
       value: "2"
@@ -99,4 +100,4 @@ run:
     - name: MAX_REQUESTS_JITTER
       value: "100"
     - name: KEEP_ALIVE
-      value: "2" 
+      value: "2"
