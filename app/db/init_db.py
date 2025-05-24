@@ -30,8 +30,8 @@ load_dotenv()
 async def create_default_assistant(db: Session):
     """Create a default assistant if none exists."""
     try:
-        # Check if any assistants exist
-        assistants = await AssistantService.get_assistants(db)
+        # Check if any assistants exist - use get_active_assistants since get_assistants requires organization_id
+        assistants = await AssistantService.get_active_assistants()
         if assistants:
             logger.info(f"Found {len(assistants)} existing assistants, skipping default creation")
             return
@@ -74,8 +74,13 @@ async def create_default_assistant(db: Session):
             "is_active": True
         }
         
-        # Create the assistant
-        assistant = await AssistantService.create_assistant(db, default_assistant)
+        # Create the assistant with default user_id and organization_id (1 for admin/default)
+        # Note: This assumes there's a default organization and user with ID 1
+        assistant = await AssistantService.create_assistant(
+            default_assistant, 
+            user_id=1,  # Default user ID - adjust as needed
+            organization_id=1  # Default organization ID - adjust as needed
+        )
         logger.info(f"Created default assistant with ID: {assistant.id}")
         
     except Exception as e:
