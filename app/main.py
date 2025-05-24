@@ -107,14 +107,6 @@ call_manager = CallManager()
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    # Run database migrations first
-    try:
-        run_migrations()
-    except Exception as e:
-        logger.error("Failed to run database migrations: %s", e)
-        # You might want to decide if you want to continue startup without migrations
-        # For now, we'll continue but log the error
-    
     # Load active assistants
     try:
         await assistant_manager.load_assistants()
@@ -129,73 +121,3 @@ async def startup_event():
         logger.error("Error initializing billing service: %s", e, exc_info=True)
 
     logger.info("Application startup complete")
-
-
-# Server configuration from environment variables
-workers = int(os.getenv("WORKERS", "2"))
-worker_class = "uvicorn.workers.UvicornWorker"
-bind = f"{os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}"
-timeout = int(os.getenv("TIMEOUT", "300"))
-keepalive = int(os.getenv("KEEP_ALIVE", "2"))
-worker_connections = int(os.getenv("WORKER_CONNECTIONS", "1000"))
-max_requests = int(os.getenv("MAX_REQUESTS", "1000"))
-max_requests_jitter = int(os.getenv("MAX_REQUESTS_JITTER", "100"))
-log_level = os.getenv("LOG_LEVEL", "info")
-
-
-def run_with_gunicorn():
-    """Run the application using Gunicorn."""
-    import gunicorn.app.base
-
-    class StandaloneApplication(gunicorn.app.base.BaseApplication):
-        def __init__(self, app, options=None):
-            self.options = options or {}
-            self.application = app
-            super().__init__()
-
-        def load_config(self):
-            for key, value in self.options.items():
-                self.cfg.set(key.lower(), value)
-
-        def load(self):
-            return self.application
-
-    options = {
-        "bind": bind,
-        "workers": workers,
-        "worker_class": worker_class,
-        "timeout": timeout,
-        "keepalive": keepalive,
-        "worker_connections": worker_connections,
-        "max_requests": max_requests,
-        "max_requests_jitter": max_requests_jitter,
-        "loglevel": log_level,
-    }
-
-    StandaloneApplication(app, options).run()
-
-
-if __name__ == "__main__":
-    server_type = os.getenv("SERVER_TYPE", "uvicorn").lower()
-    port = int(os.getenv("PORT", "8000"))
-    host = os.getenv("HOST", "0.0.0.0")
-    debug = os.getenv("DEBUG", "false").lower() == "true"
-    
-    logger.info(f"Starting server with {server_type}")
-    logger.info(f"Server will run on {host}:{port}")
-    
-    if server_type == "gunicorn":
-        logger.info("Starting application with Gunicorn...")
-        run_with_gunicorn()
-    else:
-        # Run with uvicorn (following the web examples pattern)
-        logger.info("Starting application with Uvicorn...")
-        import uvicorn
-        uvicorn.run(
-            app,  # Pass the app directly instead of string reference
-            host=host,
-            port=port,
-            reload=debug,
-            log_level=log_level,
-            proxy_headers=True  # Following the blog example
-        )
