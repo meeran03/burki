@@ -1,0 +1,59 @@
+# Git files
+.git
+.gitignore
+
+# Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+.env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Documentation and markdown files (keep README.md)
+*.md
+!README.md
+docs/
+
+# Test files
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Development files
+.env
+*.log
+logs/
+
+# Recordings and temporary files
+recordings/
+temp/
+tmp/
+
+# Node modules if any
+node_modules/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/ 

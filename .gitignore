@@ -3,5 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+.env.production
 .venv
 recordings/*.wav
+
+# Deployment files with actual secrets
+apprunner-config.json
+
+# Logs
+*.log
+logs/
+
+# IDE files
+.vscode/
+.idea/
