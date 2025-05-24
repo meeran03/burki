@@ -3,8 +3,12 @@ runtime: python311
 build:
   commands:
     build:
+      - echo "Installing dependencies..."
       - pip3 install --upgrade pip
       - pip3 install -r requirements.txt
+      - echo "Dependencies installed successfully"
+      - echo "Verifying FastAPI installation..."
+      - python3 -c "import fastapi; import gunicorn; print('Dependencies verified')"
   env:
     - name: PYTHONUNBUFFERED
       value: "1"
@@ -14,7 +18,7 @@ build:
       value: "/app"
 run:
   runtime-version: "3.11.10"
-  command: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --keep-alive 2 --log-level info --access-logfile - --error-logfile -
+  command: python3 -m gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --keep-alive 2 --log-level info --access-logfile - --error-logfile -
   # Alternative command if the above doesn't work: ./app_runner_start.sh
   network:
     port: 8000
