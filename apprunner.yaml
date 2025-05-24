@@ -1,10 +1,12 @@
 version: 1.0
-runtime: docker
+runtime: python3
 build:
   commands:
     build:
       - echo "Build started on `date`"
-      - echo "Building Docker image..."
+      - echo "Installing Python dependencies..."
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
   env:
     - name: PORT
       value: "8000"
@@ -13,8 +15,8 @@ build:
     - name: APP_ENV
       value: "production"
 run:
-  runtime-version: latest
-  command: ./start.sh
+  runtime-version: "3.11"
+  command: python -m gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 300 --log-level info
   network:
     port: 8000
   env:

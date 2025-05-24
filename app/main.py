@@ -5,6 +5,8 @@ Entry Point for Application
 # pylint: disable=logging-format-interpolation,logging-fstring-interpolation,broad-exception-caught
 import logging
 import os
+import subprocess
+import sys
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +33,26 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def run_migrations():
+    """Run database migrations using Alembic."""
+    try:
+        logger.info("Running database migrations...")
+        result = subprocess.run([
+            sys.executable, "-m", "alembic", "upgrade", "head"
+        ], capture_output=True, text=True, check=True)
+        logger.info("Database migrations completed successfully")
+        if result.stdout:
+            logger.info("Migration output: %s", result.stdout)
+    except subprocess.CalledProcessError as e:
+        logger.error("Migration failed with return code %s", e.returncode)
+        logger.error("Error output: %s", e.stderr)
+        raise
+    except Exception as e:
+        logger.error("Error running migrations: %s", e)
+        raise
+
 
 app = FastAPI(
     title="Diwaar",
@@ -81,6 +103,14 @@ call_manager = CallManager()
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
+    # Run database migrations first
+    try:
+        run_migrations()
+    except Exception as e:
+        logger.error("Failed to run database migrations: %s", e)
+        # You might want to decide if you want to continue startup without migrations
+        # For now, we'll continue but log the error
+    
     # Load active assistants
     try:
         await assistant_manager.load_assistants()
