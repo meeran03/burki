@@ -15,12 +15,6 @@ run:
   command: python3 -m app.main
   network:
     port: 8000
-  health-check:
-    command: curl -f http://localhost:8000/health || exit 1
-    interval: 5
-    timeout: 5
-    retries: 2
-    start_period: 10
   env:
     # Server settings
     - name: PORT
