@@ -125,3 +125,70 @@ async def startup_event():
         logger.error("Error initializing billing service: %s", e, exc_info=True)
 
     logger.info("Application startup complete")
+
+
+# Server configuration from environment variables
+workers = int(os.getenv("WORKERS", "2"))
+worker_class = "uvicorn.workers.UvicornWorker"
+bind = f"{os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}"
+timeout = int(os.getenv("TIMEOUT", "300"))
+keepalive = int(os.getenv("KEEP_ALIVE", "2"))
+worker_connections = int(os.getenv("WORKER_CONNECTIONS", "1000"))
+max_requests = int(os.getenv("MAX_REQUESTS", "1000"))
+max_requests_jitter = int(os.getenv("MAX_REQUESTS_JITTER", "100"))
+log_level = os.getenv("LOG_LEVEL", "info")
+
+
+def run_with_gunicorn():
+    """Run the application using Gunicorn."""
+    import gunicorn.app.base
+
+    class StandaloneApplication(gunicorn.app.base.BaseApplication):
+        def __init__(self, app, options=None):
+            self.options = options or {}
+            self.application = app
+            super().__init__()
+
+        def load_config(self):
+            for key, value in self.options.items():
+                self.cfg.set(key.lower(), value)
+
+        def load(self):
+            return self.application
+
+    options = {
+        "bind": bind,
+        "workers": workers,
+        "worker_class": worker_class,
+        "timeout": timeout,
+        "keepalive": keepalive,
+        "worker_connections": worker_connections,
+        "max_requests": max_requests,
+        "max_requests_jitter": max_requests_jitter,
+        "loglevel": log_level,
+    }
+
+    StandaloneApplication(app, options).run()
+
+
+if __name__ == "__main__":
+    server_type = os.getenv("SERVER_TYPE", "uvicorn").lower()
+    port = int(os.getenv("PORT", "8000"))
+    host = os.getenv("HOST", "0.0.0.0")
+    debug = os.getenv("DEBUG", "false").lower() == "true"
+    
+    logger.info(f"Starting server with {server_type}")
+    
+    if server_type == "gunicorn":
+        run_with_gunicorn()
+    else:
+        # Run with uvicorn
+        import uvicorn
+        uvicorn.run(
+            "app.main:app",
+            host=host,
+            port=port,
+            reload=debug,
+            workers=workers if not debug else 1,
+            log_level=log_level
+        )

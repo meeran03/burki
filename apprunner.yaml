@@ -12,9 +12,15 @@ build:
       value: "production"
 run:
   runtime-version: "3.11.10"
-  command: python3 -m gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000
+  command: python3 -m app.main
   network:
     port: 8000
+  health-check:
+    command: curl -f http://localhost:8000/health || exit 1
+    interval: 5
+    timeout: 5
+    retries: 2
+    start_period: 10
   env:
     # Server settings
     - name: PORT
@@ -23,6 +29,8 @@ run:
       value: "0.0.0.0"
     - name: DEBUG
       value: "false"
+    - name: SERVER_TYPE
+      value: "gunicorn"
     
     # Database Configuration
     - name: DB_HOST
@@ -66,7 +74,7 @@ run:
     
     # Security Keys
     - name: SECRET_KEY
-      value: "sadlsasdadsadsadsadsadsadsadsadasd"
+      value: "sadlsasdadsadsadsadsadsadsadasd"
     - name: JWT_SECRET_KEY
       value: "ysadksajdskaldjsakl12321321312"
     
@@ -76,4 +84,20 @@ run:
     - name: GOOGLE_CLIENT_SECRET
       value: "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"
     - name: GOOGLE_REDIRECT_URI
-      value: "http://localhost:8000/auth/google/callback" 
+      value: "http://localhost:8000/auth/google/callback"
+    
+    # Server Performance Settings
+    - name: WORKERS
+      value: "2"
+    - name: WORKER_CONNECTIONS
+      value: "1000"
+    - name: TIMEOUT
+      value: "300"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: MAX_REQUESTS
+      value: "1000"
+    - name: MAX_REQUESTS_JITTER
+      value: "100"
+    - name: KEEP_ALIVE
+      value: "2" 
