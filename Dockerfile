@@ -4,7 +4,31 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Default environment variables (Railway will override these)
 ENV PORT=8000
+ENV HOST=0.0.0.0
+ENV DEBUG=false
+ENV SERVER_TYPE=gunicorn
+ENV APP_ENV=production
+
+# LLM settings
+ENV OPENAI_MODEL=gpt-4-turbo
+ENV OPENAI_TEMPERATURE=0.7
+ENV OPENAI_MAX_TOKENS=500
+
+# TTS settings
+ENV ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
+
+# Server Performance Settings
+ENV WORKERS=2
+ENV WORKER_CONNECTIONS=1000
+ENV TIMEOUT=300
+ENV LOG_LEVEL=info
+ENV MAX_REQUESTS=1000
+ENV MAX_REQUESTS_JITTER=100
+ENV KEEP_ALIVE=2
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -32,20 +56,8 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p /app/recordings /app/logs
 
-# Make start script executable
-RUN chmod +x start.sh
-
-# Create non-root user for security
-RUN adduser --disabled-password --gecos '' appuser
-RUN chown -R appuser:appuser /app
-USER appuser
-
-# Expose port
+# Expose port (Railway will set this dynamically)
 EXPOSE $PORT
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:$PORT/health || exit 1
-
-# Start the application
-CMD ["./start.sh"] 
+# Start the application with gunicorn
+CMD python3 -m gunicorn app.main:app --bind 0.0.0.0:$PORT --worker-class uvicorn.workers.UvicornWorker --workers $WORKERS --timeout $TIMEOUT --log-level $LOG_LEVEL --max-requests $MAX_REQUESTS --max-requests-jitter $MAX_REQUESTS_JITTER --keep-alive $KEEP_ALIVE 
