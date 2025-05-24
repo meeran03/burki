@@ -11,9 +11,9 @@ build:
     - name: APP_ENV
       value: "production"
 run:
+  runtime-version: "3.11.10"
   pre-run:
     - pip3 install --no-cache-dir -r requirements.txt
-  runtime-version: "3.11.10"
   command: python3 -m gunicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
   network:
     port: 8000
