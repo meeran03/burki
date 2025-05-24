@@ -12,7 +12,7 @@ build:
       value: "production"
 run:
   runtime-version: "3.11.10"
-  command: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000
+  command: python3 -m gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000
   network:
     port: 8000
   env:
