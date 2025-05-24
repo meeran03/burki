@@ -62,33 +62,37 @@ async def get_twiml(request: Request):
     if to_phone_number:
         assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
         if assistant:
-            # Check billing limits for the organization
-            usage_check = await BillingService.check_usage_limits(assistant.organization_id)
-            
-            if not usage_check.get("allowed", False):
-                # Create a TwiML response to reject the call or play a message
-                response = VoiceResponse()
+            # Check billing limits for the organization - make this faster
+            try:
+                usage_check = await BillingService.check_usage_limits(assistant.organization_id)
                 
-                if usage_check.get("needs_upgrade", False):
-                    response.say(
-                        "Your call cannot be completed at this time. "
-                        "Your organization has exceeded its monthly usage limit. "
-                        "Please contact your administrator to upgrade your plan or add top-up credits.",
-                        voice="alice"
+                if not usage_check.get("allowed", False):
+                    # Create a TwiML response to reject the call or play a message
+                    response = VoiceResponse()
+                    
+                    if usage_check.get("needs_upgrade", False):
+                        response.say(
+                            "Your call cannot be completed at this time. "
+                            "Your organization has exceeded its monthly usage limit. "
+                            "Please contact your administrator to upgrade your plan or add top-up credits.",
+                            voice="alice"
+                        )
+                    else:
+                        response.say(
+                            "Your call cannot be completed at this time. "
+                            "Please try again later.",
+                            voice="alice"
+                        )
+                    
+                    response.hangup()
+                    
+                    logger.warning(
+                        f"Call rejected due to billing limits for organization {assistant.organization_id}: {usage_check}"
                     )
-                else:
-                    response.say(
-                        "Your call cannot be completed at this time. "
-                        "Please try again later.",
-                        voice="alice"
-                    )
-                
-                response.hangup()
-                
-                logger.warning(
-                    f"Call rejected due to billing limits for organization {assistant.organization_id}: {usage_check}"
-                )
-                return Response(content=str(response), media_type="application/xml")
+                    return Response(content=str(response), media_type="application/xml")
+            except Exception as billing_error:
+                # Don't block calls if billing check fails
+                logger.error(f"Billing check failed for {assistant.organization_id}, allowing call: {billing_error}")
 
     # Create the TwiML response
     response = VoiceResponse()
@@ -177,7 +181,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     # Start call handling
                     try:
-                        # Get assistant based on the to_number
+                        # Get assistant based on the to_number - optimize this lookup
+                        assistant = None
                         if to_number:
                             assistant = await assistant_manager.get_assistant_by_phone(to_number)
                             if not assistant:
@@ -197,10 +202,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             },
                             assistant=assistant,
                         )
-
-                        # The welcome message is now handled in the call_handler.start_call method
-                        # since DeepgramService is now initialized per-call
-                        # Removed redundant deepgram initialization as it's now handled in call_handler.start_call
 
                     except Exception as e:
                         logger.error(
@@ -347,15 +348,18 @@ async def recording_status_callback(request: Request):
                 logger.error(f"Error downloading recording {recording_sid}: {e}", exc_info=True)
 
         # Update recording status in database
-        await CallService.update_recording_status(
-            recording_sid=recording_sid,
-            status=recording_status.lower(),
-            recording_url=recording_url,
-            duration=duration,
-            local_file_path=local_file_path,  # Add the local file path
+        # Run as background task to reduce webhook response latency
+        asyncio.create_task(
+            CallService.update_recording_status(
+                recording_sid=recording_sid,
+                status=recording_status.lower(),
+                recording_url=recording_url,
+                duration=duration,
+                local_file_path=local_file_path,  # Add the local file path
+            )
         )
 
-        logger.info(f"Updated recording {recording_sid} status to {recording_status}")
+        logger.info(f"Scheduled recording {recording_sid} status update to {recording_status}")
         
         # If recording is completed, check if we should trigger end-of-call webhook
         if recording_status.lower() == "completed":
@@ -370,10 +374,11 @@ async def recording_status_callback(request: Request):
                     if all_completed:
                         # Record billing usage for the completed call
                         try:
-                            await BillingService.record_call_usage(call.id)
-                            logger.info(f"Recorded billing usage for call {call.id}")
+                            # Run billing as background task to reduce latency
+                            asyncio.create_task(BillingService.record_call_usage(call.id))
+                            logger.info(f"Scheduled billing usage recording for call {call.id}")
                         except Exception as billing_error:
-                            logger.error(f"Error recording billing usage for call {call.id}: {billing_error}")
+                            logger.error(f"Error scheduling billing usage for call {call.id}: {billing_error}")
                         
                         # Send webhook immediately since all recordings are ready
                         from app.services.webhook_service import WebhookService
