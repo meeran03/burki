@@ -1,13 +1,9 @@
 """
-Recording service for handling local audio recording during calls.
+Recording service for handling S3-based audio recording during calls.
 """
 
-import os
 import logging
 import asyncio
-import wave
-import time
-import numpy as np
 import audioop
 from typing import Optional, Dict, Any, Callable
 from datetime import datetime
@@ -16,17 +12,18 @@ from io import BytesIO
 # Try to import pydub for better audio handling
 try:
     from pydub import AudioSegment
-    from pydub.utils import make_chunks
     PYDUB_AVAILABLE = True
 except ImportError:
     PYDUB_AVAILABLE = False
+
+from app.services.s3_service import S3Service
 
 logger = logging.getLogger(__name__)
 
 
 class RecordingService:
     """
-    Service for recording audio locally during calls.
+    Service for recording audio to S3 during calls.
     Supports various audio formats and configurable recording settings.
     """
 
@@ -34,14 +31,14 @@ class RecordingService:
         self,
         call_sid: str,
         enabled: bool = False,
-        format: str = "wav",
+        format: str = "mp3",
         sample_rate: int = 8000,
         channels: int = 1,
         record_user: bool = True,
         record_assistant: bool = True,
         record_mixed: bool = True,
         auto_save: bool = True,
-        recordings_dir: str = "recordings",
+        s3_service: Optional[S3Service] = None,
     ):
         """
         Initialize the recording service.
@@ -56,7 +53,7 @@ class RecordingService:
             record_assistant: Whether to record assistant audio
             record_mixed: Whether to record mixed audio (both user and assistant)
             auto_save: Whether to automatically save recordings when call ends
-            recordings_dir: Directory to save recordings
+            s3_service: S3Service instance (will create default if not provided)
         """
         self.call_sid = call_sid
         self.enabled = enabled
@@ -67,74 +64,69 @@ class RecordingService:
         self.should_record_assistant_audio = record_assistant
         self.should_record_mixed_audio = record_mixed
         self.auto_save = auto_save
-        self.recordings_dir = recordings_dir
 
         # Validate format
         if self.format not in ["wav", "mp3"]:
-            logger.warning(f"Unsupported format '{self.format}', defaulting to 'wav'")
-            self.format = "wav"
+            logger.warning(f"Unsupported format '{self.format}', defaulting to 'mp3'")
+            self.format = "mp3"
         
         # Check if MP3 is requested but pydub is not available
         if self.format == "mp3" and not PYDUB_AVAILABLE:
             logger.warning("MP3 format requested but pydub is not available, falling back to WAV")
             self.format = "wav"
 
+        # Initialize S3 service
+        try:
+            self.s3_service = s3_service or S3Service.create_default_instance()
+        except Exception as e:
+            logger.error(f"Failed to initialize S3 service: {e}")
+            self.enabled = False
+            self.s3_service = None
+
         # Recording state
         self.is_recording = False
         self.start_time: Optional[datetime] = None
         self.end_time: Optional[datetime] = None
 
-        # Audio buffers for different streams (using pydub AudioSegments for better quality)
+        # Audio buffers for different streams
         self.user_audio_segments = []
         self.assistant_audio_segments = []
         self.mixed_audio_segments = []
-
-        # Legacy wave file writers (for WAV format only)
-        self.user_wave_writer: Optional[wave.Wave_write] = None
-        self.assistant_wave_writer: Optional[wave.Wave_write] = None
-        self.mixed_wave_writer: Optional[wave.Wave_write] = None
-
-        # File paths
-        self.user_audio_path: Optional[str] = None
-        self.assistant_audio_path: Optional[str] = None
-        self.mixed_audio_path: Optional[str] = None
 
         # Callbacks
         self.recording_started_callback: Optional[Callable] = None
         self.recording_stopped_callback: Optional[Callable] = None
         self.recording_saved_callback: Optional[Callable] = None
 
-        logger.info(f"Initialized RecordingService for call {call_sid} - enabled: {enabled}, format: {self.format}, pydub_available: {PYDUB_AVAILABLE}")
+        logger.info(f"Initialized S3 RecordingService for call {call_sid} - enabled: {enabled}, format: {self.format}, s3_available: {self.s3_service is not None}")
 
     def _convert_mulaw_to_audiosegment(self, mulaw_data: bytes) -> Optional[AudioSegment]:
         """
-        Convert μ-law encoded audio to AudioSegment using proper μ-law decoding for better quality.
+        Convert μ-law encoded audio data to AudioSegment.
         
         Args:
-            mulaw_data: μ-law encoded audio bytes from Twilio/ElevenLabs
+            mulaw_data: Raw μ-law encoded audio bytes
             
         Returns:
-            AudioSegment: High-quality audio segment, or None if conversion fails
+            Optional[AudioSegment]: Converted audio segment or None if conversion fails
         """
-        if not PYDUB_AVAILABLE:
-            return None
-            
         try:
-            # Use Python's built-in audioop for proper μ-law to linear PCM conversion
-            # This gives much better quality than manual bit manipulation
-            linear_pcm = audioop.ulaw2lin(mulaw_data, 2)  # Convert to 16-bit linear PCM
+            if not mulaw_data:
+                return None
+                
+            # Convert μ-law to 16-bit PCM using Python's built-in audioop
+            pcm_data = audioop.ulaw2lin(mulaw_data, 2)  # 2 bytes per sample (16-bit)
             
-            # Create AudioSegment from the properly decoded PCM data
+            # Create AudioSegment from PCM data
             audio_segment = AudioSegment(
-                data=linear_pcm,
-                sample_width=2,  # 16-bit (2 bytes per sample)
+                data=pcm_data,
+                sample_width=2,  # 16-bit = 2 bytes
                 frame_rate=self.sample_rate,
                 channels=self.channels
             )
             
-            # Optionally upsample to higher quality for better MP3 encoding
-            if self.format == "mp3":
-                # Upsample to 22.05 kHz for better MP3 quality (matches Twilio recordings)
+            # For MP3 format, upsample to 22.05kHz for better quality
+            if self.format == "mp3" and audio_segment.frame_rate < 22050:
                 audio_segment = audio_segment.set_frame_rate(22050)
             
             return audio_segment
@@ -143,35 +135,19 @@ class RecordingService:
             logger.error(f"Error converting μ-law to AudioSegment: {e}")
             return None
 
-    def _convert_mulaw_to_pcm16(self, mulaw_data: bytes) -> bytes:
-        """
-        Convert μ-law encoded audio to 16-bit PCM using proper μ-law decoding.
-        
-        Args:
-            mulaw_data: μ-law encoded audio bytes from Twilio/ElevenLabs
-            
-        Returns:
-            bytes: 16-bit PCM audio bytes suitable for WAV files
-        """
-        try:
-            # Use Python's built-in audioop for proper μ-law to linear PCM conversion
-            # This gives much better quality than manual bit manipulation
-            linear_pcm = audioop.ulaw2lin(mulaw_data, 2)  # Convert to 16-bit linear PCM
-            return linear_pcm
-            
-        except Exception as e:
-            logger.error(f"Error converting μ-law to PCM16: {e}")
-            return b''
-
     async def start_recording(self) -> bool:
         """
-        Start recording audio.
+        Start recording audio streams.
 
         Returns:
             bool: True if recording started successfully, False otherwise
         """
         if not self.enabled:
-            logger.debug(f"Recording not enabled for call {self.call_sid}")
+            logger.info(f"Recording disabled for call {self.call_sid}")
+            return False
+
+        if not self.s3_service:
+            logger.error(f"S3 service not available for call {self.call_sid}")
             return False
 
         if self.is_recording:
@@ -179,56 +155,16 @@ class RecordingService:
             return True
 
         try:
-            # Create recordings directory
-            call_recordings_dir = os.path.join(self.recordings_dir, self.call_sid)
-            os.makedirs(call_recordings_dir, exist_ok=True)
-
-            # Generate file paths
-            timestamp = int(time.time())
-            if self.should_record_user_audio:
-                self.user_audio_path = os.path.join(
-                    call_recordings_dir, f"user_{timestamp}.{self.format}"
-                )
-            if self.should_record_assistant_audio:
-                self.assistant_audio_path = os.path.join(
-                    call_recordings_dir, f"assistant_{timestamp}.{self.format}"
-                )
-            if self.should_record_mixed_audio:
-                self.mixed_audio_path = os.path.join(
-                    call_recordings_dir, f"mixed_{timestamp}.{self.format}"
-                )
-
-            # Initialize wave writers for WAV format only
-            # For MP3, we'll use pydub AudioSegments and export at the end
-            if self.format == "wav":
-                if self.should_record_user_audio and self.user_audio_path:
-                    self.user_wave_writer = wave.open(self.user_audio_path, "wb")
-                    self.user_wave_writer.setnchannels(self.channels)
-                    self.user_wave_writer.setsampwidth(2)  # 16-bit audio
-                    self.user_wave_writer.setframerate(self.sample_rate)
-
-                if self.should_record_assistant_audio and self.assistant_audio_path:
-                    self.assistant_wave_writer = wave.open(self.assistant_audio_path, "wb")
-                    self.assistant_wave_writer.setnchannels(self.channels)
-                    self.assistant_wave_writer.setsampwidth(2)  # 16-bit audio
-                    self.assistant_wave_writer.setframerate(self.sample_rate)
-
-                if self.should_record_mixed_audio and self.mixed_audio_path:
-                    self.mixed_wave_writer = wave.open(self.mixed_audio_path, "wb")
-                    self.mixed_wave_writer.setnchannels(self.channels)
-                    self.mixed_wave_writer.setsampwidth(2)  # 16-bit audio
-                    self.mixed_wave_writer.setframerate(self.sample_rate)
-            else:
-                # For MP3 and other formats, we'll collect AudioSegments and export later
-                self.user_audio_segments = []
-                self.assistant_audio_segments = []
-                self.mixed_audio_segments = []
+            # Initialize audio buffers
+            self.user_audio_segments = []
+            self.assistant_audio_segments = []
+            self.mixed_audio_segments = []
 
             # Set recording state
             self.is_recording = True
-            self.start_time = datetime.now()
+            self.start_time = datetime.utcnow()
 
-            logger.info(f"Started recording for call {self.call_sid}")
+            logger.info(f"Started S3 recording for call {self.call_sid}")
 
             # Call callback if set
             if self.recording_started_callback:
@@ -245,32 +181,18 @@ class RecordingService:
 
     async def stop_recording(self) -> bool:
         """
-        Stop recording audio.
+        Stop recording and optionally save to S3.
 
         Returns:
             bool: True if recording stopped successfully, False otherwise
         """
         if not self.is_recording:
-            logger.debug(f"Recording not active for call {self.call_sid}")
+            logger.warning(f"Recording not active for call {self.call_sid}")
             return True
 
         try:
-            # Set recording state
             self.is_recording = False
-            self.end_time = datetime.now()
-
-            # Close wave writers
-            if self.user_wave_writer:
-                self.user_wave_writer.close()
-                self.user_wave_writer = None
-
-            if self.assistant_wave_writer:
-                self.assistant_wave_writer.close()
-                self.assistant_wave_writer = None
-
-            if self.mixed_wave_writer:
-                self.mixed_wave_writer.close()
-                self.mixed_wave_writer = None
+            self.end_time = datetime.utcnow()
 
             logger.info(f"Stopped recording for call {self.call_sid}")
 
@@ -296,7 +218,7 @@ class RecordingService:
         Record user audio data.
 
         Args:
-            audio_data: Raw μ-law encoded audio bytes from Twilio
+            audio_data: Raw audio data (μ-law encoded)
 
         Returns:
             bool: True if audio was recorded successfully, False otherwise
@@ -305,28 +227,14 @@ class RecordingService:
             return False
 
         try:
-            if self.format == "wav":
-                # For WAV format, convert μ-law to PCM and write directly
-                pcm_data = self._convert_mulaw_to_pcm16(audio_data)
-                if not pcm_data:
-                    return False
-
-                # Write to wave file if available
-                if self.user_wave_writer:
-                    self.user_wave_writer.writeframes(pcm_data)
-
-                # Also write to mixed audio if enabled
-                if self.should_record_mixed_audio and self.mixed_wave_writer:
-                    self.mixed_wave_writer.writeframes(pcm_data)
-            else:
-                # For MP3 and other formats, use pydub AudioSegments for better quality
-                audio_segment = self._convert_mulaw_to_audiosegment(audio_data)
-                if audio_segment:
-                    self.user_audio_segments.append(audio_segment)
-                    
-                    # Also add to mixed audio if enabled
-                    if self.should_record_mixed_audio:
-                        self.mixed_audio_segments.append(audio_segment)
+            # Convert μ-law to AudioSegment
+            audio_segment = self._convert_mulaw_to_audiosegment(audio_data)
+            if audio_segment:
+                self.user_audio_segments.append(audio_segment)
+                
+                # Also add to mixed audio if enabled
+                if self.should_record_mixed_audio:
+                    self.mixed_audio_segments.append(audio_segment)
 
             return True
 
@@ -339,7 +247,7 @@ class RecordingService:
         Record assistant audio data.
 
         Args:
-            audio_data: Raw μ-law encoded audio bytes from ElevenLabs TTS
+            audio_data: Raw audio data (μ-law encoded)
 
         Returns:
             bool: True if audio was recorded successfully, False otherwise
@@ -348,34 +256,14 @@ class RecordingService:
             return False
 
         try:
-            if self.format == "wav":
-                # For WAV format, convert μ-law to PCM and write directly
-                pcm_data = self._convert_mulaw_to_pcm16(audio_data)
-                if not pcm_data:
-                    return False
-
-                # Write to wave file if available
-                if self.assistant_wave_writer:
-                    self.assistant_wave_writer.writeframes(pcm_data)
-
-                # Also write to mixed audio if enabled (this would need proper mixing logic)
-                # For now, we'll just append assistant audio to mixed stream
-                # In a real implementation, you'd want to properly mix the audio streams
-                if self.should_record_mixed_audio and self.mixed_wave_writer:
-                    # Note: This is a simple append, not proper audio mixing
-                    # For proper mixing, you'd need to combine the audio samples
-                    self.mixed_wave_writer.writeframes(pcm_data)
-            else:
-                # For MP3 and other formats, use pydub AudioSegments for better quality
-                audio_segment = self._convert_mulaw_to_audiosegment(audio_data)
-                if audio_segment:
-                    self.assistant_audio_segments.append(audio_segment)
-                    
-                    # Also add to mixed audio if enabled
-                    # Note: This is sequential append, not proper mixing
-                    # For proper mixing, you'd overlay the audio segments
-                    if self.should_record_mixed_audio:
-                        self.mixed_audio_segments.append(audio_segment)
+            # Convert μ-law to AudioSegment
+            audio_segment = self._convert_mulaw_to_audiosegment(audio_data)
+            if audio_segment:
+                self.assistant_audio_segments.append(audio_segment)
+                
+                # Also add to mixed audio if enabled
+                if self.should_record_mixed_audio:
+                    self.mixed_audio_segments.append(audio_segment)
 
             return True
 
@@ -383,101 +271,48 @@ class RecordingService:
             logger.error(f"Error recording assistant audio for call {self.call_sid}: {e}")
             return False
 
-    async def save_recordings(self) -> Dict[str, str]:
+    async def save_recordings(self) -> Dict[str, Dict[str, Any]]:
         """
-        Save all recordings and return file paths.
+        Save all recordings to S3 and return file information.
 
         Returns:
-            Dict[str, str]: Dictionary mapping recording type to file path
+            Dict[str, Dict[str, Any]]: Dictionary mapping recording type to file info
         """
+        if not self.s3_service:
+            logger.error(f"S3 service not available for saving recordings for call {self.call_sid}")
+            return {}
+
         saved_files = {}
 
         try:
-            # For WAV format, files are already saved via wave writers
-            if self.format == "wav":
-                if self.user_audio_path and os.path.exists(self.user_audio_path):
-                    saved_files["user"] = self.user_audio_path
-                    logger.info(f"Saved user recording: {self.user_audio_path}")
+            # Save user audio
+            if self.user_audio_segments and self.should_record_user_audio:
+                file_info = await self._save_audio_segments(
+                    self.user_audio_segments, "user"
+                )
+                if file_info:
+                    saved_files["user"] = file_info
 
-                if self.assistant_audio_path and os.path.exists(self.assistant_audio_path):
-                    saved_files["assistant"] = self.assistant_audio_path
-                    logger.info(f"Saved assistant recording: {self.assistant_audio_path}")
+            # Save assistant audio
+            if self.assistant_audio_segments and self.should_record_assistant_audio:
+                file_info = await self._save_audio_segments(
+                    self.assistant_audio_segments, "assistant"
+                )
+                if file_info:
+                    saved_files["assistant"] = file_info
 
-                if self.mixed_audio_path and os.path.exists(self.mixed_audio_path):
-                    saved_files["mixed"] = self.mixed_audio_path
-                    logger.info(f"Saved mixed recording: {self.mixed_audio_path}")
-            else:
-                # For MP3 and other formats, export AudioSegments using pydub
-                if PYDUB_AVAILABLE:
-                    # Export user audio
-                    if self.user_audio_segments and self.user_audio_path:
-                        combined_user = AudioSegment.empty()
-                        for segment in self.user_audio_segments:
-                            combined_user += segment
-                        
-                        # Export with high quality settings for MP3
-                        export_params = {"format": self.format}
-                        if self.format == "mp3":
-                            export_params.update({
-                                "bitrate": "320k",  # Highest quality bitrate
-                                "parameters": [
-                                    "-q:a", "0",  # Highest quality
-                                    "-ar", "22050",  # Sample rate to match Twilio
-                                    "-ac", "1",  # Mono
-                                    "-compression_level", "0"  # No compression
-                                ]
-                            })
-                        
-                        combined_user.export(self.user_audio_path, **export_params)
-                        saved_files["user"] = self.user_audio_path
-                        logger.info(f"Exported user recording: {self.user_audio_path}")
+            # Save mixed audio
+            if self.mixed_audio_segments and self.should_record_mixed_audio:
+                file_info = await self._save_audio_segments(
+                    self.mixed_audio_segments, "mixed"
+                )
+                if file_info:
+                    saved_files["mixed"] = file_info
 
-                    # Export assistant audio
-                    if self.assistant_audio_segments and self.assistant_audio_path:
-                        combined_assistant = AudioSegment.empty()
-                        for segment in self.assistant_audio_segments:
-                            combined_assistant += segment
-                        
-                        export_params = {"format": self.format}
-                        if self.format == "mp3":
-                            export_params.update({
-                                "bitrate": "320k",
-                                "parameters": [
-                                    "-q:a", "0",
-                                    "-ar", "22050",
-                                    "-ac", "1",
-                                    "-compression_level", "0"
-                                ]
-                            })
-                        
-                        combined_assistant.export(self.assistant_audio_path, **export_params)
-                        saved_files["assistant"] = self.assistant_audio_path
-                        logger.info(f"Exported assistant recording: {self.assistant_audio_path}")
-
-                    # Export mixed audio
-                    if self.mixed_audio_segments and self.mixed_audio_path:
-                        combined_mixed = AudioSegment.empty()
-                        for segment in self.mixed_audio_segments:
-                            combined_mixed += segment
-                        
-                        export_params = {"format": self.format}
-                        if self.format == "mp3":
-                            export_params.update({
-                                "bitrate": "320k",
-                                "parameters": [
-                                    "-q:a", "0",
-                                    "-ar", "22050",
-                                    "-ac", "1",
-                                    "-compression_level", "0"
-                                ]
-                            })
-                        
-                        combined_mixed.export(self.mixed_audio_path, **export_params)
-                        saved_files["mixed"] = self.mixed_audio_path
-                        logger.info(f"Exported mixed recording: {self.mixed_audio_path}")
+            logger.info(f"Saved {len(saved_files)} recordings to S3 for call {self.call_sid}")
 
             # Call callback if set
-            if self.recording_saved_callback:
+            if self.recording_saved_callback and saved_files:
                 try:
                     await self.recording_saved_callback(self.call_sid, saved_files)
                 except Exception as e:
@@ -489,45 +324,114 @@ class RecordingService:
             logger.error(f"Error saving recordings for call {self.call_sid}: {e}")
             return {}
 
-    async def cleanup(self) -> None:
+    async def _save_audio_segments(
+        self, segments: list, recording_type: str
+    ) -> Optional[Dict[str, Any]]:
         """
-        Clean up recording resources.
+        Save audio segments to S3.
+
+        Args:
+            segments: List of AudioSegment objects
+            recording_type: Type of recording (user, assistant, mixed)
+
+        Returns:
+            Optional[Dict[str, Any]]: File information or None if failed
         """
         try:
-            # Stop recording if still active
-            if self.is_recording:
-                await self.stop_recording()
+            if not segments:
+                return None
 
-            # Close any remaining wave writers
-            if self.user_wave_writer:
-                self.user_wave_writer.close()
-                self.user_wave_writer = None
+            # Combine all segments
+            combined_audio = AudioSegment.empty()
+            for segment in segments:
+                combined_audio += segment
 
-            if self.assistant_wave_writer:
-                self.assistant_wave_writer.close()
-                self.assistant_wave_writer = None
+            # Export to bytes
+            buffer = BytesIO()
+            export_params = {"format": self.format}
+            
+            if self.format == "mp3":
+                export_params.update({
+                    "bitrate": "320k",  # Highest quality bitrate
+                    "parameters": [
+                        "-q:a", "0",  # Highest quality
+                        "-ar", str(combined_audio.frame_rate),
+                        "-ac", str(combined_audio.channels),
+                    ]
+                })
 
-            if self.mixed_wave_writer:
-                self.mixed_wave_writer.close()
-                self.mixed_wave_writer = None
+            combined_audio.export(buffer, **export_params)
+            audio_data = buffer.getvalue()
+            buffer.close()
+
+            # Calculate duration and file size
+            duration = len(combined_audio) / 1000.0  # Convert ms to seconds
+            file_size = len(audio_data)
+
+            # Prepare metadata
+            metadata = {
+                "duration": str(duration),
+                "file_size": str(file_size),
+                "sample_rate": str(combined_audio.frame_rate),
+                "channels": str(combined_audio.channels),
+                "segments_count": str(len(segments)),
+            }
+
+            # Upload to S3
+            s3_key, s3_url = await self.s3_service.upload_audio_file(
+                audio_data=audio_data,
+                call_sid=self.call_sid,
+                recording_type=recording_type,
+                format=self.format,
+                metadata=metadata,
+            )
+
+            file_info = {
+                "s3_key": s3_key,
+                "s3_url": s3_url,
+                "duration": duration,
+                "file_size": file_size,
+                "sample_rate": combined_audio.frame_rate,
+                "channels": combined_audio.channels,
+                "format": self.format,
+                "recording_type": recording_type,
+                "uploaded_at": datetime.utcnow().isoformat(),
+            }
+
+            logger.info(f"Saved {recording_type} recording to S3: {s3_key}")
+            return file_info
+
+        except Exception as e:
+            logger.error(f"Error saving {recording_type} recording to S3: {e}")
+            return None
+
+    async def cleanup(self) -> None:
+        """
+        Clean up resources and clear audio buffers.
+        """
+        try:
+            # Clear audio buffers
+            self.user_audio_segments.clear()
+            self.assistant_audio_segments.clear()
+            self.mixed_audio_segments.clear()
+
+            # Reset state
+            self.is_recording = False
+            self.start_time = None
+            self.end_time = None
 
             logger.info(f"Cleaned up recording service for call {self.call_sid}")
 
         except Exception as e:
-            logger.error(f"Error cleaning up recording service for call {self.call_sid}: {e}")
+            logger.error(f"Error during cleanup for call {self.call_sid}: {e}")
 
     def get_recording_info(self) -> Dict[str, Any]:
         """
-        Get information about the current recording session.
+        Get current recording information.
 
         Returns:
-            Dict[str, Any]: Recording information
+            Dict[str, Any]: Recording status and statistics
         """
-        duration = None
-        if self.start_time:
-            end_time = self.end_time or datetime.now()
-            duration = (end_time - self.start_time).total_seconds()
-
         return {
             "call_sid": self.call_sid,
             "enabled": self.enabled,
@@ -535,15 +439,17 @@ class RecordingService:
             "format": self.format,
             "sample_rate": self.sample_rate,
             "channels": self.channels,
-            "record_user_audio": self.should_record_user_audio,
-            "record_assistant_audio": self.should_record_assistant_audio,
-            "record_mixed_audio": self.should_record_mixed_audio,
             "start_time": self.start_time.isoformat() if self.start_time else None,
             "end_time": self.end_time.isoformat() if self.end_time else None,
-            "duration": duration,
-            "user_audio_path": self.user_audio_path,
-            "assistant_audio_path": self.assistant_audio_path,
-            "mixed_audio_path": self.mixed_audio_path,
+            "user_segments": len(self.user_audio_segments),
+            "assistant_segments": len(self.assistant_audio_segments),
+            "mixed_segments": len(self.mixed_audio_segments),
+            "s3_available": self.s3_service is not None,
+            "recording_types": {
+                "user": self.should_record_user_audio,
+                "assistant": self.should_record_assistant_audio,
+                "mixed": self.should_record_mixed_audio,
+            },
         }
 
     def set_callbacks(
@@ -558,7 +464,7 @@ class RecordingService:
         Args:
             recording_started_callback: Called when recording starts
             recording_stopped_callback: Called when recording stops
-            recording_saved_callback: Called when recordings are saved
+            recording_saved_callback: Called when recordings are saved to S3
         """
         self.recording_started_callback = recording_started_callback
         self.recording_stopped_callback = recording_stopped_callback

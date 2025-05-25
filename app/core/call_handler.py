@@ -366,7 +366,6 @@ class CallHandler:
                 record_assistant=recording_settings.get('record_assistant_audio', True),
                 record_mixed=recording_settings.get('record_mixed_audio', True),
                 auto_save=recording_settings.get('auto_save', True),
-                recordings_dir=recording_settings.get('recordings_dir', 'recordings'),
             )
 
             # Initialize and start recording service if enabled
@@ -379,26 +378,33 @@ class CallHandler:
                 async def recording_stopped_callback(call_sid: str):
                     logger.info(f"Local recording stopped for call {call_sid}")
                     
-                async def recording_saved_callback(call_sid: str, saved_files: Dict[str, str]):
-                    logger.info(f"Local recordings saved for call {call_sid}: {saved_files}")
-                    # Create database records if enabled
-                    if (assistant and assistant.recording_settings and 
-                        assistant.recording_settings.get('create_database_records', True)):
-                        for recording_type, file_path in saved_files.items():
-                            try:
-                                await CallService.create_recording(
-                                    call_sid=call_sid,
-                                    format=recording_service.format,
-                                    recording_type=recording_type,
-                                    recording_source="local",
-                                    status="completed",
-                                    file_path=file_path,  # Pass the file path directly
-                                )
-                                logger.info(f"Created database record for {recording_type} recording: {file_path}")
-                            except Exception as e:
-                                logger.error(f"Error creating database record for recording {file_path}: {e}")
+                async def recording_saved_callback(call_sid: str, saved_files: Dict[str, Dict[str, Any]]):
+                    """Callback when recordings are saved to S3."""
+                    logger.info(f"Recordings saved to S3 for call {call_sid}: {list(saved_files.keys())}")
                     
-                    # Record billing usage for the completed call
+                    # Create database records for each saved recording
+                    try:
+                        from app.services.call_service import CallService
+                        
+                        for recording_type, file_info in saved_files.items():
+                            await CallService.create_s3_recording(
+                                call_sid=call_sid,
+                                s3_key=file_info["s3_key"],
+                                s3_url=file_info["s3_url"],
+                                duration=file_info["duration"],
+                                file_size=file_info["file_size"],
+                                format=file_info["format"],
+                                sample_rate=file_info["sample_rate"],
+                                channels=file_info["channels"],
+                                recording_type=recording_type,
+                                metadata=file_info,
+                            )
+                            logger.info(f"Created database record for {recording_type} recording: {file_info['s3_key']}")
+                    
+                    except Exception as db_error:
+                        logger.error(f"Error creating database records for recordings: {db_error}")
+                    
+                    # Record billing usage
                     try:
                         # Get the call to record billing
                         call = await CallService.get_call_by_sid(call_sid)
@@ -1201,7 +1207,7 @@ class CallHandler:
                 else:
                     logger.error(f"Failed to end call {call_sid} via Twilio API")
 
-                return
+                # Don't return early - continue with cleanup to save recordings
 
             # Stop transcription first
             await self.active_calls[call_sid].deepgram_service.stop_transcription()
@@ -1213,9 +1219,14 @@ class CallHandler:
             if self.active_calls[call_sid].audio_denoising_service:
                 await self.active_calls[call_sid].audio_denoising_service.cleanup()
 
-            # Clean up recording service
+            # Stop and save recording service BEFORE cleanup
             if self.active_calls[call_sid].recording_service:
-                await self.active_calls[call_sid].recording_service.cleanup()
+                recording_service = self.active_calls[call_sid].recording_service
+                if recording_service.enabled and recording_service.is_recording:
+                    logger.info(f"Stopping recording service for call {call_sid}")
+                    await recording_service.stop_recording()
+                    # stop_recording() will trigger auto_save and the recording_saved_callback
+                await recording_service.cleanup()
 
             # Update call status in database
             try:

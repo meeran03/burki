@@ -15,6 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from typing import Optional, Dict, Any
 
 Base = declarative_base()
 
@@ -405,23 +406,71 @@ class Recording(Base):
 
     id = Column(Integer, primary_key=True)
     call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
-    recording_sid = Column(String(100), nullable=True)  # Twilio Recording SID
-    file_path = Column(String(255), nullable=True)  # Local file path (optional)
-    recording_url = Column(String(500), nullable=True)  # Twilio recording URL
+    recording_sid = Column(String(100), nullable=True)  # Twilio Recording SID (deprecated)
+    
+    # S3 Storage fields
+    s3_key = Column(String(500), nullable=True)  # S3 object key
+    s3_url = Column(String(1000), nullable=True)  # S3 public URL
+    s3_bucket = Column(String(100), nullable=True)  # S3 bucket name
+    
+    # Recording metadata
     duration = Column(Float, nullable=True)  # Duration in seconds
-    format = Column(String(20), nullable=True)  # wav, mp3, etc.
-    recording_type = Column(String(20), nullable=True, default="full")  # full, segment
-    recording_source = Column(String(20), nullable=True, default="twilio")  # twilio, local
-    status = Column(String(20), nullable=True, default="recording")  # recording, completed, failed
-    created_at = Column(DateTime, nullable=True, default=datetime.datetime.utcnow)
+    file_size = Column(Integer, nullable=True)  # File size in bytes
+    format = Column(String(20), nullable=False, default="mp3")  # Audio format
+    sample_rate = Column(Integer, nullable=True, default=22050)  # Sample rate in Hz
+    channels = Column(Integer, nullable=True, default=1)  # Number of audio channels
+    
+    # Recording classification
+    recording_type = Column(String(20), nullable=False, default="mixed")  # user, assistant, mixed
+    recording_source = Column(String(20), nullable=False, default="s3")  # s3, twilio (deprecated)
+    
+    # Status and timestamps
+    status = Column(String(20), nullable=False, default="recording")  # recording, completed, failed, uploaded
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    uploaded_at = Column(DateTime, nullable=True)  # When uploaded to S3
+    
+    # Additional metadata stored as JSON
+    recording_metadata = Column(JSON, nullable=True, default=lambda: {})
 
     # Relationships
     call = relationship("Call", back_populates="recordings")
 
     def __repr__(self):
         return (
-            f"<Recording(id={self.id}, call_id={self.call_id}, recording_sid='{self.recording_sid}')>"
+            f"<Recording(id={self.id}, call_id={self.call_id}, s3_key='{self.s3_key}', type='{self.recording_type}')>"
         )
+
+    def get_download_url(self) -> Optional[str]:
+        """
+        Get the download URL for this recording.
+        
+        Returns:
+            Optional[str]: S3 URL if available, None otherwise
+        """
+        return self.s3_url
+
+    def get_file_info(self) -> Dict[str, Any]:
+        """
+        Get file information for this recording.
+        
+        Returns:
+            Dict[str, Any]: File information including size, format, etc.
+        """
+        return {
+            "id": self.id,
+            "s3_key": self.s3_key,
+            "s3_url": self.s3_url,
+            "format": self.format,
+            "duration": self.duration,
+            "file_size": self.file_size,
+            "sample_rate": self.sample_rate,
+            "channels": self.channels,
+            "recording_type": self.recording_type,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
+            "recording_metadata": self.recording_metadata or {},
+        }
 
 
 class Transcript(Base):
