@@ -309,6 +309,25 @@ class Assistant(Base):
             "audio_denoising": False,  # Whether to enable real-time audio denoising
         },
     )
+
+    # Recording settings as JSON
+    recording_settings = Column(
+        JSON,
+        nullable=True,
+        default=lambda: {
+            "enabled": False,  # Whether local recording is enabled
+            "format": "mp3",  # Audio format ("wav", "mp3") - MP3 recommended for better quality
+            "sample_rate": 8000,  # Audio sample rate in Hz (will be upsampled to 22050 for MP3)
+            "channels": 1,  # Number of audio channels
+            "record_user_audio": True,  # Whether to record user audio
+            "record_assistant_audio": True,  # Whether to record assistant audio
+            "record_mixed_audio": True,  # Whether to record mixed audio (both user and assistant)
+            "auto_save": True,  # Whether to automatically save recordings when call ends
+            "recordings_dir": "recordings",  # Directory to save recordings
+            "create_database_records": True,  # Whether to create database records for local recordings
+        },
+    )
+
     # Call control settings
     end_call_message = Column(String(255), nullable=True)
     transfer_call_message = Column(String(255), nullable=True)

@@ -11,7 +11,7 @@ import asyncio
 from typing import Optional
 from datetime import datetime
 from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 from fastapi import APIRouter
 from twilio.twiml.voice_response import VoiceResponse, Connect
 
@@ -325,118 +325,42 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"Error in WebSocket connection: {e}", exc_info=True)
 
 
-@router.post("/recording-status")
-async def recording_status_callback(request: Request):
+@router.get("/recordings/{call_sid}/{filename}")
+async def serve_recording(call_sid: str, filename: str):
     """
-    Webhook endpoint for Twilio recording status callbacks.
-    Called when a recording is completed or fails.
+    Serve local recording files for webhook URLs.
     """
-    form_data = await request.form()
-    recording_sid = form_data.get("RecordingSid")
-    recording_status = form_data.get("RecordingStatus")
-    call_sid = form_data.get("CallSid")
-    recording_url = form_data.get("RecordingUrl")
-    recording_duration = form_data.get("RecordingDuration")
-
-    logger.info(
-        f"Recording status callback: SID={recording_sid}, Status={recording_status}, "
-        f"CallSID={call_sid}, URL={recording_url}, Duration={recording_duration}"
-    )
-
-    if not recording_sid or not call_sid:
-        logger.error("Missing recording SID or call SID in callback")
-        return Response(content="Missing required parameters", status_code=400)
-
     try:
-        # Convert duration to float if available
-        duration = float(recording_duration) if recording_duration else None
-
-        # If recording is completed, download it locally
-        local_file_path = None
-        if recording_status.lower() == "completed":
-            try:
-                # Download the recording from Twilio
-                download_result = TwilioService.download_recording_content(recording_sid)
-                
-                if download_result:
-                    filename, content = download_result
-                    
-                    # Save to local recordings directory
-                    recordings_dir = os.getenv("RECORDINGS_DIR", "recordings")
-                    os.makedirs(recordings_dir, exist_ok=True)
-                    
-                    # Create call-specific directory
-                    call_dir = os.path.join(recordings_dir, call_sid)
-                    os.makedirs(call_dir, exist_ok=True)
-                    
-                    # Save the file
-                    local_file_path = os.path.join(call_dir, filename)
-                    with open(local_file_path, "wb") as f:
-                        f.write(content)
-                    
-                    logger.info(f"Downloaded and saved recording {recording_sid} to {local_file_path}")
-                else:
-                    logger.error(f"Failed to download recording {recording_sid}")
-            except Exception as e:
-                logger.error(f"Error downloading recording {recording_sid}: {e}", exc_info=True)
-
-        # Update recording status in database
-        # Run as background task to reduce webhook response latency
-        asyncio.create_task(
-            CallService.update_recording_status(
-                recording_sid=recording_sid,
-                status=recording_status.lower(),
-                recording_url=recording_url,
-                duration=duration,
-                local_file_path=local_file_path,  # Add the local file path
-            )
-        )
-
-        logger.info(f"Scheduled recording {recording_sid} status update to {recording_status}")
+        # Construct the file path
+        recordings_dir = os.getenv("RECORDINGS_DIR", "recordings")
+        file_path = os.path.join(recordings_dir, call_sid, filename)
         
-        # If recording is completed, check if we should trigger end-of-call webhook
-        if recording_status.lower() == "completed":
-            try:
-                # Get the call to find assistant info
-                call = await CallService.get_call_by_sid(call_sid)
-                if call and call.assistant and call.assistant.webhook_url and call.status == "completed":
-                    # Check if all recordings for this call are now completed
-                    recordings = await CallService.get_call_recordings(call_sid)
-                    all_completed = all(r.status in ["completed", "failed"] for r in recordings)
-                    
-                    if all_completed:
-                        # Record billing usage for the completed call
-                        try:
-                            # Run billing as background task to reduce latency
-                            asyncio.create_task(BillingService.record_call_usage(call.id))
-                            logger.info(f"Scheduled billing usage recording for call {call.id}")
-                        except Exception as billing_error:
-                            logger.error(f"Error scheduling billing usage for call {call.id}: {billing_error}")
-                        
-                        # Send webhook immediately since all recordings are ready
-                        from app.services.webhook_service import WebhookService
-                        
-                        # Get the best recording URL using proper URL construction
-                        best_recording = next((r for r in recordings if r.status == "completed"), None)
-                        recording_url_for_webhook = None
-                        if best_recording:
-                            recording_url_for_webhook = WebhookService._construct_recording_url(best_recording)
-                        
-                        # Send webhook asynchronously - the locking mechanism will prevent duplicates
-                        asyncio.create_task(
-                            WebhookService.send_end_of_call_webhook(
-                                assistant=call.assistant,
-                                call=call,
-                                ended_reason="customer-ended-call",
-                                recording_url=recording_url_for_webhook
-                            )
-                        )
-                        logger.info(f"Triggered immediate end-of-call webhook for completed recording of call {call_sid}")
-            except Exception as e:
-                logger.error(f"Error triggering webhook for recording completion: {e}", exc_info=True)
-
+        # Check if file exists and is within the recordings directory (security check)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Recording not found")
+        
+        # Ensure the file is within the recordings directory (prevent directory traversal)
+        real_file_path = os.path.realpath(file_path)
+        real_recordings_dir = os.path.realpath(recordings_dir)
+        if not real_file_path.startswith(real_recordings_dir):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Determine media type based on file extension
+        media_type = "audio/wav"
+        if filename.lower().endswith('.mp3'):
+            media_type = "audio/mpeg"
+        elif filename.lower().endswith('.wav'):
+            media_type = "audio/wav"
+        
+        # Serve the file
+        return FileResponse(
+            path=file_path,
+            media_type=media_type,
+            filename=filename
+        )
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error processing recording status callback: {e}", exc_info=True)
-        return Response(content="Error processing callback", status_code=500)
-
-    return Response(content="OK", status_code=200)
+        logger.error(f"Error serving recording {call_sid}/{filename}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

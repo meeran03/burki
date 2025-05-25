@@ -140,6 +140,7 @@ class CallService:
         recording_sid: str = None,
         recording_url: str = None,
         status: str = "recording",
+        file_path: str = None,
     ) -> Optional[Tuple[Recording, str]]:
         """
         Create a recording for a call.
@@ -153,6 +154,7 @@ class CallService:
             recording_sid: Twilio Recording SID (for Twilio recordings)
             recording_url: Twilio Recording URL (for Twilio recordings)
             status: Recording status (recording, completed, failed)
+            file_path: Direct file path (for existing files)
 
         Returns:
             Optional[Tuple[Recording, str]]: Recording object and file path or None
@@ -163,10 +165,8 @@ class CallService:
                 logger.error(f"Call not found for SID: {call_sid}")
                 return None
 
-            file_path = None
-
             # Handle local recordings (save audio data to file)
-            if recording_source == "local" and audio_data:
+            if recording_source == "local" and audio_data and not file_path:
                 # Create recordings directory if it doesn't exist
                 os.makedirs(CallService.RECORDINGS_DIR, exist_ok=True)
 
