@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y \
     python3-pyaudio \
     alsa-utils \
     curl \
+    wget \
     git \
     autoconf \
     automake \
