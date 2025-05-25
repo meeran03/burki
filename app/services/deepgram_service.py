@@ -106,7 +106,7 @@ class DeepgramService:
         language: str = "en-US",
         punctuate: bool = True,
         interim_results: bool = True,
-        endpointing: int = 100,
+        endpointing: int = 10,
         utterance_end_ms: int = 1000,
         smart_format: bool = True,
         keywords: Optional[list] = None,
@@ -123,7 +123,7 @@ class DeepgramService:
             language: Language code (default: "en-US")
             punctuate: Whether to add punctuation (default: True)
             interim_results: Whether to provide interim results (default: True)
-            endpointing: Time in ms for silence detection (default: 100)
+            endpointing: Time in ms for silence detection (default: 10ms - Deepgram's default)
             utterance_end_ms: Time in ms to wait before ending utterance (default: 1000)
             smart_format: Whether to apply smart formatting (default: True)
             keywords: List of keywords to detect
