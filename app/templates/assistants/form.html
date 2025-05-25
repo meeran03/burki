@@ -699,7 +699,7 @@
                             <!-- Processing Options -->
                             <div class="lg:col-span-2">
                                 <h4 class="text-sm font-medium text-gray-300 mb-4">Processing Options</h4>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div class="flex items-center space-x-3">
                                         <input type="checkbox" name="stt_punctuate" id="stt_punctuate"
                                             {% if not assistant or (assistant.stt_settings and assistant.stt_settings.punctuate) %}checked{% endif %}
@@ -717,6 +717,25 @@
                                             {% if not assistant or (assistant.stt_settings and assistant.stt_settings.smart_format) %}checked{% endif %}
                                             class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
                                         <label for="stt_smart_format" class="text-sm text-white">Smart Format</label>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <input type="checkbox" name="stt_audio_denoising" id="stt_audio_denoising"
+                                            {% if assistant and assistant.stt_settings and assistant.stt_settings.audio_denoising %}checked{% endif %}
+                                            class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                                        <div>
+                                            <label for="stt_audio_denoising" class="text-sm text-white">Audio Denoising</label>
+                                            <div class="group relative inline-block ml-1">
+                                                <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                </svg>
+                                                <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                                    <div class="font-semibold mb-2">Real-time Audio Denoising 🎧</div>
+                                                    <div class="text-xs">
+                                                        Removes background noise from incoming audio before transcription. Uses RNNoise for high-quality noise suppression. May slightly increase latency but improves transcription accuracy in noisy environments.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

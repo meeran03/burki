@@ -260,9 +260,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         try:
                             # Decode the base64 audio data to bytes
                             decoded_audio = base64.b64decode(audio_data)
+                            
+                            # Log audio reception for debugging
+                            logger.debug(f"Received audio for call {call_sid}: {len(decoded_audio)} bytes")
 
                             # Handle audio through call handler
-                            await call_handler.handle_audio(call_sid, decoded_audio)
+                            result = await call_handler.handle_audio(call_sid, decoded_audio)
+                            logger.debug(f"Audio processing result for call {call_sid}: {result}")
 
                         except Exception as audio_error:
                             logger.error(

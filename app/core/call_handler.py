@@ -16,11 +16,12 @@ from app.services.llm_service import LLMService
 from app.services.tts_service import TTSService
 from app.services.call_service import CallService
 from app.services.webhook_service import WebhookService
+from app.services.audio_denoising_service import AudioDenoisingService
 from app.twilio.twilio_service import TwilioService
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO,  # Reverted back to INFO
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class CallState:
     llm_service: Optional[Any] = None  # LLM service for this call
     deepgram_service: Optional[Any] = None  # Deepgram service for this call
     tts_service: Optional[Any] = None  # TTS service for this call
+    audio_denoising_service: Optional[Any] = None  # Audio denoising service for this call
     assistant: Optional[Any] = None  # Assistant to use for this call
     
     # Idle timeout tracking
@@ -215,6 +217,19 @@ class CallHandler:
             use_speaker_boost=use_speaker_boost,
             latency=latency,
         )
+
+        # Create audio denoising service if enabled in assistant settings
+        denoising_enabled = False  # Default to disabled - the current implementation has issues
+        if assistant and assistant.stt_settings:
+            denoising_enabled = assistant.stt_settings.get('audio_denoising', False)
+        
+        self.active_calls[call_sid].audio_denoising_service = AudioDenoisingService(
+            call_sid=call_sid,
+            enabled=denoising_enabled,
+        )
+
+        # Initialize denoising service
+        await self.active_calls[call_sid].audio_denoising_service.initialize()
 
         # Define audio callback to handle TTS audio
         async def audio_callback(
@@ -1044,13 +1059,30 @@ class CallHandler:
             return False
 
         try:
+            # Log audio reception for debugging
+            logger.debug(f"Received audio for call {call_sid}: {len(audio_data)} bytes, "
+                        f"sample_rate={sample_rate}, channels={channels}")
+            
             # Note: Don't reset idle timer here as audio packets flow constantly
             # Only reset on meaningful user activity (speech transcripts)
             
-            # Send audio to Deepgram
-            return await self.active_calls[call_sid].deepgram_service.send_audio(
-                audio_data
-            )
+            # Process audio through denoising service first
+            processed_audio = audio_data
+            denoising_service = self.active_calls[call_sid].audio_denoising_service
+            
+            if denoising_service and denoising_service.enabled:
+                logger.debug(f"Processing audio through denoising service for call {call_sid}")
+                processed_audio = await denoising_service.process_audio(audio_data)
+                logger.debug(f"Denoising processed {len(audio_data)} -> {len(processed_audio)} bytes for call {call_sid}")
+            else:
+                logger.debug(f"Audio denoising disabled for call {call_sid}")
+            
+            # Send processed audio to Deepgram
+            logger.debug(f"Sending {len(processed_audio)} bytes to Deepgram for call {call_sid}")
+            result = await self.active_calls[call_sid].deepgram_service.send_audio(processed_audio)
+            logger.debug(f"Deepgram send_audio result for call {call_sid}: {result}")
+            
+            return result
         except Exception as e:
             logger.error(
                 f"Error handling audio for call {call_sid}: {e}", exc_info=True
@@ -1117,6 +1149,10 @@ class CallHandler:
 
             # End TTS session
             await self.active_calls[call_sid].tts_service.end_session()
+
+            # Clean up audio denoising service
+            if self.active_calls[call_sid].audio_denoising_service:
+                await self.active_calls[call_sid].audio_denoising_service.cleanup()
 
             # Update call status in database
             try:
