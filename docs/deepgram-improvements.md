@@ -112,4 +112,51 @@ if pending_llm_task and not pending_llm_task.done():
         pass  # Expected
 ```
 
-This ensures that users hear only the most relevant response when they interrupt or speak multiple utterances quickly. 
+This ensures that users hear only the most relevant response when they interrupt or speak multiple utterances quickly.
+
+## UtteranceEnd Support for Noisy Environments
+
+### Problem
+According to [Deepgram's documentation](https://developers.deepgram.com/docs/understanding-end-of-speech-detection), endpointing alone can fail in noisy environments:
+
+> "In environments with significant background noise such as playing music, a ringing phone, or at a fast food drive thru, the background noise can cause the VAD to trigger and prevent the detection of silent audio. Since endpointing only fires after a certain amount of silence has been detected, a significant amount of background noise may prevent the `speech_final=true` flag from being sent."
+
+### Solution
+We've implemented **UtteranceEnd** as a fallback mechanism that works even in noisy environments:
+
+1. **Word-based Detection**: UtteranceEnd analyzes word timings instead of audio silence
+2. **Noise Immunity**: Works regardless of background noise levels
+3. **Fallback Processing**: Triggers when `speech_final` fails to fire
+4. **Configurable Timing**: Uses 1000ms gap detection by default (recommended minimum)
+
+### Implementation Details
+
+```python
+# UtteranceEnd configuration
+{
+  "stt_settings": {
+    "utterance_end_ms": 1000,  // Gap in ms between words to trigger UtteranceEnd
+    "vad_events": true,        // Enable VAD events for better detection
+    "interim_results": true    // Required for UtteranceEnd to work
+  }
+}
+```
+
+### How It Works
+
+1. **Primary Path**: System tries to use `speech_final` for natural speech boundaries
+2. **Fallback Path**: If `speech_final` doesn't fire due to noise, UtteranceEnd triggers based on word gaps
+3. **Dual Processing**: Both mechanisms can work together for maximum reliability
+
+This ensures reliable speech detection in all environments, from quiet offices to noisy restaurants or drive-throughs.
+
+## Architecture Compliance
+
+Our implementation now fully complies with Deepgram's recommendations:
+
+✅ **Endpointing**: Proper `speech_final` handling with 10ms default  
+✅ **Interim Results**: Correct utterance accumulation until `speech_final`  
+✅ **UtteranceEnd**: Fallback detection for noisy environments  
+✅ **VAD Events**: Enhanced voice activity detection  
+✅ **Request Management**: Proper LLM task cancellation  
+✅ **Timing Heuristics**: Word-gap based utterance segmentation 
