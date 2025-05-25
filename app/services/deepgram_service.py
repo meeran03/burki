@@ -364,13 +364,7 @@ class DeepgramService:
         self.is_connected = True
 
     async def _on_message_async(self, ws, result):
-        """
-        Handle transcript messages from Deepgram.
-
-        Args:
-            ws: WebSocket connection
-            result: Transcript result
-        """
+        """Handle incoming message from Deepgram WebSocket."""
         try:
             # Extract the transcript from the result
             try:
@@ -388,6 +382,33 @@ class DeepgramService:
                 # Get transcript metadata
                 is_final = result.is_final
                 speech_final = result.speech_final
+                
+                # Extract timing information if available
+                start_time = None
+                end_time = None
+                confidence = None
+                
+                # Try to get timing from the alternative
+                alternative = alternatives[0]
+                if hasattr(alternative, 'start') and hasattr(alternative, 'end'):
+                    start_time = alternative.start
+                    end_time = alternative.end
+                
+                # Try to get confidence if available
+                if hasattr(alternative, 'confidence'):
+                    confidence = alternative.confidence
+                
+                # If we don't have segment-level timing, try to get it from words
+                if (start_time is None or end_time is None) and hasattr(alternative, 'words') and alternative.words:
+                    words = alternative.words
+                    if words:
+                        # Get start time from first word
+                        if hasattr(words[0], 'start'):
+                            start_time = words[0].start
+                        # Get end time from last word
+                        if hasattr(words[-1], 'end'):
+                            end_time = words[-1].end
+                
                 # Log the transcript
                 if speech_final:
                     logger.info(
@@ -405,12 +426,21 @@ class DeepgramService:
                 # Pass to callback if available
                 if self.transcript_callback:
                     try:
+                        # Create enhanced metadata with timing information
+                        enhanced_metadata = {
+                            "is_final": is_final, 
+                            "speech_final": speech_final,
+                            "confidence": confidence,
+                            "start_time": start_time,
+                            "end_time": end_time,
+                        }
+                        
                         # Create a task for the callback to avoid blocking the event handler
                         asyncio.create_task(
                             self.transcript_callback(
                                 sentence,
                                 is_final,
-                                {"is_final": is_final, "speech_final": speech_final},
+                                enhanced_metadata,
                             )
                         )
                     except Exception as cb_error:

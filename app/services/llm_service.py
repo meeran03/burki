@@ -354,6 +354,11 @@ class CustomLLMProvider(BaseLLMProvider):
             to_number = settings.get("to_number", "")
             from_number = settings.get("from_number", "")
             call_sid = settings.get("call_sid", "")
+            assistant = settings.get("assistant")
+            
+            # Temporarily store assistant in config for access in _process_custom_llm_response
+            if assistant:
+                self.config["assistant"] = assistant
             
             payload = {
                 "messages": messages,
@@ -388,24 +393,147 @@ class CustomLLMProvider(BaseLLMProvider):
         response: httpx.Response,
         response_callback: Callable[[str, bool, Dict[str, Any]], None],
     ) -> None:
-        """Process streaming response from custom LLM endpoint."""
+        """
+        Process streaming response from custom LLM endpoint.
+
+        Args:
+            response: The streaming response from custom LLM
+            response_callback: Callback function to handle streaming responses
+        """
         collected_response = ""
+        current_tool_call = None
 
         async for line in response.aiter_lines():
             if line.startswith("data: "):
                 try:
-                    data = json.loads(line[6:])
+                    data = json.loads(line[6:])  # Remove 'data: ' prefix
+
+                    # Handle tool calls
                     if data.get("choices") and data["choices"][0].get("delta"):
                         delta = data["choices"][0]["delta"]
+
+                        # Handle regular content
                         if delta.get("content") is not None:
-                            content = delta["content"]
-                            collected_response += content
-                            await response_callback(content, False, {})
+                            if delta["content"]:  # Only process non-null content
+                                content = delta["content"]
+                                collected_response += content
+                                await response_callback(content, False, {})
+
+                        # Check for tool calls
+                        if delta.get("tool_calls"):
+                            tool_call = delta["tool_calls"][0]
+
+                            # Handle tool call start - first chunk contains the name
+                            if tool_call.get("function", {}).get("name"):
+                                current_tool_call = {
+                                    "name": tool_call["function"]["name"],
+                                    "id": tool_call.get("id"),
+                                    "arguments": "",
+                                }
+                                logger.info(
+                                    f"Started tool call: {current_tool_call['name']}"
+                                )
+
+                            # Accumulate arguments if they exist - second chunk contains arguments
+                            if (
+                                tool_call.get("function", {}).get("arguments")
+                                is not None
+                            ):
+                                if current_tool_call:
+                                    current_tool_call["arguments"] += tool_call[
+                                        "function"
+                                    ]["arguments"]
+                                    logger.info(
+                                        f"Accumulated arguments: {current_tool_call['arguments']}"
+                                    )
+
+                    # Check for finish_reason to handle end of tool call - third chunk indicates completion
+                    if (
+                        data["choices"][0].get("finish_reason") == "tool_calls"
+                        and current_tool_call
+                    ):
+                        logger.info(
+                            f"Completing tool call: {current_tool_call['name']}"
+                        )
+                        try:
+                            # Parse arguments if they exist, otherwise use empty dict
+                            args = {}
+                            if current_tool_call["arguments"]:
+                                try:
+                                    args = json.loads(current_tool_call["arguments"])
+                                except json.JSONDecodeError:
+                                    logger.warning(
+                                        f"Failed to parse arguments: {current_tool_call['arguments']}, using empty dict"
+                                    )
+
+                            if current_tool_call["name"] == "endCall":
+                                logger.info("Processing endCall tool call")
+                                # Get custom end call message from assistant
+                                end_call_message = "Thank you for calling. Goodbye!"
+                                assistant = self.config.get("assistant")
+                                if assistant and hasattr(assistant, 'end_call_message') and assistant.end_call_message:
+                                    end_call_message = assistant.end_call_message
+                                
+                                # First send the custom message to be spoken
+                                await response_callback(
+                                    end_call_message,
+                                    False,  # Not final yet, speak the message first
+                                    {"speak_before_action": True, "action": "end_call"}
+                                )
+                                
+                                # Then send the action to end the call
+                                await response_callback(
+                                    "",
+                                    True,
+                                    {"action": "end_call"},
+                                )
+                                return
+                            elif current_tool_call["name"] == "transferCall":
+                                logger.info("Processing transferCall tool call")
+                                destination = args.get("destination")
+                                if destination:
+                                    # Get custom transfer call message from assistant
+                                    transfer_call_message = "Please hold while I transfer your call."
+                                    assistant = self.config.get("assistant")
+                                    if assistant and hasattr(assistant, 'transfer_call_message') and assistant.transfer_call_message:
+                                        transfer_call_message = assistant.transfer_call_message
+                                    
+                                    # First send the custom message to be spoken
+                                    await response_callback(
+                                        transfer_call_message,
+                                        False,  # Not final yet, speak the message first
+                                        {"speak_before_action": True}
+                                    )
+                                    
+                                    # Then send the action to transfer the call
+                                    await response_callback(
+                                        "",
+                                        True,
+                                        {
+                                            "action": "transfer_call",
+                                            "destination": destination,
+                                        },
+                                    )
+                                    return
+                        except Exception as e:
+                            logger.error(f"Error processing tool call completion: {e}")
+                        finally:
+                            current_tool_call = None
+
                 except json.JSONDecodeError:
+                    logger.error(f"Error parsing JSON from response: {line}")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error processing response line: {e}")
                     continue
 
-        if collected_response:
-            await response_callback("", True, {"full_response": collected_response})
+        # Only send final response if we haven't already sent a tool action
+        if collected_response and not current_tool_call:
+            await response_callback(
+                "",
+                True,
+                {"full_response": collected_response},
+            )
 
 
 class LLMService:

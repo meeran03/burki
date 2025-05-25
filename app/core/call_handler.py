@@ -61,6 +61,9 @@ class CallState:
     idle_timeout_seconds: Optional[int] = None  # Timeout in seconds
     max_idle_messages: Optional[int] = None  # Max idle messages before ending call
     idle_message: Optional[str] = None  # Message to send when idle
+    
+    # Timing tracking for metrics calculation
+    current_assistant_response_start: Optional[float] = None  # Track when assistant response starts
 
 
 class CallHandler:
@@ -633,6 +636,15 @@ class CallHandler:
                         # End the call in our system after transfer
                         return
 
+            # Track timing for the first response chunk (when assistant starts responding)
+            if content and not self.active_calls[call_sid].current_assistant_response_start:
+                # Calculate time since call start in seconds
+                call_start_time = self.active_calls[call_sid].start_time
+                current_time = datetime.now()
+                self.active_calls[call_sid].current_assistant_response_start = (
+                    current_time - call_start_time
+                ).total_seconds()
+
             # Process text through TTS service
             if content:
                 await self.active_calls[call_sid].tts_service.process_text(
@@ -648,19 +660,35 @@ class CallHandler:
                 response = metadata.get("full_response", "")
                 logger.info(f"Final LLM response for {call_sid}: {response}")
                 
-                # Store assistant response in database asynchronously
+                # Store assistant response in database asynchronously with timing
                 if response:
                     # Clean up flush tags and other formatting before storing
                     cleaned_response = response.replace("<flush/>", "").replace("<flush>", "").strip()
                     if cleaned_response:  # Only store if there's actual content
+                        # Calculate response end time
+                        call_start_time = self.active_calls[call_sid].start_time
+                        current_time = datetime.now()
+                        response_end_time = (current_time - call_start_time).total_seconds()
+                        
+                        # Use the tracked start time or estimate it
+                        response_start_time = self.active_calls[call_sid].current_assistant_response_start
+                        if response_start_time is None:
+                            # Estimate response took about 2-3 seconds if we don't have start time
+                            response_start_time = max(0, response_end_time - 2.5)
+                        
                         asyncio.create_task(
                             CallService.create_transcript(
                                 call_sid=call_sid,
                                 content=cleaned_response,
                                 is_final=True,
                                 speaker="assistant",
+                                segment_start=response_start_time,
+                                segment_end=response_end_time,
                             )
                         )
+                        
+                        # Reset the response start tracking for next response
+                        self.active_calls[call_sid].current_assistant_response_start = None
             else:
                 logger.debug(f"LLM response chunk for {call_sid}: {content}")
 
@@ -736,6 +764,8 @@ class CallHandler:
                                     content=buffered_transcript,
                                     is_final=True,
                                     speaker="user",
+                                    segment_start=self._get_segment_start_time(call_sid, metadata),
+                                    segment_end=self._get_segment_end_time(call_sid, metadata),
                                 )
                             )
                         
@@ -775,6 +805,8 @@ class CallHandler:
                             is_final=is_final,
                             speaker="user",
                             confidence=metadata.get("confidence"),
+                            segment_start=self._get_segment_start_time(call_sid, metadata),
+                            segment_end=self._get_segment_end_time(call_sid, metadata),
                         )
                     )
                     
@@ -972,3 +1004,59 @@ class CallHandler:
         if call_sid in self.active_calls and self.active_calls[call_sid].llm_service:
             return self.active_calls[call_sid].llm_service.get_conversation_history()
         return []
+
+    def _get_segment_start_time(self, call_sid: str, metadata: Dict[str, Any]) -> Optional[float]:
+        """
+        Get the segment start time from metadata.
+
+        Args:
+            call_sid: The Twilio call SID
+            metadata: Additional metadata about the transcript
+
+        Returns:
+            Optional[float]: The segment start time in seconds since call start, or None
+        """
+        if call_sid not in self.active_calls:
+            return None
+            
+        # Get the absolute start time from Deepgram (if available)
+        deepgram_start_time = metadata.get("start_time")
+        if deepgram_start_time is not None:
+            # Convert to relative time since call start
+            call_start_time = self.active_calls[call_sid].start_time
+            current_time = datetime.now()
+            call_duration = (current_time - call_start_time).total_seconds()
+            
+            # If deepgram_start_time is relative to the audio stream, use it directly
+            # If it's absolute, we'd need to adjust it, but typically it's relative
+            return deepgram_start_time
+        
+        return None
+
+    def _get_segment_end_time(self, call_sid: str, metadata: Dict[str, Any]) -> Optional[float]:
+        """
+        Get the segment end time from metadata.
+
+        Args:
+            call_sid: The Twilio call SID
+            metadata: Additional metadata about the transcript
+
+        Returns:
+            Optional[float]: The segment end time in seconds since call start, or None
+        """
+        if call_sid not in self.active_calls:
+            return None
+            
+        # Get the absolute end time from Deepgram (if available)
+        deepgram_end_time = metadata.get("end_time")
+        if deepgram_end_time is not None:
+            # Convert to relative time since call start
+            call_start_time = self.active_calls[call_sid].start_time
+            current_time = datetime.now()
+            call_duration = (current_time - call_start_time).total_seconds()
+            
+            # If deepgram_end_time is relative to the audio stream, use it directly
+            # If it's absolute, we'd need to adjust it, but typically it's relative
+            return deepgram_end_time
+        
+        return None
