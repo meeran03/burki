@@ -6,6 +6,7 @@ This file contains the CallHandler class for managing call state and conversatio
 import logging
 import base64
 import asyncio
+import json
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -17,6 +18,7 @@ from app.services.tts_service import TTSService
 from app.services.call_service import CallService
 from app.services.webhook_service import WebhookService
 from app.services.audio_denoising_service import AudioDenoisingService
+from app.services.recording_service import RecordingService
 from app.twilio.twilio_service import TwilioService
 
 # Configure logging
@@ -54,6 +56,7 @@ class CallState:
     deepgram_service: Optional[Any] = None  # Deepgram service for this call
     tts_service: Optional[Any] = None  # TTS service for this call
     audio_denoising_service: Optional[Any] = None  # Audio denoising service for this call
+    recording_service: Optional[Any] = None  # Recording service for this call
     assistant: Optional[Any] = None  # Assistant to use for this call
     
     # Idle timeout tracking
@@ -313,8 +316,8 @@ class CallHandler:
             else:
                 logger.error(f"Failed to start transcription for call: {call_sid}")
 
-            # Start recording asynchronously (don't wait for it)
-            asyncio.create_task(self._start_call_recording_async(call_sid, assistant, websocket))
+            # Initialize and start local recording service
+            await self._start_local_recording_async(call_sid, assistant)
 
             # Start idle timeout monitoring if configured
             if (call_sid in self.active_calls and 
@@ -337,61 +340,105 @@ class CallHandler:
         except Exception as e:
             logger.error(f"Error starting background services for call {call_sid}: {e}", exc_info=True)
 
-    async def _start_call_recording_async(self, call_sid: str, assistant: Any, websocket: WebSocket) -> None:
+    async def _start_local_recording_async(self, call_sid: str, assistant: Any) -> None:
         """
-        Start Twilio call recording asynchronously.
+        Start local recording service asynchronously.
 
         Args:
             call_sid: The Twilio call SID
             assistant: The assistant instance
-            websocket: The WebSocket connection to get host info
         """
         try:
-            # Get Twilio credentials from assistant or environment
-            account_sid = assistant.twilio_account_sid if assistant else None
-            auth_token = assistant.twilio_auth_token if assistant else None
+            # Create recording service with assistant settings
+            recording_enabled = False
+            recording_settings = {}
+            if assistant and assistant.recording_settings:
+                recording_enabled = assistant.recording_settings.get('enabled', False)
+                recording_settings = assistant.recording_settings
 
-            # Build recording status callback URL
-            # Get host from WebSocket headers
-            host = websocket.headers.get("host", "localhost:8000")
-            
-            # Determine protocol based on host - fix for Railway
-            protocol = "http"  # default
-            
-            # Check for HTTPS indicators
-            if (websocket.headers.get("x-forwarded-proto") == "https" or 
-                "ngrok" in host or 
-                "herokuapp" in host or 
-                "railway.app" in host or
-                host.startswith("https")):
-                protocol = "https"
-            
-            recording_callback_url = f"{protocol}://{host}/recording-status"
-
-            # Start recording via Twilio API
-            recording_sid = TwilioService.start_call_recording(
+            self.active_calls[call_sid].recording_service = RecordingService(
                 call_sid=call_sid,
-                recording_channels="dual",
-                recording_status_callback=recording_callback_url,
-                account_sid=account_sid,
-                auth_token=auth_token,
+                enabled=recording_enabled,
+                format=recording_settings.get('format', 'wav'),
+                sample_rate=recording_settings.get('sample_rate', 8000),
+                channels=recording_settings.get('channels', 1),
+                record_user=recording_settings.get('record_user_audio', True),
+                record_assistant=recording_settings.get('record_assistant_audio', True),
+                record_mixed=recording_settings.get('record_mixed_audio', True),
+                auto_save=recording_settings.get('auto_save', True),
+                recordings_dir=recording_settings.get('recordings_dir', 'recordings'),
             )
 
-            if recording_sid:
-                # Create recording record in database as background task
-                asyncio.create_task(
-                    CallService.create_twilio_recording(
-                        call_sid=call_sid,
-                        recording_sid=recording_sid,
-                        status="recording",
-                    )
+            # Initialize and start recording service if enabled
+            recording_service = self.active_calls[call_sid].recording_service
+            if recording_service and recording_service.enabled:
+                # Set up recording callbacks
+                async def recording_started_callback(call_sid: str):
+                    logger.info(f"Local recording started for call {call_sid}")
+                    
+                async def recording_stopped_callback(call_sid: str):
+                    logger.info(f"Local recording stopped for call {call_sid}")
+                    
+                async def recording_saved_callback(call_sid: str, saved_files: Dict[str, str]):
+                    logger.info(f"Local recordings saved for call {call_sid}: {saved_files}")
+                    # Create database records if enabled
+                    if (assistant and assistant.recording_settings and 
+                        assistant.recording_settings.get('create_database_records', True)):
+                        for recording_type, file_path in saved_files.items():
+                            try:
+                                await CallService.create_recording(
+                                    call_sid=call_sid,
+                                    format=recording_service.format,
+                                    recording_type=recording_type,
+                                    recording_source="local",
+                                    status="completed",
+                                    file_path=file_path,  # Pass the file path directly
+                                )
+                                logger.info(f"Created database record for {recording_type} recording: {file_path}")
+                            except Exception as e:
+                                logger.error(f"Error creating database record for recording {file_path}: {e}")
+                    
+                    # Record billing usage for the completed call
+                    try:
+                        # Get the call to record billing
+                        call = await CallService.get_call_by_sid(call_sid)
+                        if call:
+                            # Import BillingService here to avoid circular imports
+                            from app.services.billing_service import BillingService
+                            # Run billing as background task to reduce latency
+                            asyncio.create_task(BillingService.record_call_usage(call.id))
+                            logger.info(f"Scheduled billing usage recording for call {call.id}")
+                    except Exception as billing_error:
+                        logger.error(f"Error scheduling billing usage for call {call_sid}: {billing_error}")
+                    
+                    # Send webhook when recordings are saved
+                    if assistant and assistant.webhook_url:
+                        try:
+                            # Send end-of-call webhook with recording information
+                            asyncio.create_task(
+                                WebhookService.send_end_of_call_webhook_with_recordings(
+                                    call_sid=call_sid,
+                                    saved_files=saved_files
+                                )
+                            )
+                            logger.info(f"Scheduled end-of-call webhook with recordings for call {call_sid}")
+                        except Exception as e:
+                            logger.error(f"Error scheduling webhook for call {call_sid}: {e}")
+                
+                recording_service.set_callbacks(
+                    recording_started_callback=recording_started_callback,
+                    recording_stopped_callback=recording_stopped_callback,
+                    recording_saved_callback=recording_saved_callback,
                 )
-                logger.info(f"Started Twilio recording {recording_sid} for call {call_sid}")
+                
+                # Start recording
+                await recording_service.start_recording()
+                logger.info(f"Started local recording service for call {call_sid}")
             else:
-                logger.error(f"Failed to start Twilio recording for call {call_sid}")
+                logger.info(f"Local recording disabled for call {call_sid}")
 
         except Exception as e:
-            logger.error(f"Error starting call recording: {e}", exc_info=True)
+            logger.error(f"Error starting local recording for call {call_sid}: {e}", exc_info=True)
 
     async def _monitor_idle_timeout(self, call_sid: str) -> None:
         """
@@ -498,7 +545,10 @@ class CallHandler:
 
             # Only send non-empty audio data
             if audio_data:
-                # Create a message in Twilio Media Streams format
+                # Encode audio data as base64
+                audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+
+                # Send audio to Twilio via WebSocket
                 message = {
                     "event": "media",
                     "streamSid": self.active_calls[call_sid].metadata.get("stream_sid"),
@@ -517,6 +567,10 @@ class CallHandler:
 
                 # Send the audio data through the WebSocket
                 await websocket.send_json(message)
+                # Record assistant audio if recording service is enabled
+                recording_service = self.active_calls[call_sid].recording_service
+                if recording_service and recording_service.enabled:
+                    await recording_service.record_assistant_audio(audio_data)
 
         except Exception as e:
             logger.error(
@@ -1082,6 +1136,11 @@ class CallHandler:
             result = await self.active_calls[call_sid].deepgram_service.send_audio(processed_audio)
             logger.debug(f"Deepgram send_audio result for call {call_sid}: {result}")
             
+            # Record user audio if recording service is enabled
+            recording_service = self.active_calls[call_sid].recording_service
+            if recording_service and recording_service.enabled:
+                await recording_service.record_user_audio(processed_audio)
+            
             return result
         except Exception as e:
             logger.error(
@@ -1154,6 +1213,10 @@ class CallHandler:
             if self.active_calls[call_sid].audio_denoising_service:
                 await self.active_calls[call_sid].audio_denoising_service.cleanup()
 
+            # Clean up recording service
+            if self.active_calls[call_sid].recording_service:
+                await self.active_calls[call_sid].recording_service.cleanup()
+
             # Update call status in database
             try:
                 start_time = self.active_calls[call_sid].start_time
@@ -1171,19 +1234,21 @@ class CallHandler:
                 logger.error(f"Error scheduling call status update for {call_sid}: {e}", exc_info=True)
 
             # Send end-of-call webhook if assistant and webhook URL are configured
+            # Only send if recordings are not enabled, otherwise webhook is sent when recordings are saved
             assistant = self.active_calls[call_sid].assistant
-            if assistant:
-                try:
-                    # Send delayed webhook that waits for recordings to complete
-                    asyncio.create_task(
-                        WebhookService.send_end_of_call_webhook_when_ready(
-                            call_sid=call_sid,
-                            max_wait_seconds=60  # Wait up to 60 seconds for recordings
+            if assistant and assistant.webhook_url:
+                recording_enabled = (assistant.recording_settings and 
+                                   assistant.recording_settings.get('enabled', False))
+                
+                if not recording_enabled:
+                    try:
+                        # Send immediate webhook since no recordings to wait for
+                        asyncio.create_task(
+                            WebhookService.send_end_of_call_webhook_immediate(call_sid=call_sid)
                         )
-                    )
-                    logger.info(f"Scheduled delayed end-of-call webhook for call {call_sid}")
-                except Exception as e:
-                    logger.error(f"Error scheduling end-of-call webhook for call {call_sid}: {e}")
+                        logger.info(f"Scheduled immediate end-of-call webhook for call {call_sid} (no recordings)")
+                    except Exception as e:
+                        logger.error(f"Error scheduling end-of-call webhook for call {call_sid}: {e}")
 
             # Clean up call state - save a reference for logging before deletion
             call_state = self.active_calls.get(call_sid)

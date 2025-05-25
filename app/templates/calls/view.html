@@ -287,15 +287,31 @@
                                 <h5 class="text-sm font-medium text-gray-300 mb-3">Audio Quality</h5>
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-400 text-sm">Sample Rate</span>
-                                    <span class="text-white text-sm font-mono">8 kHz</span>
+                                    <span class="text-white text-sm font-mono">
+                                        {% if recording_with_file.file_path and recording_with_file.file_path.endswith('.mp3') %}
+                                            22 kHz
+                                        {% else %}
+                                            8 kHz
+                                        {% endif %}
+                                    </span>
                                 </div>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-gray-400 text-sm">Bit Depth</span>
-                                    <span class="text-white text-sm font-mono">16-bit</span>
+                                    <span class="text-gray-400 text-sm">Format</span>
+                                    <span class="text-white text-sm font-mono">
+                                        {% if recording_with_file.file_path and recording_with_file.file_path.endswith('.mp3') %}
+                                            MP3
+                                        {% else %}
+                                            WAV
+                                        {% endif %}
+                                    </span>
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-400 text-sm">Channels</span>
                                     <span class="text-white text-sm font-mono">Mono</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-gray-400 text-sm">Source</span>
+                                    <span class="text-white text-sm font-mono">Local</span>
                                 </div>
                             </div>
                             
@@ -330,6 +346,8 @@
                             <script>
                                 window.audioUrl = '/calls/{{ call.id }}/recording/{{ recording_with_file.id }}/play';
                         window.hasAudio = true;
+                        window.recordingType = '{{ recording_with_file.recording_type }}';
+                        window.recordingSource = '{{ recording_with_file.recording_source }}';
                             </script>
                         {% else %}
                     <!-- No Local Recording Available -->
@@ -339,18 +357,33 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
                         </div>
-                        <h4 class="text-lg font-medium text-white mb-2">Audio Processing in Progress</h4>
-                        <p class="text-gray-400 mb-6">The neural audio analysis engine is processing this recording for enhanced insights</p>
-                                {% set completed_recording = recordings|selectattr('status', 'equalto', 'completed')|first %}
-                                {% if completed_recording %}
-                                    <a href="/calls/{{ call.id }}/recording/{{ completed_recording.id }}" 
-                               class="inline-flex items-center px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all duration-300 shadow-lg">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                                </svg>
-                                Access External Recording
-                                    </a>
-                                {% endif %}
+                        <h4 class="text-lg font-medium text-white mb-2">Recording Processing</h4>
+                        <p class="text-gray-400 mb-6">The local recording system is processing this call's audio</p>
+                        
+                        <!-- Show available recordings even if no local file -->
+                        {% if recordings %}
+                            <div class="space-y-2 mb-6">
+                                {% for recording in recordings %}
+                                    <div class="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
+                                        <div class="flex items-center space-x-3">
+                                            {% if recording.status == 'completed' %}
+                                                <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                                            {% elif recording.status == 'recording' %}
+                                                <div class="w-3 h-3 rounded-full bg-yellow-400 animate-pulse"></div>
+                                            {% else %}
+                                                <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                                            {% endif %}
+                                            <span class="text-sm text-gray-300">{{ recording.recording_type|title }} Recording</span>
+                                        </div>
+                                        <span class="text-xs text-gray-500">{{ recording.status|title }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                        <div class="text-sm text-gray-500">
+                            Local recordings provide better quality and faster access
+                        </div>
                             </div>
                         {% endif %}
                     {% else %}
@@ -361,10 +394,10 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"></path>
                         </svg>
                     </div>
-                    <h4 class="text-lg font-medium text-white mb-2">No Audio Available</h4>
-                    <p class="text-gray-400 mb-4">This call was not recorded or the recording process encountered an issue</p>
+                    <h4 class="text-lg font-medium text-white mb-2">No Recording Available</h4>
+                    <p class="text-gray-400 mb-4">This call was not recorded or recording is disabled for this assistant</p>
                     <div class="text-sm text-gray-500">
-                        Voice AI insights are limited without audio data
+                        Enable recording in assistant settings to capture future calls
                     </div>
                         </div>
                     {% endif %}

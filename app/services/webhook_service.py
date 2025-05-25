@@ -415,7 +415,7 @@ Call Summary: {summary}"""
             
             # Wait for recordings to complete or timeout
             wait_time = 0
-            check_interval = 2  # Check every 2 seconds
+            check_interval = 2
             
             while wait_time < max_wait_seconds:
                 # Check again if webhook was sent while we were waiting
@@ -473,6 +473,119 @@ Call Summary: {summary}"""
         except Exception as e:
             logger.error(f"Error sending delayed end-of-call webhook for call {call_sid}: {e}")
             return False
+
+    @staticmethod
+    async def send_end_of_call_webhook_with_recordings(
+        call_sid: str,
+        saved_files: Dict[str, str]
+    ) -> bool:
+        """
+        Send end-of-call webhook with local recording information.
+
+        Args:
+            call_sid: The call SID
+            saved_files: Dictionary of recording type to file path
+
+        Returns:
+            bool: True if webhook was sent successfully, False otherwise
+        """
+        try:
+            # Get call and assistant info
+            call = await CallService.get_call_by_sid(call_sid)
+            if not call or not call.assistant:
+                logger.error(f"Call or assistant not found for SID: {call_sid}")
+                return False
+            
+            assistant = call.assistant
+            
+            # Construct recording URL from the best available local recording
+            recording_url = None
+            if saved_files:
+                # Prefer mixed recording, then user, then assistant
+                if "mixed" in saved_files:
+                    recording_url = WebhookService._construct_local_recording_url(call_sid, saved_files["mixed"])
+                elif "user" in saved_files:
+                    recording_url = WebhookService._construct_local_recording_url(call_sid, saved_files["user"])
+                elif "assistant" in saved_files:
+                    recording_url = WebhookService._construct_local_recording_url(call_sid, saved_files["assistant"])
+                else:
+                    # Use the first available recording
+                    first_file = next(iter(saved_files.values()))
+                    recording_url = WebhookService._construct_local_recording_url(call_sid, first_file)
+            
+            # Send the webhook
+            return await WebhookService.send_end_of_call_webhook(
+                assistant=assistant,
+                call=call,
+                ended_reason="customer-ended-call",
+                recording_url=recording_url
+            )
+            
+        except Exception as e:
+            logger.error(f"Error sending end-of-call webhook with recordings for call {call_sid}: {e}")
+            return False
+
+    @staticmethod
+    async def send_end_of_call_webhook_immediate(call_sid: str) -> bool:
+        """
+        Send end-of-call webhook immediately without waiting for recordings.
+
+        Args:
+            call_sid: The call SID
+
+        Returns:
+            bool: True if webhook was sent successfully, False otherwise
+        """
+        try:
+            # Get call and assistant info
+            call = await CallService.get_call_by_sid(call_sid)
+            if not call or not call.assistant:
+                logger.error(f"Call or assistant not found for SID: {call_sid}")
+                return False
+            
+            assistant = call.assistant
+            
+            # Send the webhook without recording URL
+            return await WebhookService.send_end_of_call_webhook(
+                assistant=assistant,
+                call=call,
+                ended_reason="customer-ended-call",
+                recording_url=None
+            )
+            
+        except Exception as e:
+            logger.error(f"Error sending immediate end-of-call webhook for call {call_sid}: {e}")
+            return False
+
+    @staticmethod
+    def _construct_local_recording_url(call_sid: str, file_path: str) -> str:
+        """
+        Construct a URL for a local recording file.
+
+        Args:
+            call_sid: The call SID
+            file_path: The local file path
+
+        Returns:
+            str: The constructed URL
+        """
+        try:
+            # Get the base server URL
+            base_url = get_server_base_url()
+            
+            # Extract filename from path
+            import os
+            filename = os.path.basename(file_path)
+            
+            # Construct URL for local recording endpoint
+            # This assumes you have an endpoint to serve local recordings
+            recording_url = f"{base_url}/recordings/{call_sid}/{filename}"
+            
+            return recording_url
+            
+        except Exception as e:
+            logger.error(f"Error constructing local recording URL for {file_path}: {e}")
+            return file_path  # Fallback to file path
 
     @staticmethod
     def cleanup_webhook_tracking(max_entries: int = 1000) -> None:
