@@ -40,7 +40,25 @@ RUN apt-get update && apt-get install -y \
     python3-pyaudio \
     alsa-utils \
     curl \
+    git \
+    autoconf \
+    automake \
+    libtool \
+    make \
     && rm -rf /var/lib/apt/lists/*
+
+# Install RNNoise for audio denoising
+RUN mkdir -p /tmp/rnnoise && cd /tmp/rnnoise \
+    && git clone https://github.com/xiph/rnnoise.git \
+    && cd rnnoise \
+    && ./autogen.sh \
+    && ./configure --prefix=/usr/local \
+    && make \
+    && make install \
+    && cp examples/.libs/rnnoise_demo /usr/local/bin/ \
+    && ldconfig \
+    && cd / \
+    && rm -rf /tmp/rnnoise
 
 # Set work directory
 WORKDIR /app
@@ -55,6 +73,12 @@ COPY . .
 
 # Create necessary directories
 RUN mkdir -p /app/recordings /app/logs
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh
+
+# Verify RNNoise installation
+RUN /app/scripts/verify_rnnoise.sh
 
 # Expose port (Railway will set this dynamically)
 EXPOSE $PORT
