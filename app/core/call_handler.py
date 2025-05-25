@@ -108,22 +108,8 @@ class CallHandler:
             metadata: Additional call metadata
             assistant: The assistant to use for this call
         """
-        # Create call record in database
-        if assistant:
-            try:
-                # Run database operation as background task to reduce latency
-                asyncio.create_task(
-                    CallService.create_call(
-                        assistant_id=assistant.id,
-                        call_sid=call_sid,
-                        to_phone_number=to_number or "",
-                        customer_phone_number=from_number or "",
-                        metadata=metadata or {},
-                    )
-                )
-                logger.info(f"Scheduled call record creation in database for call {call_sid}")
-            except Exception as e:
-                logger.error(f"Error scheduling call record creation for {call_sid}: {e}", exc_info=True)
+        # Note: Call record creation and initial webhook are now handled in /twiml endpoint
+        # for faster response time
 
         # Initialize call state
         self.active_calls[call_sid] = CallState(
@@ -328,22 +314,8 @@ class CallHandler:
                 logger.info(f"No idle timeout configured for call {call_sid} "
                            f"(timeout: {self.active_calls[call_sid].idle_timeout_seconds})")
 
-            # Send initial webhook status update after call starts
-            if assistant:
-                try:
-                    call = await CallService.get_call_by_sid(call_sid)
-                    if call:
-                        asyncio.create_task(
-                            WebhookService.send_status_update_webhook(
-                                assistant=assistant,
-                                call=call,
-                                status="in-progress",
-                                messages=[]
-                            )
-                        )
-                        logger.info(f"Sent initial webhook status update for call {call_sid}")
-                except Exception as e:
-                    logger.error(f"Error sending initial webhook for call {call_sid}: {e}")
+            # Note: Initial webhook status update is now sent immediately in /twiml endpoint
+            # for faster response time
 
         except Exception as e:
             logger.error(f"Error starting background services for call {call_sid}: {e}", exc_info=True)
