@@ -131,16 +131,94 @@ class CallService:
             raise
 
     @staticmethod
+    async def create_s3_recording(
+        call_sid: str,
+        s3_key: str,
+        s3_url: str,
+        duration: float,
+        file_size: int,
+        format: str = "mp3",
+        sample_rate: int = 22050,
+        channels: int = 1,
+        recording_type: str = "mixed",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Recording]:
+        """
+        Create an S3-based recording for a call.
+
+        Args:
+            call_sid: Call SID
+            s3_key: S3 object key
+            s3_url: S3 public URL
+            duration: Recording duration in seconds
+            file_size: File size in bytes
+            format: Audio format
+            sample_rate: Sample rate in Hz
+            channels: Number of audio channels
+            recording_type: Recording type (user, assistant, mixed)
+            metadata: Additional metadata
+
+        Returns:
+            Optional[Recording]: Created recording record or None
+        """
+        try:
+            call = await CallService.get_call_by_sid(call_sid)
+            if not call:
+                logger.error(f"Call not found for SID: {call_sid}")
+                return None
+
+            async with await get_async_db_session() as db:
+                # Create recording record in database
+                recording_data = {
+                    "call_id": call.id,
+                    "s3_key": s3_key,
+                    "s3_url": s3_url,
+                    "s3_bucket": os.getenv("AWS_S3_BUCKET_NAME"),
+                    "duration": duration,
+                    "file_size": file_size,
+                    "format": format,
+                    "sample_rate": sample_rate,
+                    "channels": channels,
+                    "recording_type": recording_type,
+                    "recording_source": "s3",
+                    "status": "completed",
+                    "uploaded_at": datetime.datetime.utcnow(),
+                    "recording_metadata": metadata or {},
+                }
+
+                recording = Recording(**recording_data)
+                db.add(recording)
+                await db.commit()
+                await db.refresh(recording)
+                logger.info(
+                    f"Created S3 recording with ID: {recording.id} for call SID: {call_sid}, S3 key: {s3_key}"
+                )
+
+                return recording
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating S3 recording: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error creating S3 recording: {e}")
+            raise
+
+    @staticmethod
     async def create_recording(
         call_sid: str,
         audio_data: bytes = None,
-        format: str = "wav",
-        recording_type: str = "full",
-        recording_source: str = "local",
+        format: str = "mp3",
+        recording_type: str = "mixed",
+        recording_source: str = "s3",
         recording_sid: str = None,
         recording_url: str = None,
         status: str = "recording",
         file_path: str = None,
+        s3_key: str = None,
+        s3_url: str = None,
+        duration: float = None,
+        file_size: int = None,
+        sample_rate: int = None,
+        channels: int = None,
     ) -> Optional[Tuple[Recording, str]]:
         """
         Create a recording for a call.
@@ -155,6 +233,12 @@ class CallService:
             recording_url: Twilio Recording URL (for Twilio recordings)
             status: Recording status (recording, completed, failed)
             file_path: Direct file path (for existing files)
+            s3_key: S3 object key
+            s3_url: S3 public URL
+            duration: Recording duration in seconds
+            file_size: File size in bytes
+            sample_rate: Sample rate in Hz
+            channels: Number of audio channels
 
         Returns:
             Optional[Tuple[Recording, str]]: Recording object and file path or None
@@ -194,6 +278,12 @@ class CallService:
                     "recording_type": recording_type,
                     "recording_source": recording_source,
                     "status": status,
+                    "s3_key": s3_key,
+                    "s3_url": s3_url,
+                    "duration": duration,
+                    "file_size": file_size,
+                    "sample_rate": sample_rate,
+                    "channels": channels,
                 }
 
                 recording = Recording(**recording_data)
