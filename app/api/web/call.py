@@ -6,6 +6,7 @@ Call routes
 import logging
 import json
 import os
+import datetime
 from io import StringIO
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response
 from fastapi.responses import (
@@ -289,20 +290,18 @@ async def list_calls(
 
     # Apply date range filter
     if date_range:
-        from datetime import datetime, timedelta
-
-        today = datetime.now().date()
+        today = datetime.datetime.now().date()
 
         if date_range == "today":
             query = query.filter(func.date(Call.started_at) == today)
         elif date_range == "yesterday":
-            yesterday = today - timedelta(days=1)
+            yesterday = today - datetime.timedelta(days=1)
             query = query.filter(func.date(Call.started_at) == yesterday)
         elif date_range == "week":
-            week_ago = today - timedelta(days=7)
+            week_ago = today - datetime.timedelta(days=7)
             query = query.filter(Call.started_at >= week_ago)
         elif date_range == "month":
-            month_ago = today - timedelta(days=30)
+            month_ago = today - datetime.timedelta(days=30)
             query = query.filter(Call.started_at >= month_ago)
 
     # Get total count before pagination
@@ -494,7 +493,11 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
 
 def calculate_call_metrics(call, transcripts):
     """Calculate dynamic metrics from call and transcript data."""
+    logger = logging.getLogger(__name__)
+    logger.info(f"Calculating metrics for call {call.call_sid if call else 'None'} with {len(transcripts)} transcripts")
+    
     if not transcripts:
+        logger.info("No transcripts found, returning default metrics")
         return {
             "avg_response_time": 0,
             "fastest_response_time": 0,
@@ -512,16 +515,66 @@ def calculate_call_metrics(call, transcripts):
     user_transcripts = [t for t in transcripts if t.speaker == 'user']
     ai_transcripts = [t for t in transcripts if t.speaker == 'assistant']
     
-    # Calculate response times
+    logger.info(f"Found {len(user_transcripts)} user transcripts and {len(ai_transcripts)} AI transcripts")
+    
+    # Sort all transcripts by timing for proper chronological order
+    all_transcripts_with_timing = [
+        t for t in transcripts 
+        if t.segment_start is not None and t.segment_end is not None
+    ]
+    all_transcripts_with_timing.sort(key=lambda x: x.segment_start)
+    
+    logger.info(f"Found {len(all_transcripts_with_timing)} transcripts with timing data")
+    
+    # Log some sample timing data
+    for i, t in enumerate(all_transcripts_with_timing[:3]):  # Log first 3
+        logger.info(f"Sample transcript {i}: speaker={t.speaker}, start={t.segment_start}, end={t.segment_end}, content='{t.content[:50]}...'")
+    
+    # Calculate response times using chronological matching
     response_times = []
-    if user_transcripts and ai_transcripts:
-        for i in range(min(len(user_transcripts) - 1, len(ai_transcripts))):
-            if (user_transcripts[i].segment_end and 
-                i < len(ai_transcripts) and 
-                ai_transcripts[i].segment_start):
-                response_time = ai_transcripts[i].segment_start - user_transcripts[i].segment_end
-                if response_time > 0:
-                    response_times.append(response_time)
+    
+    # Method 1: Use timing data if available
+    if all_transcripts_with_timing:
+        for i, transcript in enumerate(all_transcripts_with_timing):
+            if transcript.speaker == 'user':
+                # Find the next assistant response after this user message
+                for j in range(i + 1, len(all_transcripts_with_timing)):
+                    next_transcript = all_transcripts_with_timing[j]
+                    if next_transcript.speaker == 'assistant':
+                        # Calculate response time
+                        response_time = next_transcript.segment_start - transcript.segment_end
+                        logger.info(f"Response time calculation: {next_transcript.segment_start} - {transcript.segment_end} = {response_time}")
+                        if response_time > 0 and response_time <= 30:  # Reasonable response time
+                            response_times.append(response_time)
+                            logger.info(f"Added response time: {response_time}")
+                        else:
+                            logger.info(f"Rejected response time: {response_time} (out of bounds)")
+                        break  # Only match with the first assistant response
+    
+    logger.info(f"Method 1 found {len(response_times)} response times: {response_times}")
+    
+    # Method 2: Fallback to timestamp differences if no timing data or no response times found
+    if not response_times and user_transcripts and ai_transcripts:
+        logger.info("Falling back to timestamp-based calculation")
+        # Sort transcripts by creation time
+        all_transcripts_by_time = sorted(transcripts, key=lambda x: x.created_at or datetime.datetime.min)
+        
+        for i, transcript in enumerate(all_transcripts_by_time):
+            if transcript.speaker == 'user':
+                # Find the next assistant response after this user message
+                for j in range(i + 1, len(all_transcripts_by_time)):
+                    next_transcript = all_transcripts_by_time[j]
+                    if next_transcript.speaker == 'assistant':
+                        if transcript.created_at and next_transcript.created_at:
+                            response_time = (next_transcript.created_at - transcript.created_at).total_seconds()
+                            logger.info(f"Timestamp response time: {response_time}")
+                            # Only consider reasonable response times (0.1 to 30 seconds)
+                            if 0.1 <= response_time <= 30:
+                                response_times.append(response_time)
+                                logger.info(f"Added timestamp response time: {response_time}")
+                        break  # Only match with the first assistant response
+    
+    logger.info(f"Final response times: {response_times}")
     
     # Calculate average and fastest response times
     avg_response_time = sum(response_times) / len(response_times) if response_times else 0
@@ -557,7 +610,7 @@ def calculate_call_metrics(call, transcripts):
     avg_transcript_length = sum(len(t.content) for t in transcripts) / len(transcripts) if transcripts else 0
     engagement_score = min(100, max(30, (avg_transcript_length / 50) * 100))
     
-    return {
+    calculated_metrics = {
         "avg_response_time": round(avg_response_time, 2),
         "fastest_response_time": round(fastest_response_time, 2),
         "response_consistency": round(response_consistency),
@@ -569,6 +622,9 @@ def calculate_call_metrics(call, transcripts):
         "user_turns": len(user_transcripts),
         "ai_turns": len(ai_transcripts),
     }
+    
+    logger.info(f"Calculated metrics: {calculated_metrics}")
+    return calculated_metrics
 
 
 @router.get("/calls/export", response_class=Response)
@@ -615,20 +671,18 @@ async def export_calls(
 
     # Apply date range filter
     if date_range:
-        from datetime import datetime, timedelta
-
-        today = datetime.now().date()
+        today = datetime.datetime.now().date()
 
         if date_range == "today":
             query = query.filter(func.date(Call.started_at) == today)
         elif date_range == "yesterday":
-            yesterday = today - timedelta(days=1)
+            yesterday = today - datetime.timedelta(days=1)
             query = query.filter(func.date(Call.started_at) == yesterday)
         elif date_range == "week":
-            week_ago = today - timedelta(days=7)
+            week_ago = today - datetime.timedelta(days=7)
             query = query.filter(Call.started_at >= week_ago)
         elif date_range == "month":
-            month_ago = today - timedelta(days=30)
+            month_ago = today - datetime.timedelta(days=30)
             query = query.filter(Call.started_at >= month_ago)
 
     calls = query.order_by(desc(Call.started_at)).all()
