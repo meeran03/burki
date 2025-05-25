@@ -18,6 +18,7 @@ from twilio.twiml.voice_response import VoiceResponse, Connect
 from app.core.call_handler import CallHandler
 from app.core.assistant_manager import AssistantManager
 from app.services.call_service import CallService
+from app.services.webhook_service import WebhookService
 from app.twilio.twilio_service import TwilioService
 from app.services.billing_service import BillingService
 
@@ -59,6 +60,7 @@ async def get_twiml(request: Request):
     logger.info("Request headers: %s", request.headers)
 
     # Get assistant to check billing limits
+    assistant = None
     if to_phone_number:
         assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
         if assistant:
@@ -93,6 +95,33 @@ async def get_twiml(request: Request):
             except Exception as billing_error:
                 # Don't block calls if billing check fails
                 logger.error(f"Billing check failed for {assistant.organization_id}, allowing call: {billing_error}")
+
+    # Create call record in database and send initial webhook as soon as call comes in
+    if assistant and call_sid:
+        try:
+            # Create call record in database immediately
+            call = await CallService.create_call(
+                assistant_id=assistant.id,
+                call_sid=call_sid,
+                to_phone_number=to_phone_number or "",
+                customer_phone_number=customer_phone_number or "",
+                metadata={},
+            )
+            logger.info(f"Created call record in database for call {call_sid}")
+            
+            # Send initial webhook status update immediately
+            if assistant.webhook_url:
+                asyncio.create_task(
+                    WebhookService.send_status_update_webhook(
+                        assistant=assistant,
+                        call=call,
+                        status="in-progress",
+                        messages=[]
+                    )
+                )
+                logger.info(f"Sent immediate webhook status update for incoming call {call_sid}")
+        except Exception as e:
+            logger.error(f"Error creating call record or sending webhook for {call_sid}: {e}", exc_info=True)
 
     # Create the TwiML response
     response = VoiceResponse()
