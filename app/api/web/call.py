@@ -28,7 +28,6 @@ from app.db.models import (
 )
 from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
-from app.twilio.twilio_service import TwilioService
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])
@@ -77,71 +76,34 @@ async def download_recording(
     # Log debug info
     logger = logging.getLogger(__name__)
     logger.info(
-        f"Recording {recording_id}: file_path={recording.file_path}, recording_url={recording.recording_url}, status={recording.status}"
+        f"Recording {recording_id}: file_path={recording.file_path}, recording_source={recording.recording_source}, status={recording.status}"
     )
 
     # Prefer local file if available
     if recording.file_path and os.path.exists(recording.file_path):
         logger.info(f"Serving local file: {recording.file_path}")
+        
+        # Determine media type based on file extension
+        media_type = "audio/wav"
+        filename_ext = "wav"
+        if recording.file_path.lower().endswith('.mp3'):
+            media_type = "audio/mpeg"
+            filename_ext = "mp3"
+        elif recording.file_path.lower().endswith('.wav'):
+            media_type = "audio/wav"
+            filename_ext = "wav"
+        
         return FileResponse(
             path=recording.file_path,
-            media_type="audio/mpeg",
-            filename=f"recording_{recording.recording_sid}.mp3",
+            media_type=media_type,
+            filename=f"recording_{recording.call.call_sid}_{recording.recording_type}.{filename_ext}",
         )
-    elif recording.recording_source == "twilio" and recording.recording_url:
-        # Fallback to Twilio URL if no local file
-        logger.info(f"Redirecting to Twilio URL: {recording.recording_url}")
-        return RedirectResponse(url=recording.recording_url, status_code=302)
-    elif recording.recording_source == "twilio" and recording.recording_sid:
-        # Try to download the file if we have the recording SID but no local file
-        logger.info(
-            f"Attempting to download recording {recording.recording_sid} from Twilio"
+    else:
+        # No local file available
+        logger.error(
+            f"Recording file not available: file_path={recording.file_path}, recording_source={recording.recording_source}"
         )
-        try:
-            download_result = TwilioService.download_recording_content(
-                recording.recording_sid
-            )
-
-            if download_result:
-                filename, content = download_result
-
-                # Save to local recordings directory for future use
-                recordings_dir = os.getenv("RECORDINGS_DIR", "recordings")
-                os.makedirs(recordings_dir, exist_ok=True)
-
-                # Create call-specific directory
-                call_dir = os.path.join(recordings_dir, recording.call.call_sid)
-                os.makedirs(call_dir, exist_ok=True)
-
-                # Save the file
-                local_file_path = os.path.join(call_dir, filename)
-                with open(local_file_path, "wb") as f:
-                    f.write(content)
-
-                # Update the recording with the local file path
-                recording.file_path = local_file_path
-                db.commit()
-
-                logger.info(f"Downloaded and saved recording to: {local_file_path}")
-
-                # Return the file
-                return FileResponse(
-                    path=local_file_path,
-                    media_type="audio/mpeg",
-                    filename=f"recording_{recording.recording_sid}.mp3",
-                )
-            else:
-                logger.error(
-                    f"Failed to download recording {recording.recording_sid} from Twilio"
-                )
-        except Exception as e:
-            logger.error(f"Error downloading recording: {e}")
-
-    # If all else fails
-    logger.error(
-        f"Recording file not available: file_path={recording.file_path}, recording_url={recording.recording_url}"
-    )
-    raise HTTPException(status_code=404, detail="Recording file not available")
+        raise HTTPException(status_code=404, detail="Recording file not available")
 
 
 @router.get("/calls/{call_id}/recording/{recording_id}/play")
@@ -160,9 +122,16 @@ async def play_recording(
 
     # Only serve local files for audio player
     if recording.file_path and os.path.exists(recording.file_path):
+        # Determine media type based on file extension
+        media_type = "audio/wav"
+        if recording.file_path.lower().endswith('.mp3'):
+            media_type = "audio/mpeg"
+        elif recording.file_path.lower().endswith('.wav'):
+            media_type = "audio/wav"
+        
         return FileResponse(
             path=recording.file_path,
-            media_type="audio/mpeg",
+            media_type=media_type,
             headers={"Cache-Control": "public, max-age=3600"},
         )
     else:
@@ -829,11 +798,16 @@ async def bulk_action_calls(
                     )
                     for recording in recordings:
                         if recording.file_path and os.path.exists(recording.file_path):
+                            # Determine file extension
+                            file_ext = "wav"
+                            if recording.file_path.lower().endswith('.mp3'):
+                                file_ext = "mp3"
+                            elif recording.file_path.lower().endswith('.wav'):
+                                file_ext = "wav"
+                            
                             # Add file to zip with call-specific name
-                            zip_file.write(
-                                recording.file_path,
-                                f"{call.call_sid}_{recording.recording_sid}.mp3",
-                            )
+                            zip_filename = f"{call.call_sid}_{recording.recording_type}_{recording.id}.{file_ext}"
+                            zip_file.write(recording.file_path, zip_filename)
 
             return {
                 "success": True,
