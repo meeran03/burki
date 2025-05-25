@@ -385,6 +385,7 @@ async def create_assistant(
     stt_smart_format: Optional[bool] = Form(False),
     stt_keywords: Optional[str] = Form(None),
     stt_keyterms: Optional[str] = Form(None),
+    stt_audio_denoising: Optional[bool] = Form(False),
     # Interruption Settings
     interruption_threshold: Optional[int] = Form(None),
     min_speaking_time: Optional[float] = Form(None),
@@ -399,6 +400,8 @@ async def create_assistant(
     webhook_url: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
     structured_data_prompt: Optional[str] = Form(None),
+    # Recording settings
+    recording_enabled: bool = Form(False),
 ):
     """Create a new assistant."""
     # Check if an assistant with this phone number already exists
@@ -516,6 +519,7 @@ async def create_assistant(
                 "smart_format": stt_smart_format,
                 "keywords": [],  # Will be populated below if provided
                 "keyterms": [],  # Will be populated below if provided
+                "audio_denoising": stt_audio_denoising,
             }
             if any(
                 [
@@ -530,6 +534,7 @@ async def create_assistant(
                     stt_smart_format,
                     stt_keywords,
                     stt_keyterms,
+                    stt_audio_denoising,
                 ]
             )
             else None
@@ -551,6 +556,19 @@ async def create_assistant(
         "idle_timeout": idle_timeout,
         # Webhook settings
         "webhook_url": empty_to_none(webhook_url),
+        # Recording settings
+        "recording_settings": {
+            "enabled": recording_enabled,
+            "format": "mp3",  # Always MP3 format
+            "sample_rate": 8000,
+            "channels": 1,
+            "record_user_audio": True,
+            "record_assistant_audio": True,
+            "record_mixed_audio": True,
+            "auto_save": True,
+            "recordings_dir": "recordings",
+            "create_database_records": True,
+        } if recording_enabled else None,
     }
 
     # Handle custom settings separately
@@ -814,6 +832,7 @@ async def update_assistant(
     stt_smart_format: Optional[bool] = Form(False),
     stt_keywords: Optional[str] = Form(None),  # JSON string of keywords
     stt_keyterms: Optional[str] = Form(None),  # JSON string of keyterms
+    stt_audio_denoising: Optional[bool] = Form(False),
     # Interruption Settings
     interruption_threshold: Optional[int] = Form(None),
     min_speaking_time: Optional[float] = Form(None),
@@ -828,6 +847,8 @@ async def update_assistant(
     webhook_url: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
     structured_data_prompt: Optional[str] = Form(None),
+    # Recording settings
+    recording_enabled: bool = Form(False),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
@@ -947,6 +968,7 @@ async def update_assistant(
                 "smart_format": stt_smart_format,
                 "keywords": [],  # Will be populated below if provided
                 "keyterms": [],  # Will be populated below if provided
+                "audio_denoising": stt_audio_denoising,
             }
             if any(
                 [
@@ -961,6 +983,7 @@ async def update_assistant(
                     stt_smart_format,
                     stt_keywords,
                     stt_keyterms,
+                    stt_audio_denoising,
                 ]
             )
             else None
@@ -982,6 +1005,19 @@ async def update_assistant(
         "idle_timeout": idle_timeout,
         # Webhook settings
         "webhook_url": empty_to_none(webhook_url),
+        # Recording settings
+        "recording_settings": {
+            "enabled": recording_enabled,
+            "format": "mp3",  # Always MP3 format
+            "sample_rate": 8000,
+            "channels": 1,
+            "record_user_audio": True,
+            "record_assistant_audio": True,
+            "record_mixed_audio": True,
+            "auto_save": True,
+            "recordings_dir": "recordings",
+            "create_database_records": True,
+        } if recording_enabled else None,
     }
 
     # Handle custom settings separately
