@@ -69,6 +69,8 @@ class CallState:
     utterance_buffer: list = field(default_factory=list)  # Buffer for accumulating is_final transcripts until speech_final
     utterance_start_time: Optional[float] = None  # Start time of current utterance
     utterance_end_time: Optional[float] = None  # End time of current utterance
+    utterance_timeout_task: Optional[Any] = None  # Task to handle utterance timeout
+    last_final_transcript_time: Optional[datetime] = None  # Track when last final transcript was received
     
     # LLM request tracking for proper cancellation
     pending_llm_task: Optional[asyncio.Task] = None  # Track pending LLM request task
@@ -898,9 +900,44 @@ class CallHandler:
                 # Add this final transcript to the utterance buffer
                 self.active_calls[call_sid].utterance_buffer.append(transcript.strip())
                 logger.debug(f"Added to utterance buffer for {call_sid}: {transcript.strip()}")
+                
+                # Track when we received this final transcript
+                self.active_calls[call_sid].last_final_transcript_time = datetime.now()
+                
+                # Cancel any existing timeout task
+                if (self.active_calls[call_sid].utterance_timeout_task and 
+                    not self.active_calls[call_sid].utterance_timeout_task.done()):
+                    self.active_calls[call_sid].utterance_timeout_task.cancel()
+                
+                # Start a timeout task to process the utterance if speech_final doesn't come
+                # Use min_silence_duration from assistant settings, with fallbacks
+                # Use shorter timeout when AI is not speaking for better responsiveness
+                # Use longer timeout when AI is speaking to avoid false interruptions
+                assistant = self.active_calls[call_sid].assistant
+                base_timeout = 1.5  # Default fallback
+                
+                if assistant and assistant.stt_settings:
+                    # Get min_silence_duration from stt_settings (in ms), convert to seconds
+                    min_silence_ms = assistant.stt_settings.get("endpointing", {}).get("min_silence_duration", 1500)
+                    base_timeout = min_silence_ms / 1000.0  # Convert ms to seconds
+                
+                # Adjust timeout based on AI speaking state
+                timeout_duration = base_timeout if not self.active_calls[call_sid].is_ai_speaking else base_timeout * 2
+                
+                logger.debug(f"Setting utterance timeout for {call_sid}: {timeout_duration}s (base: {base_timeout}s, AI speaking: {self.active_calls[call_sid].is_ai_speaking})")
+                self.active_calls[call_sid].utterance_timeout_task = asyncio.create_task(
+                    self._delayed_utterance_processing(call_sid, timeout_duration)
+                )
 
             # When speech_final=true, process the complete utterance
             if speech_final and self.active_calls[call_sid].utterance_buffer:
+                # Cancel the timeout task since we got speech_final
+                if (self.active_calls[call_sid].utterance_timeout_task and 
+                    not self.active_calls[call_sid].utterance_timeout_task.done()):
+                    self.active_calls[call_sid].utterance_timeout_task.cancel()
+                    self.active_calls[call_sid].utterance_timeout_task = None
+                    logger.debug(f"Cancelled utterance timeout for {call_sid} due to speech_final")
+                
                 # Concatenate all accumulated transcripts for the complete utterance
                 complete_utterance = " ".join(self.active_calls[call_sid].utterance_buffer)
                 logger.info(f"Complete utterance detected (speech_final) for {call_sid}: {complete_utterance}")
@@ -969,16 +1006,6 @@ class CallHandler:
                 self.active_calls[call_sid].utterance_buffer = []
                 self.active_calls[call_sid].utterance_start_time = None
                 self.active_calls[call_sid].utterance_end_time = None
-                
-            # For low-latency use cases: optionally process interim results
-            # This is useful for real-time feedback but not for complete utterances
-            elif not is_final and self.active_calls[call_sid].assistant:
-                # Check if assistant is configured for low-latency processing
-                if (self.active_calls[call_sid].assistant.llm_settings and 
-                    self.active_calls[call_sid].assistant.llm_settings.get("process_interim_results", False)):
-                    logger.debug(f"Processing interim result for low-latency: {transcript}")
-                    # You could add interim processing here if needed
-                    pass
 
         except Exception as e:
             logger.error(
@@ -1052,6 +1079,13 @@ class CallHandler:
                 not self.active_calls[call_sid].idle_timeout_task.done()):
                 self.active_calls[call_sid].idle_timeout_task.cancel()
                 logger.info(f"Cancelled idle timeout task for call {call_sid}")
+
+            # Cancel utterance timeout task if it exists
+            if (call_sid in self.active_calls and 
+                self.active_calls[call_sid].utterance_timeout_task and 
+                not self.active_calls[call_sid].utterance_timeout_task.done()):
+                self.active_calls[call_sid].utterance_timeout_task.cancel()
+                logger.info(f"Cancelled utterance timeout task for call {call_sid}")
 
             # Cancel any pending LLM task
             if (call_sid in self.active_calls and 
@@ -1212,3 +1246,114 @@ class CallHandler:
             return deepgram_end_time
         
         return None
+
+    async def _handle_utterance_timeout(self, call_sid: str) -> None:
+        """
+        Handle utterance timeout when speech_final is not received within reasonable time.
+        
+        Args:
+            call_sid: The Twilio call SID
+        """
+        if call_sid not in self.active_calls or not self.active_calls[call_sid].is_active:
+            return
+            
+        try:
+            # Check if we still have buffered utterances
+            if self.active_calls[call_sid].utterance_buffer:
+                logger.info(f"Utterance timeout for call {call_sid} - processing buffered utterance without speech_final")
+                
+                # Concatenate all accumulated transcripts for the complete utterance
+                complete_utterance = " ".join(self.active_calls[call_sid].utterance_buffer)
+                logger.info(f"Complete utterance from timeout for {call_sid}: {complete_utterance}")
+                
+                # Store the complete utterance in database
+                asyncio.create_task(
+                    CallService.create_transcript(
+                        call_sid=call_sid,
+                        content=complete_utterance,
+                        is_final=True,
+                        speaker="user",
+                        confidence=None,  # No confidence available for timeout
+                        segment_start=self.active_calls[call_sid].utterance_start_time,
+                        segment_end=self.active_calls[call_sid].utterance_end_time,
+                    )
+                )
+                
+                # Check if this should be treated as an interruption
+                is_interruption = False
+                if self.active_calls[call_sid].is_ai_speaking:
+                    speaking_start = self.active_calls[call_sid].ai_speaking_start_time
+                    if speaking_start:
+                        speaking_duration = (datetime.now() - speaking_start).total_seconds()
+                        if speaking_duration >= self.active_calls[call_sid].min_speaking_time:
+                            word_count = len(complete_utterance.split())
+                            if word_count >= self.active_calls[call_sid].interruption_threshold:
+                                logger.info(
+                                    f"Detected interruption via timeout in call {call_sid} with {word_count} words "
+                                    f"after {speaking_duration:.2f} seconds of AI speaking"
+                                )
+                                self.active_calls[call_sid].last_interruption_time = datetime.now()
+                                await self._handle_interruption(call_sid, complete_utterance)
+                                is_interruption = True
+
+                # Only process with LLM if it's not an interruption
+                if not is_interruption and self.active_calls[call_sid].is_active:
+                    # Cancel any existing pending task first
+                    if (self.active_calls[call_sid].pending_llm_task and 
+                        not self.active_calls[call_sid].pending_llm_task.done()):
+                        logger.info(f"Cancelling previous LLM task before processing timeout utterance for {call_sid}")
+                        self.active_calls[call_sid].pending_llm_task.cancel()
+                        try:
+                            await asyncio.wait_for(
+                                self.active_calls[call_sid].pending_llm_task, 
+                                timeout=0.1
+                            )
+                        except (asyncio.CancelledError, asyncio.TimeoutError):
+                            pass
+                    
+                    # Process complete utterance with LLM
+                    self.active_calls[call_sid].pending_llm_task = asyncio.create_task(
+                        self.active_calls[call_sid].llm_service.process_transcript(
+                            transcript=complete_utterance,
+                            is_final=True,
+                            metadata={"utterance_timeout": True},
+                            response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
+                                call_sid=call_sid,
+                                content=content,
+                                is_final=is_final,
+                                metadata=response_metadata,
+                            ),
+                        )
+                    )
+                
+                # Clear the utterance buffer after processing
+                self.active_calls[call_sid].utterance_buffer = []
+                self.active_calls[call_sid].utterance_start_time = None
+                self.active_calls[call_sid].utterance_end_time = None
+                self.active_calls[call_sid].utterance_timeout_task = None
+                
+        except Exception as e:
+            logger.error(f"Error handling utterance timeout for call {call_sid}: {e}", exc_info=True)
+
+    async def _delayed_utterance_processing(self, call_sid: str, timeout: float) -> None:
+        """
+        Handle delayed utterance processing after a timeout.
+        
+        Args:
+            call_sid: The Twilio call SID
+            timeout: The timeout duration in seconds
+        """
+        if call_sid not in self.active_calls or not self.active_calls[call_sid].is_active:
+            return
+            
+        try:
+            # Wait for the specified timeout
+            await asyncio.sleep(timeout)
+            
+            # Handle utterance timeout
+            await self._handle_utterance_timeout(call_sid)
+            
+        except asyncio.CancelledError:
+            logger.debug(f"Utterance timeout cancelled for call {call_sid}")
+        except Exception as e:
+            logger.error(f"Error handling delayed utterance processing for call {call_sid}: {e}", exc_info=True)
