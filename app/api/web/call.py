@@ -35,6 +35,9 @@ router = APIRouter(tags=["web"])
 # Initialize Jinja2 templates
 templates = Jinja2Templates(directory="app/templates")
 
+# Initialize logger
+logger = logging.getLogger(__name__)
+
 # Security
 security = HTTPBearer(auto_error=False)
 auth_service = AuthService()
@@ -63,7 +66,7 @@ def get_template_context(request: Request, **extra_context) -> dict:
 async def download_recording(
     request: Request, call_id: int, recording_id: int, db: Session = Depends(get_db)
 ):
-    """Download or serve recording."""
+    """Download or serve recording from S3."""
     recording = (
         db.query(Recording)
         .filter(Recording.id == recording_id, Recording.call_id == call_id)
@@ -74,34 +77,45 @@ async def download_recording(
         raise HTTPException(status_code=404, detail="Recording not found")
 
     # Log debug info
-    logger = logging.getLogger(__name__)
     logger.info(
-        f"Recording {recording_id}: file_path={recording.file_path}, recording_source={recording.recording_source}, status={recording.status}"
+        f"Recording {recording_id}: s3_key={recording.s3_key}, recording_source={recording.recording_source}, status={recording.status}"
     )
 
-    # Prefer local file if available
-    if recording.file_path and os.path.exists(recording.file_path):
-        logger.info(f"Serving local file: {recording.file_path}")
-        
-        # Determine media type based on file extension
-        media_type = "audio/wav"
-        filename_ext = "wav"
-        if recording.file_path.lower().endswith('.mp3'):
-            media_type = "audio/mpeg"
-            filename_ext = "mp3"
-        elif recording.file_path.lower().endswith('.wav'):
-            media_type = "audio/wav"
-            filename_ext = "wav"
-        
-        return FileResponse(
-            path=recording.file_path,
-            media_type=media_type,
-            filename=f"recording_{recording.call.call_sid}_{recording.recording_type}.{filename_ext}",
-        )
+    # Check if this is an S3 recording
+    if recording.recording_source == "s3" and recording.s3_key:
+        try:
+            from app.services.s3_service import S3Service
+            s3_service = S3Service.create_default_instance()
+            
+            # Download the file from S3
+            audio_data = await s3_service.download_audio_file(recording.s3_key)
+            
+            if audio_data:
+                # Determine content type based on format
+                content_type = "audio/mpeg" if recording.format == "mp3" else "audio/wav"
+                
+                # Generate filename
+                filename = f"recording_{recording.recording_type}_{recording.id}.{recording.format}"
+                
+                # Return the audio file as a streaming response
+                return Response(
+                    content=audio_data,
+                    media_type=content_type,
+                    headers={
+                        "Content-Disposition": f"attachment; filename={filename}",
+                        "Content-Length": str(len(audio_data))
+                    }
+                )
+            else:
+                raise HTTPException(status_code=404, detail="Recording file not found in S3")
+                
+        except Exception as e:
+            logger.error(f"Error downloading recording from S3 {recording_id}: {e}")
+            raise HTTPException(status_code=500, detail="Error downloading recording file")
     else:
-        # No local file available
+        # Legacy support for non-S3 recordings
         logger.error(
-            f"Recording file not available: file_path={recording.file_path}, recording_source={recording.recording_source}"
+            f"Recording not available: s3_key={recording.s3_key}, recording_source={recording.recording_source}"
         )
         raise HTTPException(status_code=404, detail="Recording file not available")
 
@@ -110,33 +124,49 @@ async def download_recording(
 async def play_recording(
     request: Request, call_id: int, recording_id: int, db: Session = Depends(get_db)
 ):
-    """Serve recording for in-browser audio player."""
+    """Serve recording for in-browser audio player from S3."""
     recording = (
         db.query(Recording)
         .filter(Recording.id == recording_id, Recording.call_id == call_id)
         .first()
     )
+    logger = logging.getLogger(__name__)
 
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
 
-    # Only serve local files for audio player
-    if recording.file_path and os.path.exists(recording.file_path):
-        # Determine media type based on file extension
-        media_type = "audio/wav"
-        if recording.file_path.lower().endswith('.mp3'):
-            media_type = "audio/mpeg"
-        elif recording.file_path.lower().endswith('.wav'):
-            media_type = "audio/wav"
-        
-        return FileResponse(
-            path=recording.file_path,
-            media_type=media_type,
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+    # Check if this is an S3 recording
+    if recording.recording_source == "s3" and recording.s3_key:
+        try:
+            from app.services.s3_service import S3Service
+            s3_service = S3Service.create_default_instance()
+            
+            # Download the file from S3
+            audio_data = await s3_service.download_audio_file(recording.s3_key)
+            
+            if audio_data:
+                # Determine content type based on format
+                content_type = "audio/mpeg" if recording.format == "mp3" else "audio/wav"
+                
+                # Return the audio file for streaming/playing
+                return Response(
+                    content=audio_data,
+                    media_type=content_type,
+                    headers={
+                        "Content-Length": str(len(audio_data)),
+                        "Accept-Ranges": "bytes",
+                        "Cache-Control": "public, max-age=3600"
+                    }
+                )
+            else:
+                raise HTTPException(status_code=404, detail="Recording file not found in S3")
+                
+        except Exception as e:
+            logger.error(f"Error downloading recording from S3 for audio player {recording_id}: {e}")
+            raise HTTPException(status_code=500, detail="Error loading recording file")
     else:
         raise HTTPException(
-            status_code=404, detail="Local recording file not available"
+            status_code=404, detail="S3 recording file not available"
         )
 
 
@@ -462,7 +492,6 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
 
 def calculate_call_metrics(call, transcripts):
     """Calculate dynamic metrics from call and transcript data."""
-    logger = logging.getLogger(__name__)
     logger.info(f"Calculating metrics for call {call.call_sid if call else 'None'} with {len(transcripts)} transcripts")
     
     if not transcripts:
@@ -754,18 +783,21 @@ async def bulk_action_calls(
         if action == "delete":
             # Delete related records first
             for call in calls:
-                # Delete recordings
+                # Delete recordings (S3 files will be cleaned up separately if needed)
                 recordings = (
                     db.query(Recording).filter(Recording.call_id == call.id).all()
                 )
                 for recording in recordings:
-                    # Delete physical file if exists
-                    if recording.file_path and os.path.exists(recording.file_path):
+                    # For S3 recordings, optionally delete from S3
+                    if recording.recording_source == "s3" and recording.s3_key:
                         try:
-                            os.remove(recording.file_path)
+                            from app.services.s3_service import S3Service
+                            s3_service = S3Service.create_default_instance()
+                            await s3_service.delete_audio_file(recording.s3_key)
+                            logger.info(f"Deleted S3 file: {recording.s3_key}")
                         except Exception as e:
-                            logging.warning(
-                                f"Could not delete recording file {recording.file_path}: {e}"
+                            logger.warning(
+                                f"Could not delete S3 file {recording.s3_key}: {e}"
                             )
                     db.delete(recording)
 
@@ -784,36 +816,49 @@ async def bulk_action_calls(
             )
 
         elif action == "download_recordings":
-            # Create a zip file with all recordings
-            import zipfile
-            import tempfile
-
-            # Create temporary zip file
-            temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
-
-            with zipfile.ZipFile(temp_zip.name, "w") as zip_file:
-                for call in calls:
-                    recordings = (
-                        db.query(Recording).filter(Recording.call_id == call.id).all()
-                    )
-                    for recording in recordings:
-                        if recording.file_path and os.path.exists(recording.file_path):
-                            # Determine file extension
-                            file_ext = "wav"
-                            if recording.file_path.lower().endswith('.mp3'):
-                                file_ext = "mp3"
-                            elif recording.file_path.lower().endswith('.wav'):
-                                file_ext = "wav"
+            # For S3 recordings, we'll provide presigned URLs instead of downloading files
+            recording_urls = []
+            
+            for call in calls:
+                recordings = (
+                    db.query(Recording).filter(Recording.call_id == call.id).all()
+                )
+                for recording in recordings:
+                    if recording.recording_source == "s3" and recording.s3_key:
+                        try:
+                            from app.services.s3_service import S3Service
+                            s3_service = S3Service.create_default_instance()
                             
-                            # Add file to zip with call-specific name
-                            zip_filename = f"{call.call_sid}_{recording.recording_type}_{recording.id}.{file_ext}"
-                            zip_file.write(recording.file_path, zip_filename)
+                            # Generate presigned URL for download
+                            presigned_url = await s3_service.generate_presigned_url(
+                                s3_key=recording.s3_key,
+                                expiration=3600,  # 1 hour
+                            )
+                            
+                            if presigned_url:
+                                recording_urls.append({
+                                    "call_sid": call.call_sid,
+                                    "recording_type": recording.recording_type,
+                                    "format": recording.format,
+                                    "url": presigned_url,
+                                    "filename": f"{call.call_sid}_{recording.recording_type}.{recording.format}"
+                                })
+                        except Exception as e:
+                            logger.warning(f"Could not generate presigned URL for recording {recording.id}: {e}")
 
-            return {
-                "success": True,
-                "message": f"Created download for {len(calls)} calls",
-                "download_url": f"/download/temp/{os.path.basename(temp_zip.name)}",
-            }
+            if recording_urls:
+                # Return JSON with download URLs
+                return {
+                    "success": True,
+                    "message": f"Generated download URLs for {len(recording_urls)} recordings",
+                    "recording_urls": recording_urls,
+                    "expires_in": "1 hour"
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "No S3 recordings found for selected calls"
+                }
 
         else:
             return {"success": False, "message": "Invalid action"}

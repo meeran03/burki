@@ -15,3 +15,11 @@ logs/
 # IDE files
 .vscode/
 .idea/
+
+# Build files
+build/
+dist/
+
+rnnoise
+
+# Other files

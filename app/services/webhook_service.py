@@ -477,14 +477,14 @@ Call Summary: {summary}"""
     @staticmethod
     async def send_end_of_call_webhook_with_recordings(
         call_sid: str,
-        saved_files: Dict[str, str]
+        saved_files: Dict[str, Dict[str, Any]]
     ) -> bool:
         """
-        Send end-of-call webhook with local recording information.
+        Send end-of-call webhook with S3 recording information.
 
         Args:
             call_sid: The call SID
-            saved_files: Dictionary of recording type to file path
+            saved_files: Dictionary of recording type to S3 file info
 
         Returns:
             bool: True if webhook was sent successfully, False otherwise
@@ -498,20 +498,20 @@ Call Summary: {summary}"""
             
             assistant = call.assistant
             
-            # Construct recording URL from the best available local recording
+            # Get recording URL from S3 file info
             recording_url = None
             if saved_files:
                 # Prefer mixed recording, then user, then assistant
                 if "mixed" in saved_files:
-                    recording_url = WebhookService._construct_local_recording_url(call_sid, saved_files["mixed"])
+                    recording_url = saved_files["mixed"].get("s3_url")
                 elif "user" in saved_files:
-                    recording_url = WebhookService._construct_local_recording_url(call_sid, saved_files["user"])
+                    recording_url = saved_files["user"].get("s3_url")
                 elif "assistant" in saved_files:
-                    recording_url = WebhookService._construct_local_recording_url(call_sid, saved_files["assistant"])
+                    recording_url = saved_files["assistant"].get("s3_url")
                 else:
                     # Use the first available recording
                     first_file = next(iter(saved_files.values()))
-                    recording_url = WebhookService._construct_local_recording_url(call_sid, first_file)
+                    recording_url = first_file.get("s3_url")
             
             # Send the webhook
             return await WebhookService.send_end_of_call_webhook(
@@ -630,6 +630,15 @@ Call Summary: {summary}"""
         """
         if not recording:
             return None
+            
+        # For S3 recordings, construct a URL pointing to our download endpoint
+        if recording.recording_source == "s3" and recording.s3_key:
+            try:
+                base_url = get_server_base_url()
+                return f"{base_url}/calls/{recording.call_id}/recording/{recording.id}"
+            except Exception as e:
+                logger.error(f"Error constructing S3 recording URL: {e}")
+                return None
             
         # If it's a Twilio recording with a URL and no local file, use Twilio URL
         if recording.recording_source == "twilio" and recording.recording_url and not recording.file_path:

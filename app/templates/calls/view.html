@@ -44,6 +44,32 @@
     border-color: rgba(59, 130, 246, 0.5) !important;
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
         }
+
+/* Progress bar styles */
+.user-percentage-bar {
+    width: 0%;
+    transition: width 1.5s ease;
+}
+
+.ai-percentage-bar {
+    width: 0%;
+    transition: width 1.5s ease;
+}
+
+.quality-score-bar {
+    width: 0%;
+    transition: width 1.5s ease;
+}
+
+.conversation-flow-bar {
+    width: 0%;
+    transition: width 1.5s ease;
+}
+
+.engagement-score-bar {
+    width: 0%;
+    transition: width 1.5s ease;
+}
     </style>
 {% endblock %}
 
@@ -154,19 +180,19 @@
                         
                         <div class="space-y-3">
                             <div class="flex items-center justify-between">
-                                <span class="text-sm text-gray-400">Customer</span>
+                                <span class="text-gray-400 text-sm">Customer</span>
                                 <span class="text-sm text-white">{{ metrics.user_percentage }}%</span>
                             </div>
                             <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style="width: {{ metrics.user_percentage }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000 user-percentage-bar"></div>
                         </div>
                         
                             <div class="flex items-center justify-between">
-                                <span class="text-sm text-gray-400">AI Assistant</span>
+                                <span class="text-gray-400 text-sm">AI Assistant</span>
                                 <span class="text-sm text-white">{{ metrics.ai_percentage }}%</span>
                             </div>
                             <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-1000" style="width: {{ metrics.ai_percentage }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-1000 ai-percentage-bar"></div>
                             </div>
                         </div>
                         </div>
@@ -205,9 +231,9 @@
                     </h3>
                     
                     {% if recordings %}
-                        {% set recording_with_file = recordings|selectattr('status', 'equalto', 'completed')|selectattr('file_path')|first %}
+                        {% set s3_recording = recordings|selectattr('status', 'equalto', 'completed')|selectattr('recording_source', 'equalto', 's3')|first %}
                         
-                        {% if recording_with_file %}
+                        {% if s3_recording %}
                     <!-- Audio Controls -->
                     <div class="audio-controls bg-gradient-to-br from-gray-700/50 to-gray-800/50 rounded-xl p-4 mb-6 border border-gray-600/30">
                         <div class="flex items-center justify-between">
@@ -288,7 +314,7 @@
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-400 text-sm">Sample Rate</span>
                                     <span class="text-white text-sm font-mono">
-                                        {% if recording_with_file.file_path and recording_with_file.file_path.endswith('.mp3') %}
+                                        {% if s3_recording.file_path and s3_recording.file_path.endswith('.mp3') %}
                                             22 kHz
                                         {% else %}
                                             8 kHz
@@ -298,7 +324,7 @@
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-400 text-sm">Format</span>
                                     <span class="text-white text-sm font-mono">
-                                        {% if recording_with_file.file_path and recording_with_file.file_path.endswith('.mp3') %}
+                                        {% if s3_recording.file_path and s3_recording.file_path.endswith('.mp3') %}
                                             MP3
                                         {% else %}
                                             WAV
@@ -311,7 +337,7 @@
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <span class="text-gray-400 text-sm">Source</span>
-                                    <span class="text-white text-sm font-mono">Local</span>
+                                    <span class="text-white text-sm font-mono">S3</span>
                                 </div>
                             </div>
                             
@@ -344,13 +370,13 @@
                             
                     <!-- Store audio URL for JavaScript -->
                             <script>
-                                window.audioUrl = '/calls/{{ call.id }}/recording/{{ recording_with_file.id }}/play';
+                                window.audioUrl = '/calls/{{ call.id }}/recording/{{ s3_recording.id }}/play';
                         window.hasAudio = true;
-                        window.recordingType = '{{ recording_with_file.recording_type }}';
-                        window.recordingSource = '{{ recording_with_file.recording_source }}';
+                        window.recordingType = '{{ s3_recording.recording_type }}';
+                        window.recordingSource = '{{ s3_recording.recording_source }}';
                             </script>
                         {% else %}
-                    <!-- No Local Recording Available -->
+                    <!-- No S3 Recording Available -->
                     <div class="text-center py-12">
                         <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center">
                             <svg class="w-10 h-10 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -358,9 +384,9 @@
                             </svg>
                         </div>
                         <h4 class="text-lg font-medium text-white mb-2">Recording Processing</h4>
-                        <p class="text-gray-400 mb-6">The local recording system is processing this call's audio</p>
+                        <p class="text-gray-400 mb-6">The S3 recording system is processing this call's audio</p>
                         
-                        <!-- Show available recordings even if no local file -->
+                        <!-- Show available recordings even if no S3 file -->
                         {% if recordings %}
                             <div class="space-y-2 mb-6">
                                 {% for recording in recordings %}
@@ -382,7 +408,7 @@
                         {% endif %}
                         
                         <div class="text-sm text-gray-500">
-                            Local recordings provide better quality and faster access
+                            S3 recordings provide better quality and faster access
                         </div>
                             </div>
                         {% endif %}
@@ -450,7 +476,7 @@
                             <span class="text-white text-sm">{{ metrics.quality_score }}%</span>
                                 </div>
                         <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all duration-1000" style="width: {{ metrics.quality_score }}%"></div>
+                            <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all duration-1000 quality-score-bar"></div>
                         </div>
                         </div>
                         
@@ -460,7 +486,7 @@
                             <span class="text-white text-sm">{{ metrics.conversation_flow_score }}%</span>
                         </div>
                         <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000" style="width: {{ metrics.conversation_flow_score }}%"></div>
+                            <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-1000 conversation-flow-bar"></div>
                         </div>
                             </div>
                     
@@ -470,7 +496,7 @@
                             <span class="text-white text-sm">{{ metrics.engagement_score }}%</span>
                         </div>
                         <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full transition-all duration-1000" style="width: {{ metrics.engagement_score }}%"></div>
+                            <div class="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full transition-all duration-1000 engagement-score-bar"></div>
                         </div>
                     </div>
                 </div>
