@@ -111,6 +111,7 @@ class DeepgramService:
         smart_format: bool = True,
         keywords: Optional[list] = None,
         keyterms: Optional[list] = None,
+        vad_events: bool = True,
         **options,
     ):
         """
@@ -124,10 +125,11 @@ class DeepgramService:
             punctuate: Whether to add punctuation (default: True)
             interim_results: Whether to provide interim results (default: True)
             endpointing: Time in ms for silence detection (default: 10ms - Deepgram's default)
-            utterance_end_ms: Time in ms to wait before ending utterance (default: 1000)
+            utterance_end_ms: Time in ms to wait before sending UtteranceEnd (default: 1000ms)
             smart_format: Whether to apply smart formatting (default: True)
             keywords: List of keywords to detect
             keyterms: List of keyterms to detect
+            vad_events: Whether to enable VAD events for better speech detection (default: True)
             **options: Additional configuration options
         """
         self.call_sid = call_sid
@@ -152,6 +154,7 @@ class DeepgramService:
         self.smart_format = smart_format
         self.keywords = keywords
         self.keyterms = keyterms
+        self.vad_events = vad_events
         self.options = options
 
         if call_sid:
@@ -285,6 +288,7 @@ class DeepgramService:
                 "utterance_end_ms": self.utterance_end_ms,
                 "smart_format": self.smart_format,
                 "interim_results": self.interim_results,
+                "vad_events": self.vad_events,  # Enable VAD events for better speech detection
             }
 
             # Add keywords if available and model supports them
@@ -331,6 +335,7 @@ class DeepgramService:
                         "utterance_end_ms": self.utterance_end_ms,
                         "smart_format": self.smart_format,
                         "interim_results": self.interim_results,
+                        "vad_events": self.vad_events,  # Enable VAD events for fallback too
                     }
 
                     # Add keywords for Nova-2 fallback if available
@@ -366,6 +371,36 @@ class DeepgramService:
     async def _on_message_async(self, ws, result):
         """Handle incoming message from Deepgram WebSocket."""
         try:
+            # Check if this is an UtteranceEnd event
+            if hasattr(result, 'type') and result.type == "UtteranceEnd":
+                logger.info(f"UtteranceEnd detected for call {self.call_sid} at {result.last_word_end}s")
+                
+                # Pass UtteranceEnd event to callback if available
+                if self.transcript_callback:
+                    try:
+                        # Create metadata for UtteranceEnd event
+                        utterance_end_metadata = {
+                            "type": "UtteranceEnd",
+                            "last_word_end": result.last_word_end,
+                            "channel": result.channel,
+                            "utterance_end": True,  # Flag to indicate this is an utterance end
+                            "speech_final": True,   # Treat as speech final for processing
+                            "is_final": True,       # Treat as final for processing
+                        }
+                        
+                        # Send empty transcript with UtteranceEnd metadata
+                        # This will trigger utterance processing in the call handler
+                        asyncio.create_task(
+                            self.transcript_callback(
+                                "",  # Empty transcript for UtteranceEnd event
+                                True,  # is_final
+                                utterance_end_metadata,
+                            )
+                        )
+                    except Exception as cb_error:
+                        logger.error(f"Error calling transcript callback for UtteranceEnd: {cb_error}")
+                return
+
             # Extract the transcript from the result
             try:
                 channel = result.channel
