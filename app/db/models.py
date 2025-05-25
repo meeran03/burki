@@ -306,6 +306,7 @@ class Assistant(Base):
             "utterance_end_ms": 1000,  # Time in ms to wait before considering an utterance complete
             "vad_turnoff": 500,  # Voice activity detection turnoff in ms
             "smart_format": True,  # Whether to use smart formatting
+            "audio_denoising": False,  # Whether to enable real-time audio denoising
         },
     )
     # Call control settings
