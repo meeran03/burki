@@ -498,20 +498,36 @@ Call Summary: {summary}"""
             
             assistant = call.assistant
             
-            # Get recording URL from S3 file info
+            # Get recording URL from database records instead of S3 file info
             recording_url = None
             if saved_files:
-                # Prefer mixed recording, then user, then assistant
-                if "mixed" in saved_files:
-                    recording_url = saved_files["mixed"].get("s3_url")
-                elif "user" in saved_files:
-                    recording_url = saved_files["user"].get("s3_url")
-                elif "assistant" in saved_files:
-                    recording_url = saved_files["assistant"].get("s3_url")
-                else:
-                    # Use the first available recording
-                    first_file = next(iter(saved_files.values()))
-                    recording_url = first_file.get("s3_url")
+                # Get the recordings from the database to construct proper URLs
+                recordings = await CallService.get_call_recordings(call_sid)
+                if recordings:
+                    # Prefer mixed recording, then user, then assistant
+                    target_recording = None
+                    for recording in recordings:
+                        if recording.recording_type == "mixed":
+                            target_recording = recording
+                            break
+                    
+                    if not target_recording:
+                        for recording in recordings:
+                            if recording.recording_type == "user":
+                                target_recording = recording
+                                break
+                    
+                    if not target_recording:
+                        for recording in recordings:
+                            if recording.recording_type == "assistant":
+                                target_recording = recording
+                                break
+                    
+                    if not target_recording and recordings:
+                        target_recording = recordings[0]  # Use first available
+                    
+                    if target_recording:
+                        recording_url = WebhookService._construct_recording_url(target_recording)
             
             # Send the webhook
             return await WebhookService.send_end_of_call_webhook(
