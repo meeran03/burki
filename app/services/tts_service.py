@@ -471,8 +471,11 @@ class TTSService:
         Returns:
             str: The voice ID
         """
-        voice_name = voice_name.lower()
-        return cls.available_voices.get(voice_name, cls.available_voices["rachel"])
+        _voice_name = voice_name.lower()
+        if _voice_name in cls.available_voices:
+            return cls.available_voices[_voice_name]
+        else:
+            return voice_name
 
     @classmethod
     def get_model_id(cls, model_name: str) -> str:
