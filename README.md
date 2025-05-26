@@ -1,4 +1,4 @@
-# Diwaar
+# Burqi
 
 A comprehensive AI-powered voice assistant system that handles customer calls with advanced features including multi-tenant support, billing management, and real-time audio processing.
 
@@ -293,7 +293,7 @@ Detailed documentation is available in the `docs/` directory:
 
 ## 🏗 Architecture
 
-Diwaar follows a modular architecture with clear separation of concerns:
+Burqi follows a modular architecture with clear separation of concerns:
 
 - **`app/core/`** - Core business logic and managers
 - **`app/services/`** - Service layer for external integrations
@@ -324,4 +324,4 @@ For support and questions:
 
 ---
 
-**Diwaar** - Transforming customer communication with AI-powered voice assistants.
+**Burqi** - Transforming customer communication with AI-powered voice assistants.

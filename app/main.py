@@ -59,7 +59,7 @@ def run_migrations():
 
 
 app = FastAPI(
-    title="Diwaar",
+    title="Burqi",
     description="A system that uses AI to answer customer Calls.",
     version="0.1.0",
 )
