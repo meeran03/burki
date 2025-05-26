@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y \
     portaudio19-dev \
     python3-pyaudio \
     alsa-utils \
+    ffmpeg \
     curl \
     wget \
     git \
