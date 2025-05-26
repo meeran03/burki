@@ -1,5 +1,5 @@
 """
-Example configuration for enabling audio denoising in Diwaar assistants.
+Example configuration for enabling audio denoising in Burqi assistants.
 
 This file shows how to configure audio denoising for different use cases.
 """

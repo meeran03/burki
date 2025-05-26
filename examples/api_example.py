@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example script demonstrating the Diwaar Voice AI API usage.
+Example script demonstrating the Burqi Voice AI API usage.
 
 This script shows how to:
 1. Create an assistant
@@ -18,8 +18,8 @@ import requests
 import json
 from typing import Dict, Any, Optional
 
-class DiwaarAPI:
-    """Simple client for Diwaar Voice AI API."""
+class BurqiAPI:
+    """Simple client for Burqi Voice AI API."""
     
     def __init__(self, base_url: str, api_key: str):
         """
@@ -130,14 +130,14 @@ class DiwaarAPI:
 
 
 def main():
-    """Example usage of the Diwaar API."""
+    """Example usage of the Burqi API."""
     
     # Configuration - replace with your actual values
     BASE_URL = "https://yourdomain.com"  # Replace with your domain
     API_KEY = "diwaar_your_api_key_here"  # Replace with your API key
     
     # Initialize the API client
-    api = DiwaarAPI(BASE_URL, API_KEY)
+    api = BurqiAPI(BASE_URL, API_KEY)
     
     try:
         # Get organization info

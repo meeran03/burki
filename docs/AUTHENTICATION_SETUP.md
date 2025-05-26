@@ -1,6 +1,6 @@
 # Authentication System Setup
 
-This document outlines the complete authentication system implemented for Diwaar Voice AI.
+This document outlines the complete authentication system implemented for Burqi Voice AI.
 
 ## Overview
 

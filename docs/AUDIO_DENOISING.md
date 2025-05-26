@@ -1,6 +1,6 @@
-# Audio Denoising in Diwaar
+# Audio Denoising in Burqi
 
-This document explains the real-time audio denoising feature in Diwaar, which can significantly improve call quality by removing background noise without affecting latency.
+This document explains the real-time audio denoising feature in Burqi, which can significantly improve call quality by removing background noise without affecting latency.
 
 ## Overview
 

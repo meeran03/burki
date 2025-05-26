@@ -1,10 +1,10 @@
 # Local Audio Recording Setup
 
-This document explains how to configure and use the local audio recording functionality in Diwaar.
+This document explains how to configure and use the local audio recording functionality in Burqi.
 
 ## Overview
 
-Diwaar now supports local audio recording during calls, which allows you to record audio streams directly on your server. This is in addition to the existing Twilio call recording functionality.
+Burqi now supports local audio recording during calls, which allows you to record audio streams directly on your server. This is in addition to the existing Twilio call recording functionality.
 
 ### Features
 
