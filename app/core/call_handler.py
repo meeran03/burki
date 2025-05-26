@@ -317,7 +317,7 @@ class CallHandler:
                 logger.error(f"Failed to start transcription for call: {call_sid}")
 
             # Initialize and start local recording service
-            await self._start_local_recording_async(call_sid, assistant)
+            asyncio.create_task(self._start_local_recording_async(call_sid, assistant))
 
             # Start idle timeout monitoring if configured
             if (call_sid in self.active_calls and 
@@ -576,7 +576,7 @@ class CallHandler:
                 # Record assistant audio if recording service is enabled
                 recording_service = self.active_calls[call_sid].recording_service
                 if recording_service and recording_service.enabled:
-                    await recording_service.record_assistant_audio(audio_data)
+                    asyncio.create_task(recording_service.record_assistant_audio(audio_data))
 
         except Exception as e:
             logger.error(
@@ -1145,7 +1145,7 @@ class CallHandler:
             # Record user audio if recording service is enabled
             recording_service = self.active_calls[call_sid].recording_service
             if recording_service and recording_service.enabled:
-                await recording_service.record_user_audio(processed_audio)
+                asyncio.create_task(recording_service.record_user_audio(processed_audio))
             
             return result
         except Exception as e:
