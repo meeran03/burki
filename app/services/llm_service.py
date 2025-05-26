@@ -382,6 +382,7 @@ class CustomLLMProvider(BaseLLMProvider):
 
         except Exception as e:
             logger.error(f"Custom LLM error: {e}")
+            logger.exception(e)
             await response_callback(
                 "I apologize, but I'm having trouble processing that right now.",
                 True,
