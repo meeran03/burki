@@ -652,7 +652,7 @@ class CallHandler:
                         force_flush=True,  # Force flush to ensure message is spoken
                     )
                     # Wait a bit for the message to be spoken before continuing
-                    await asyncio.sleep(1.0)
+                    await asyncio.sleep(1.5)
                 return
 
             # Check for special actions
