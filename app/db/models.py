@@ -281,6 +281,7 @@ class Assistant(Base):
         JSON,
         nullable=True,
         default=lambda: {
+            "provider": "elevenlabs",  # Provider: elevenlabs, deepgram, etc.
             "voice_id": "rachel",  # Default voice ID
             "model_id": "turbo",  # Default model ID
             "latency": 1,  # Lowest latency setting
@@ -288,6 +289,8 @@ class Assistant(Base):
             "similarity_boost": 0.75,  # Voice similarity boost (0-1)
             "style": 0.0,  # Voice style (0-1)
             "use_speaker_boost": True,  # Whether to use speaker boost
+            # Provider-specific additional settings can go here
+            "provider_config": {},
         },
     )
 
