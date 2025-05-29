@@ -373,6 +373,10 @@ async def create_assistant(
     tts_similarity_boost: Optional[float] = Form(None),
     tts_style: Optional[float] = Form(None),
     tts_use_speaker_boost: Optional[bool] = Form(False),
+    tts_provider: Optional[str] = Form("elevenlabs"),
+    # Deepgram TTS Settings
+    tts_encoding: Optional[str] = Form("mulaw"),
+    tts_sample_rate: Optional[int] = Form(8000),
     # STT Settings
     stt_model: Optional[str] = Form(None),
     stt_language: Optional[str] = Form(None),
@@ -445,6 +449,30 @@ async def create_assistant(
             return None
         return value
 
+    # Build TTS settings
+    tts_settings = {
+        "provider": tts_provider or "elevenlabs",
+        "voice_id": tts_voice_id or "rachel", 
+        "model_id": tts_model_id or ("turbo" if tts_provider == "elevenlabs" else "aura"),
+        "latency": tts_latency if tts_latency is not None else 1,
+        "stability": tts_stability if tts_stability is not None else 0.5,
+        "similarity_boost": tts_similarity_boost if tts_similarity_boost is not None else 0.75,
+        "style": tts_style if tts_style is not None else 0.0,
+        "use_speaker_boost": tts_use_speaker_boost if tts_use_speaker_boost is not None else True,
+        "provider_config": {}
+    }
+    
+    # Add provider-specific configurations
+    if tts_provider == "deepgram":
+        # Get additional Deepgram-specific fields
+        tts_settings["provider_config"] = {
+            "encoding": tts_encoding or "mulaw",
+            "sample_rate": int(tts_sample_rate) if tts_sample_rate else 8000
+        }
+    elif tts_provider == "elevenlabs":
+        # ElevenLabs doesn't need additional config for now, but can be extended
+        tts_settings["provider_config"] = {}
+
     # Create assistant data with JSON settings
     assistant_data = {
         "name": name,
@@ -477,29 +505,7 @@ async def create_assistant(
             )
             else None
         ),
-        "tts_settings": (
-            {
-                "voice_id": tts_voice_id,
-                "model_id": tts_model_id,
-                "latency": tts_latency,
-                "stability": tts_stability,
-                "similarity_boost": tts_similarity_boost,
-                "style": tts_style,
-                "use_speaker_boost": tts_use_speaker_boost,
-            }
-            if any(
-                [
-                    tts_voice_id,
-                    tts_model_id,
-                    tts_latency,
-                    tts_stability,
-                    tts_similarity_boost,
-                    tts_style,
-                    tts_use_speaker_boost,
-                ]
-            )
-            else None
-        ),
+        "tts_settings": tts_settings,
         "stt_settings": (
             {
                 "model": stt_model,
@@ -820,6 +826,10 @@ async def update_assistant(
     tts_similarity_boost: Optional[float] = Form(None),
     tts_style: Optional[float] = Form(None),
     tts_use_speaker_boost: Optional[bool] = Form(False),
+    tts_provider: Optional[str] = Form("elevenlabs"),
+    # Deepgram TTS Settings
+    tts_encoding: Optional[str] = Form("mulaw"),
+    tts_sample_rate: Optional[int] = Form(8000),
     # STT Settings
     stt_model: Optional[str] = Form(None),
     stt_language: Optional[str] = Form(None),
@@ -830,8 +840,8 @@ async def update_assistant(
     stt_utterance_end_ms: Optional[int] = Form(None),
     stt_vad_turnoff: Optional[int] = Form(None),
     stt_smart_format: Optional[bool] = Form(False),
-    stt_keywords: Optional[str] = Form(None),  # JSON string of keywords
-    stt_keyterms: Optional[str] = Form(None),  # JSON string of keyterms
+    stt_keywords: Optional[str] = Form(None),
+    stt_keyterms: Optional[str] = Form(None),
     stt_audio_denoising: Optional[bool] = Form(False),
     # Interruption Settings
     interruption_threshold: Optional[int] = Form(None),
@@ -895,6 +905,30 @@ async def update_assistant(
             return None
         return value
 
+    # Build TTS settings
+    tts_settings = {
+        "provider": tts_provider or "elevenlabs",
+        "voice_id": tts_voice_id or "rachel", 
+        "model_id": tts_model_id or ("turbo" if tts_provider == "elevenlabs" else "aura"),
+        "latency": tts_latency if tts_latency is not None else 1,
+        "stability": tts_stability if tts_stability is not None else 0.5,
+        "similarity_boost": tts_similarity_boost if tts_similarity_boost is not None else 0.75,
+        "style": tts_style if tts_style is not None else 0.0,
+        "use_speaker_boost": tts_use_speaker_boost if tts_use_speaker_boost is not None else True,
+        "provider_config": {}
+    }
+    
+    # Add provider-specific configurations
+    if tts_provider == "deepgram":
+        # Get additional Deepgram-specific fields
+        tts_settings["provider_config"] = {
+            "encoding": tts_encoding or "mulaw",
+            "sample_rate": int(tts_sample_rate) if tts_sample_rate else 8000
+        }
+    elif tts_provider == "elevenlabs":
+        # ElevenLabs doesn't need additional config for now, but can be extended
+        tts_settings["provider_config"] = {}
+
     # Create update data with JSON settings
     update_data = {
         "name": name,
@@ -926,29 +960,7 @@ async def update_assistant(
             )
             else None
         ),
-        "tts_settings": (
-            {
-                "voice_id": tts_voice_id,
-                "model_id": tts_model_id,
-                "latency": tts_latency,
-                "stability": tts_stability,
-                "similarity_boost": tts_similarity_boost,
-                "style": tts_style,
-                "use_speaker_boost": tts_use_speaker_boost,
-            }
-            if any(
-                [
-                    tts_voice_id,
-                    tts_model_id,
-                    tts_latency,
-                    tts_stability,
-                    tts_similarity_boost,
-                    tts_style,
-                    tts_use_speaker_boost,
-                ]
-            )
-            else None
-        ),
+        "tts_settings": tts_settings,
         "stt_settings": (
             {
                 "model": stt_model,
