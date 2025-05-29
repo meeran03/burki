@@ -97,13 +97,15 @@ async def download_recording(
                 # Generate filename
                 filename = f"recording_{recording.recording_type}_{recording.id}.{recording.format}"
                 
-                # Return the audio file as a streaming response
+                # Return the audio file for inline viewing/playing in browser
                 return Response(
                     content=audio_data,
                     media_type=content_type,
                     headers={
-                        "Content-Disposition": f"attachment; filename={filename}",
-                        "Content-Length": str(len(audio_data))
+                        "Content-Disposition": f"inline; filename={filename}",
+                        "Content-Length": str(len(audio_data)),
+                        "Accept-Ranges": "bytes",
+                        "Cache-Control": "public, max-age=3600"
                     }
                 )
             else:

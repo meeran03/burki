@@ -4,5 +4,23 @@
 from app.services.deepgram_service import DeepgramService
 from app.services.webhook_service import WebhookService
 from app.services.recording_service import RecordingService
+from app.services.tts_service import TTSService
+from app.services.tts_base import BaseTTSService, TTSProvider, TTSOptions, VoiceInfo, ModelInfo
+from app.services.tts_factory import TTSFactory
+from app.services.tts_elevenlabs import ElevenLabsTTSService
+from app.services.tts_deepgram import DeepgramTTSService
 
-__all__ = ["DeepgramService", "WebhookService", "RecordingService"] 
+__all__ = [
+    "DeepgramService", 
+    "WebhookService", 
+    "RecordingService",
+    "TTSService",
+    "BaseTTSService",
+    "TTSProvider",
+    "TTSOptions",
+    "VoiceInfo",
+    "ModelInfo",
+    "TTSFactory",
+    "ElevenLabsTTSService",
+    "DeepgramTTSService",
+] 

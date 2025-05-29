@@ -184,41 +184,10 @@ class CallHandler:
             vad_events=stt_settings.get("vad_events", True),
         )
 
-        # Get TTS configuration from assistant
-        elevenlabs_api_key = None
-        voice_id = None
-        model_id = None
-        stability = 0.5
-        similarity_boost = 0.75
-        style = 0.0
-        use_speaker_boost = True
-        latency = 1
-
-        if assistant and assistant.tts_settings:
-            # Get ElevenLabs API key
-            elevenlabs_api_key = assistant.elevenlabs_api_key
-
-            # Extract TTS settings
-            settings = assistant.tts_settings
-            voice_id = TTSService.get_voice_id(settings.get("voice_id", "rachel"))
-            model_id = TTSService.get_model_id(settings.get("model_id", "turbo"))
-            stability = settings.get("stability", 0.5)
-            similarity_boost = settings.get("similarity_boost", 0.75)
-            style = settings.get("style", 0.0)
-            use_speaker_boost = settings.get("use_speaker_boost", True)
-            latency = settings.get("latency", 1)
-
         # Create TTS service with assistant settings
-        self.active_calls[call_sid].tts_service = TTSService(
+        self.active_calls[call_sid].tts_service = TTSService.create_from_assistant(
             call_sid=call_sid,
-            api_key=elevenlabs_api_key,
-            voice_id=voice_id,
-            model_id=model_id,
-            stability=stability,
-            similarity_boost=similarity_boost,
-            style=style,
-            use_speaker_boost=use_speaker_boost,
-            latency=latency,
+            assistant=assistant
         )
 
         # Create audio denoising service if enabled in assistant settings
