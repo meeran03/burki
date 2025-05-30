@@ -1,0 +1,117 @@
+<!-- Tools Configuration Section -->
+<div class="space-y-6">
+    <div>
+        <h4 class="text-base font-semibold text-white mb-4">Tools Configuration</h4>
+        <p class="text-sm text-gray-400 mb-6">Enable tools to allow the assistant to perform actions during calls.</p>
+    </div>
+    
+    <!-- End Call Tool -->
+    <div class="bg-gray-700/20 border border-gray-600/50 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-3">
+                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 16l-2 2m2-2l2 2m-2-2l-2-2m2 2l2-2"></path>
+                </svg>
+                <label for="end_call_enabled" class="text-sm font-medium text-white">Enable End Call Tool</label>
+            </div>
+            <input type="checkbox" name="end_call_enabled" id="end_call_enabled"
+                {% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('enabled', False) %}checked{% endif %}
+                class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500 focus:ring-offset-gray-800">
+        </div>
+        <div id="end_call_config" class="space-y-3" style="display: {% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('enabled', False) %}block{% else %}none{% endif %};">
+            <div>
+                <label for="end_call_scenarios" class="block text-sm font-medium text-gray-300 mb-2">End Call Scenarios</label>
+                <textarea name="end_call_scenarios" id="end_call_scenarios" rows="2"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Enter scenarios separated by commas (e.g., customer says goodbye, issue resolved, complaint escalated)">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('scenarios') %}{{ ', '.join(assistant.tools_settings.get('end_call', {}).get('scenarios', [])) }}{% endif %}</textarea>
+                <p class="mt-1 text-xs text-gray-400">When should the assistant automatically end the call?</p>
+            </div>
+            <div>
+                <label for="end_call_custom_message" class="block text-sm font-medium text-gray-300 mb-2">Custom End Call Message</label>
+                <input type="text" name="end_call_custom_message" id="end_call_custom_message"
+                    value="{% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('custom_message') %}{{ assistant.tools_settings.get('end_call', {}).get('custom_message') }}{% endif %}"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Thank you for calling. Goodbye!">
+                <p class="mt-1 text-xs text-gray-400">Leave empty to use the default end call message above</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transfer Call Tool -->
+    <div class="bg-gray-700/20 border border-gray-600/50 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-3">
+                <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                </svg>
+                <label for="transfer_call_enabled" class="text-sm font-medium text-white">Enable Transfer Call Tool</label>
+            </div>
+            <input type="checkbox" name="transfer_call_enabled" id="transfer_call_enabled"
+                {% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('enabled', False) %}checked{% endif %}
+                class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-yellow-600 focus:ring-yellow-500 focus:ring-offset-gray-800">
+        </div>
+        <div id="transfer_call_config" class="space-y-3" style="display: {% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('enabled', False) %}block{% else %}none{% endif %};">
+            <div>
+                <label for="transfer_call_scenarios" class="block text-sm font-medium text-gray-300 mb-2">Transfer Call Scenarios</label>
+                <textarea name="transfer_call_scenarios" id="transfer_call_scenarios" rows="2"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Enter scenarios separated by commas (e.g., technical issue, billing inquiry, escalation request)">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('scenarios') %}{{ ', '.join(assistant.tools_settings.get('transfer_call', {}).get('scenarios', [])) }}{% endif %}</textarea>
+                <p class="mt-1 text-xs text-gray-400">When should the assistant transfer the call to a human?</p>
+            </div>
+            <div>
+                <label for="transfer_call_numbers" class="block text-sm font-medium text-gray-300 mb-2">Transfer Phone Numbers</label>
+                <textarea name="transfer_call_numbers" id="transfer_call_numbers" rows="2"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Enter phone numbers separated by commas (e.g., +1234567890, +0987654321)">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('transfer_numbers') %}{{ ', '.join(assistant.tools_settings.get('transfer_call', {}).get('transfer_numbers', [])) }}{% endif %}</textarea>
+                <p class="mt-1 text-xs text-gray-400">Phone numbers where calls can be transferred</p>
+            </div>
+            <div>
+                <label for="transfer_call_custom_message" class="block text-sm font-medium text-gray-300 mb-2">Custom Transfer Message</label>
+                <input type="text" name="transfer_call_custom_message" id="transfer_call_custom_message"
+                    value="{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('custom_message') %}{{ assistant.tools_settings.get('transfer_call', {}).get('custom_message') }}{% endif %}"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Please hold while I transfer your call.">
+                <p class="mt-1 text-xs text-gray-400">Leave empty to use the default transfer call message above</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Tools configuration toggle functions (if not already defined)
+if (typeof toggleEndCallConfig === 'undefined') {
+    function toggleEndCallConfig() {
+        const checkbox = document.getElementById('end_call_enabled');
+        const config = document.getElementById('end_call_config');
+        if (checkbox.checked) {
+            config.style.display = 'block';
+        } else {
+            config.style.display = 'none';
+        }
+    }
+
+    function toggleTransferCallConfig() {
+        const checkbox = document.getElementById('transfer_call_enabled');
+        const config = document.getElementById('transfer_call_config');
+        if (checkbox.checked) {
+            config.style.display = 'block';
+        } else {
+            config.style.display = 'none';
+        }
+    }
+
+    // Add event listeners when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        const endCallCheckbox = document.getElementById('end_call_enabled');
+        const transferCallCheckbox = document.getElementById('transfer_call_enabled');
+        
+        if (endCallCheckbox) {
+            endCallCheckbox.addEventListener('change', toggleEndCallConfig);
+        }
+        
+        if (transferCallCheckbox) {
+            transferCallCheckbox.addEventListener('change', toggleTransferCallConfig);
+        }
+    });
+}
+</script> 

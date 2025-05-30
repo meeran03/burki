@@ -28,6 +28,9 @@ try:
 except ImportError:
     AsyncGroq = None
 
+# Import tools
+from app.tools.basic import get_all_tools
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -38,14 +41,14 @@ logger = logging.getLogger(__name__)
 
 class BaseLLMProvider(ABC):
     """Base class for all LLM providers."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.api_key = config.get("api_key")
         self.base_url = config.get("base_url")
         self.model = config.get("model")
         self.custom_config = config.get("custom_config", {})
-    
+
     @abstractmethod
     async def process_transcript(
         self,
@@ -56,20 +59,114 @@ class BaseLLMProvider(ABC):
         """Process transcript and generate streaming response."""
         pass
 
+    async def _handle_tool_call(
+        self,
+        tool_call: Dict[str, Any],
+        assistant: Any,
+        response_callback: Callable[[str, bool, Dict[str, Any]], None],
+    ) -> None:
+        """Handle tool call execution - shared across all providers."""
+        try:
+            import json
+
+            # Parse arguments if they exist
+            args = {}
+            if tool_call.get("arguments"):
+                try:
+                    args = json.loads(tool_call["arguments"])
+                except json.JSONDecodeError:
+                    logger.warning(
+                        f"Failed to parse tool arguments: {tool_call['arguments']}"
+                    )
+
+            tool_name = tool_call["name"]
+            logger.info(f"Processing {tool_name} tool call")
+
+            if tool_name == "endCall":
+                # Get custom end call message from tools_settings
+                end_call_message = "Thank you for calling. Goodbye!"
+                if assistant:
+                    tools_settings = getattr(assistant, "tools_settings", {}) or {}
+                    end_call_config = tools_settings.get("end_call", {})
+                    custom_message = end_call_config.get("custom_message")
+                    if custom_message:
+                        end_call_message = custom_message
+                    # Fallback to legacy field for backward compatibility
+                    elif (
+                        hasattr(assistant, "end_call_message")
+                        and assistant.end_call_message
+                    ):
+                        end_call_message = assistant.end_call_message
+
+                # First send the custom message to be spoken
+                await response_callback(
+                    end_call_message,
+                    False,  # Not final yet, speak the message first
+                    {"speak_before_action": True, "action": "end_call"},
+                )
+
+                # Then send the action to end the call
+                await response_callback(
+                    "",
+                    True,
+                    {"action": "end_call"},
+                )
+
+            elif tool_name == "transferCall":
+                destination = args.get("destination")
+                if destination:
+                    # Get custom transfer call message from tools_settings
+                    transfer_call_message = "Please hold while I transfer your call."
+                    if assistant:
+                        tools_settings = getattr(assistant, "tools_settings", {}) or {}
+                        transfer_call_config = tools_settings.get("transfer_call", {})
+                        custom_message = transfer_call_config.get("custom_message")
+                        if custom_message:
+                            transfer_call_message = custom_message
+                        # Fallback to legacy field for backward compatibility
+                        elif (
+                            hasattr(assistant, "transfer_call_message")
+                            and assistant.transfer_call_message
+                        ):
+                            transfer_call_message = assistant.transfer_call_message
+
+                    # First send the custom message to be spoken
+                    await response_callback(
+                        transfer_call_message,
+                        False,  # Not final yet, speak the message first
+                        {"speak_before_action": True},
+                    )
+
+                    # Then send the action to transfer the call
+                    await response_callback(
+                        "",
+                        True,
+                        {
+                            "action": "transfer_call",
+                            "destination": destination,
+                        },
+                    )
+                else:
+                    logger.error("Transfer call requested but no destination provided")
+
+            else:
+                logger.warning(f"Unknown tool call: {tool_name}")
+
+        except Exception as e:
+            logger.error(f"Error processing tool call: {e}")
+            logger.exception(e)
+
 
 class OpenAIProvider(BaseLLMProvider):
     """OpenAI LLM provider."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         if AsyncOpenAI is None:
             raise ImportError("openai package not installed. Run: pip install openai")
-        
-        self.client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-    
+
+        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+
     async def process_transcript(
         self,
         messages: list,
@@ -78,24 +175,68 @@ class OpenAIProvider(BaseLLMProvider):
     ) -> None:
         """Process transcript using OpenAI."""
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                stream=True,
-                temperature=settings.get("temperature", 0.7),
-                max_tokens=settings.get("max_tokens", 150),
-                top_p=settings.get("top_p", 1.0),
-                frequency_penalty=settings.get("frequency_penalty", 0.0),
-                presence_penalty=settings.get("presence_penalty", 0.0),
-                stop=settings.get("stop_sequences") or None,
-            )
+            # Get tools from assistant if available
+            tools = []
+            assistant = settings.get("assistant")
+            if assistant:
+                tools = get_all_tools(assistant)
+
+            # Prepare the API call parameters
+            api_params = {
+                "model": self.model,
+                "messages": messages,
+                "stream": True,
+                "temperature": settings.get("temperature", 0.7),
+                "max_tokens": settings.get("max_tokens", 150),
+                "top_p": settings.get("top_p", 1.0),
+                "frequency_penalty": settings.get("frequency_penalty", 0.0),
+                "presence_penalty": settings.get("presence_penalty", 0.0),
+                "stop": settings.get("stop_sequences") or None,
+            }
+
+            # Add tools if available
+            if tools:
+                api_params["tools"] = tools
+                api_params["tool_choice"] = "auto"
+
+            stream = await self.client.chat.completions.create(**api_params)
 
             collected_response = ""
+            current_tool_call = None
+
             async for chunk in stream:
+                # Handle regular content
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
                     collected_response += content
                     await response_callback(content, False, {})
+
+                # Handle tool calls
+                if chunk.choices[0].delta.tool_calls:
+                    tool_call = chunk.choices[0].delta.tool_calls[0]
+
+                    # Handle tool call start
+                    if tool_call.function.name:
+                        current_tool_call = {
+                            "name": tool_call.function.name,
+                            "id": tool_call.id,
+                            "arguments": "",
+                        }
+                        logger.info(f"Started tool call: {current_tool_call['name']}")
+
+                    # Accumulate arguments
+                    if tool_call.function.arguments:
+                        if current_tool_call:
+                            current_tool_call[
+                                "arguments"
+                            ] += tool_call.function.arguments
+
+                # Handle tool call completion
+                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
+                    await self._handle_tool_call(
+                        current_tool_call, assistant, response_callback
+                    )
+                    return
 
             if collected_response:
                 await response_callback("", True, {"full_response": collected_response})
@@ -111,17 +252,16 @@ class OpenAIProvider(BaseLLMProvider):
 
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic Claude LLM provider."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         if AsyncAnthropic is None:
-            raise ImportError("anthropic package not installed. Run: pip install anthropic")
-        
-        self.client = AsyncAnthropic(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-    
+            raise ImportError(
+                "anthropic package not installed. Run: pip install anthropic"
+            )
+
+        self.client = AsyncAnthropic(api_key=self.api_key, base_url=self.base_url)
+
     async def process_transcript(
         self,
         messages: list,
@@ -130,27 +270,79 @@ class AnthropicProvider(BaseLLMProvider):
     ) -> None:
         """Process transcript using Anthropic Claude."""
         try:
+            # Get tools from assistant if available
+            tools = []
+            assistant = settings.get("assistant")
+            if assistant:
+                tools = get_all_tools(assistant)
+
             # Convert OpenAI format messages to Anthropic format
             anthropic_messages = self._convert_messages_to_anthropic(messages)
             system_prompt = self._extract_system_prompt(messages)
-            
-            stream = await self.client.messages.create(
-                model=self.model,
-                messages=anthropic_messages,
-                system=system_prompt,
-                stream=True,
-                temperature=settings.get("temperature", 0.7),
-                max_tokens=settings.get("max_tokens", 150),
-                top_p=settings.get("top_p", 1.0),
-                stop_sequences=settings.get("stop_sequences", []),
-            )
+
+            # Prepare the API call parameters
+            api_params = {
+                "model": self.model,
+                "messages": anthropic_messages,
+                "system": system_prompt,
+                "stream": True,
+                "temperature": settings.get("temperature", 0.7),
+                "max_tokens": settings.get("max_tokens", 150),
+                "top_p": settings.get("top_p", 1.0),
+                "stop_sequences": settings.get("stop_sequences", []),
+            }
+
+            # Add tools if available
+            if tools:
+                api_params["tools"] = tools
+
+            stream = await self.client.messages.create(**api_params)
 
             collected_response = ""
+            current_tool_call = None
+
             async for chunk in stream:
-                if chunk.type == "content_block_delta" and hasattr(chunk.delta, 'text'):
+                # Handle regular content
+                if chunk.type == "content_block_delta" and hasattr(chunk.delta, "text"):
                     content = chunk.delta.text
                     collected_response += content
                     await response_callback(content, False, {})
+
+                # Handle tool calls
+                if (
+                    chunk.type == "content_block_start"
+                    and chunk.content_block.type == "tool_use"
+                ):
+                    current_tool_call = {
+                        "name": chunk.content_block.name,
+                        "id": chunk.content_block.id,
+                        "arguments": "",
+                    }
+                    logger.info(f"Started tool call: {current_tool_call['name']}")
+
+                if chunk.type == "content_block_delta" and hasattr(
+                    chunk.delta, "partial_json"
+                ):
+                    if current_tool_call:
+                        current_tool_call["arguments"] += chunk.delta.partial_json
+
+                # Handle message completion
+                if chunk.type == "message_stop" and current_tool_call:
+                    # For Anthropic, parse arguments as JSON
+                    if current_tool_call["arguments"]:
+                        try:
+                            current_tool_call["arguments"] = json.dumps(
+                                json.loads(current_tool_call["arguments"])
+                            )
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                f"Failed to parse Anthropic tool arguments: {current_tool_call['arguments']}"
+                            )
+
+                    await self._handle_tool_call(
+                        current_tool_call, assistant, response_callback
+                    )
+                    return
 
             if collected_response:
                 await response_callback("", True, {"full_response": collected_response})
@@ -162,7 +354,7 @@ class AnthropicProvider(BaseLLMProvider):
                 True,
                 {"error": str(e)},
             )
-    
+
     def _convert_messages_to_anthropic(self, messages: list) -> list:
         """Convert OpenAI format messages to Anthropic format."""
         anthropic_messages = []
@@ -172,9 +364,11 @@ class AnthropicProvider(BaseLLMProvider):
             elif msg["role"] == "user":
                 anthropic_messages.append({"role": "user", "content": msg["content"]})
             elif msg["role"] == "assistant":
-                anthropic_messages.append({"role": "assistant", "content": msg["content"]})
+                anthropic_messages.append(
+                    {"role": "assistant", "content": msg["content"]}
+                )
         return anthropic_messages
-    
+
     def _extract_system_prompt(self, messages: list) -> str:
         """Extract system prompt from messages."""
         for msg in messages:
@@ -185,18 +379,19 @@ class AnthropicProvider(BaseLLMProvider):
 
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM provider using OpenAI compatibility."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         if AsyncOpenAI is None:
             raise ImportError("openai package not installed. Run: pip install openai")
-        
+
         # Use Gemini's OpenAI-compatible endpoint
         self.client = AsyncOpenAI(
             api_key=self.api_key,
-            base_url=self.base_url or "https://generativelanguage.googleapis.com/v1beta/openai/"
+            base_url=self.base_url
+            or "https://generativelanguage.googleapis.com/v1beta/openai/",
         )
-    
+
     async def process_transcript(
         self,
         messages: list,
@@ -205,22 +400,66 @@ class GeminiProvider(BaseLLMProvider):
     ) -> None:
         """Process transcript using Google Gemini."""
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model or "gemini-2.0-flash",
-                messages=messages,
-                stream=True,
-                temperature=settings.get("temperature", 0.7),
-                max_tokens=settings.get("max_tokens", 150),
-                top_p=settings.get("top_p", 1.0),
-                stop=settings.get("stop_sequences") or None,
-            )
+            # Get tools from assistant if available
+            tools = []
+            assistant = settings.get("assistant")
+            if assistant:
+                tools = get_all_tools(assistant)
+
+            # Prepare the API call parameters
+            api_params = {
+                "model": self.model or "gemini-2.0-flash",
+                "messages": messages,
+                "stream": True,
+                "temperature": settings.get("temperature", 0.7),
+                "max_tokens": settings.get("max_tokens", 150),
+                "top_p": settings.get("top_p", 1.0),
+                "stop": settings.get("stop_sequences") or None,
+            }
+
+            # Add tools if available
+            if tools:
+                api_params["tools"] = tools
+                api_params["tool_choice"] = "auto"
+
+            stream = await self.client.chat.completions.create(**api_params)
 
             collected_response = ""
+            current_tool_call = None
+
             async for chunk in stream:
+                # Handle regular content
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
                     collected_response += content
                     await response_callback(content, False, {})
+
+                # Handle tool calls (same as OpenAI format)
+                if chunk.choices[0].delta.tool_calls:
+                    tool_call = chunk.choices[0].delta.tool_calls[0]
+
+                    # Handle tool call start
+                    if tool_call.function.name:
+                        current_tool_call = {
+                            "name": tool_call.function.name,
+                            "id": tool_call.id,
+                            "arguments": "",
+                        }
+                        logger.info(f"Started tool call: {current_tool_call['name']}")
+
+                    # Accumulate arguments
+                    if tool_call.function.arguments:
+                        if current_tool_call:
+                            current_tool_call[
+                                "arguments"
+                            ] += tool_call.function.arguments
+
+                # Handle tool call completion
+                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
+                    await self._handle_tool_call(
+                        current_tool_call, assistant, response_callback
+                    )
+                    return
 
             if collected_response:
                 await response_callback("", True, {"full_response": collected_response})
@@ -236,18 +475,17 @@ class GeminiProvider(BaseLLMProvider):
 
 class XAIProvider(BaseLLMProvider):
     """xAI Grok LLM provider using OpenAI compatibility."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         if AsyncOpenAI is None:
             raise ImportError("openai package not installed. Run: pip install openai")
-        
+
         # Use xAI's OpenAI-compatible endpoint
         self.client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url or "https://api.x.ai/v1"
+            api_key=self.api_key, base_url=self.base_url or "https://api.x.ai/v1"
         )
-    
+
     async def process_transcript(
         self,
         messages: list,
@@ -256,24 +494,68 @@ class XAIProvider(BaseLLMProvider):
     ) -> None:
         """Process transcript using xAI Grok."""
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model or "grok-beta",
-                messages=messages,
-                stream=True,
-                temperature=settings.get("temperature", 0.7),
-                max_tokens=settings.get("max_tokens", 150),
-                top_p=settings.get("top_p", 1.0),
-                frequency_penalty=settings.get("frequency_penalty", 0.0),
-                presence_penalty=settings.get("presence_penalty", 0.0),
-                stop=settings.get("stop_sequences") or None,
-            )
+            # Get tools from assistant if available
+            tools = []
+            assistant = settings.get("assistant")
+            if assistant:
+                tools = get_all_tools(assistant)
+
+            # Prepare the API call parameters
+            api_params = {
+                "model": self.model or "grok-beta",
+                "messages": messages,
+                "stream": True,
+                "temperature": settings.get("temperature", 0.7),
+                "max_tokens": settings.get("max_tokens", 150),
+                "top_p": settings.get("top_p", 1.0),
+                "frequency_penalty": settings.get("frequency_penalty", 0.0),
+                "presence_penalty": settings.get("presence_penalty", 0.0),
+                "stop": settings.get("stop_sequences") or None,
+            }
+
+            # Add tools if available
+            if tools:
+                api_params["tools"] = tools
+                api_params["tool_choice"] = "auto"
+
+            stream = await self.client.chat.completions.create(**api_params)
 
             collected_response = ""
+            current_tool_call = None
+
             async for chunk in stream:
+                # Handle regular content
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
                     collected_response += content
                     await response_callback(content, False, {})
+
+                # Handle tool calls (same as OpenAI format)
+                if chunk.choices[0].delta.tool_calls:
+                    tool_call = chunk.choices[0].delta.tool_calls[0]
+
+                    # Handle tool call start
+                    if tool_call.function.name:
+                        current_tool_call = {
+                            "name": tool_call.function.name,
+                            "id": tool_call.id,
+                            "arguments": "",
+                        }
+                        logger.info(f"Started tool call: {current_tool_call['name']}")
+
+                    # Accumulate arguments
+                    if tool_call.function.arguments:
+                        if current_tool_call:
+                            current_tool_call[
+                                "arguments"
+                            ] += tool_call.function.arguments
+
+                # Handle tool call completion
+                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
+                    await self._handle_tool_call(
+                        current_tool_call, assistant, response_callback
+                    )
+                    return
 
             if collected_response:
                 await response_callback("", True, {"full_response": collected_response})
@@ -289,17 +571,14 @@ class XAIProvider(BaseLLMProvider):
 
 class GroqProvider(BaseLLMProvider):
     """Groq LLM provider."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         if AsyncGroq is None:
             raise ImportError("groq package not installed. Run: pip install groq")
-        
-        self.client = AsyncGroq(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-    
+
+        self.client = AsyncGroq(api_key=self.api_key, base_url=self.base_url)
+
     async def process_transcript(
         self,
         messages: list,
@@ -308,24 +587,68 @@ class GroqProvider(BaseLLMProvider):
     ) -> None:
         """Process transcript using Groq."""
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model or "llama-3.3-70b-versatile",
-                messages=messages,
-                stream=True,
-                temperature=settings.get("temperature", 0.7),
-                max_tokens=settings.get("max_tokens", 150),
-                top_p=settings.get("top_p", 1.0),
-                frequency_penalty=settings.get("frequency_penalty", 0.0),
-                presence_penalty=settings.get("presence_penalty", 0.0),
-                stop=settings.get("stop_sequences") or None,
-            )
+            # Get tools from assistant if available
+            tools = []
+            assistant = settings.get("assistant")
+            if assistant:
+                tools = get_all_tools(assistant)
+
+            # Prepare the API call parameters
+            api_params = {
+                "model": self.model or "llama-3.3-70b-versatile",
+                "messages": messages,
+                "stream": True,
+                "temperature": settings.get("temperature", 0.7),
+                "max_tokens": settings.get("max_tokens", 150),
+                "top_p": settings.get("top_p", 1.0),
+                "frequency_penalty": settings.get("frequency_penalty", 0.0),
+                "presence_penalty": settings.get("presence_penalty", 0.0),
+                "stop": settings.get("stop_sequences") or None,
+            }
+
+            # Add tools if available
+            if tools:
+                api_params["tools"] = tools
+                api_params["tool_choice"] = "auto"
+
+            stream = await self.client.chat.completions.create(**api_params)
 
             collected_response = ""
+            current_tool_call = None
+
             async for chunk in stream:
+                # Handle regular content
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
                     collected_response += content
                     await response_callback(content, False, {})
+
+                # Handle tool calls (same as OpenAI format)
+                if chunk.choices[0].delta.tool_calls:
+                    tool_call = chunk.choices[0].delta.tool_calls[0]
+
+                    # Handle tool call start
+                    if tool_call.function.name:
+                        current_tool_call = {
+                            "name": tool_call.function.name,
+                            "id": tool_call.id,
+                            "arguments": "",
+                        }
+                        logger.info(f"Started tool call: {current_tool_call['name']}")
+
+                    # Accumulate arguments
+                    if tool_call.function.arguments:
+                        if current_tool_call:
+                            current_tool_call[
+                                "arguments"
+                            ] += tool_call.function.arguments
+
+                # Handle tool call completion
+                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
+                    await self._handle_tool_call(
+                        current_tool_call, assistant, response_callback
+                    )
+                    return
 
             if collected_response:
                 await response_callback("", True, {"full_response": collected_response})
@@ -341,7 +664,7 @@ class GroqProvider(BaseLLMProvider):
 
 class CustomLLMProvider(BaseLLMProvider):
     """Custom LLM provider for custom endpoints (backward compatibility)."""
-    
+
     async def process_transcript(
         self,
         messages: list,
@@ -355,11 +678,16 @@ class CustomLLMProvider(BaseLLMProvider):
             from_number = settings.get("from_number", "")
             call_sid = settings.get("call_sid", "")
             assistant = settings.get("assistant")
-            
+
             # Temporarily store assistant in config for access in _process_custom_llm_response
             if assistant:
                 self.config["assistant"] = assistant
-            
+
+            # Get tools from assistant if available
+            tools = []
+            if assistant:
+                tools = get_all_tools(assistant)
+
             payload = {
                 "messages": messages,
                 "phoneNumber": {"number": to_number or ""},
@@ -368,6 +696,10 @@ class CustomLLMProvider(BaseLLMProvider):
                     "customer": {"number": from_number or ""},
                 },
             }
+
+            # Add tools if available
+            if tools:
+                payload["tools"] = tools
 
             async with httpx.AsyncClient() as client:
                 async with client.stream(
@@ -388,7 +720,7 @@ class CustomLLMProvider(BaseLLMProvider):
                 True,
                 {"error": str(e)},
             )
-    
+
     async def _process_custom_llm_response(
         self,
         response: httpx.Response,
@@ -457,65 +789,11 @@ class CustomLLMProvider(BaseLLMProvider):
                             f"Completing tool call: {current_tool_call['name']}"
                         )
                         try:
-                            # Parse arguments if they exist, otherwise use empty dict
-                            args = {}
-                            if current_tool_call["arguments"]:
-                                try:
-                                    args = json.loads(current_tool_call["arguments"])
-                                except json.JSONDecodeError:
-                                    logger.warning(
-                                        f"Failed to parse arguments: {current_tool_call['arguments']}, using empty dict"
-                                    )
-
-                            if current_tool_call["name"] == "endCall":
-                                logger.info("Processing endCall tool call")
-                                # Get custom end call message from assistant
-                                end_call_message = "Thank you for calling. Goodbye!"
-                                assistant = self.config.get("assistant")
-                                if assistant and hasattr(assistant, 'end_call_message') and assistant.end_call_message:
-                                    end_call_message = assistant.end_call_message
-                                
-                                # First send the custom message to be spoken
-                                await response_callback(
-                                    end_call_message,
-                                    False,  # Not final yet, speak the message first
-                                    {"speak_before_action": True, "action": "end_call"}
-                                )
-                                
-                                # Then send the action to end the call
-                                await response_callback(
-                                    "",
-                                    True,
-                                    {"action": "end_call"},
-                                )
-                                return
-                            elif current_tool_call["name"] == "transferCall":
-                                logger.info("Processing transferCall tool call")
-                                destination = args.get("destination")
-                                if destination:
-                                    # Get custom transfer call message from assistant
-                                    transfer_call_message = "Please hold while I transfer your call."
-                                    assistant = self.config.get("assistant")
-                                    if assistant and hasattr(assistant, 'transfer_call_message') and assistant.transfer_call_message:
-                                        transfer_call_message = assistant.transfer_call_message
-                                    
-                                    # First send the custom message to be spoken
-                                    await response_callback(
-                                        transfer_call_message,
-                                        False,  # Not final yet, speak the message first
-                                        {"speak_before_action": True}
-                                    )
-                                    
-                                    # Then send the action to transfer the call
-                                    await response_callback(
-                                        "",
-                                        True,
-                                        {
-                                            "action": "transfer_call",
-                                            "destination": destination,
-                                        },
-                                    )
-                                    return
+                            assistant = self.config.get("assistant")
+                            await self._handle_tool_call(
+                                current_tool_call, assistant, response_callback
+                            )
+                            return
                         except Exception as e:
                             logger.error(f"Error processing tool call completion: {e}")
                         finally:
@@ -585,7 +863,9 @@ class LLMService:
         self.conversation_history = [{"role": "system", "content": system_prompt}]
 
         if call_sid:
-            logger.info(f"Started new conversation for call {call_sid} using {self._get_provider_name()}")
+            logger.info(
+                f"Started new conversation for call {call_sid} using {self._get_provider_name()}"
+            )
 
     def _initialize_provider(self) -> BaseLLMProvider:
         """Initialize the appropriate LLM provider based on assistant configuration."""
@@ -595,42 +875,61 @@ class LLMService:
                 "api_key": os.getenv("OPENAI_API_KEY"),
                 "model": "gpt-4o-mini",
             }
+            logger.info("No assistant provided, using default OpenAI provider")
             return OpenAIProvider(config)
 
-        # Check for legacy configuration (backward compatibility)
-        if hasattr(self.assistant, 'custom_llm_url') and self.assistant.custom_llm_url:
-            config = {
-                "base_url": self.assistant.custom_llm_url,
-            }
-            return CustomLLMProvider(config)
+        # Use new provider configuration (prioritize this over legacy settings)
+        provider_name = getattr(self.assistant, "llm_provider", "openai")
+        provider_config = getattr(self.assistant, "llm_provider_config", {})
 
-        # Use new provider configuration
-        provider_name = getattr(self.assistant, 'llm_provider', 'openai')
-        provider_config = getattr(self.assistant, 'llm_provider_config', {})
-                                
-        # Fallback to legacy OpenAI key if no provider config
-        if not provider_config.get("api_key") and hasattr(self.assistant, 'openai_api_key'):
-            provider_config = {
-                "api_key": self.assistant.openai_api_key,
-                "model": "gpt-4o-mini",
-            }
-            provider_name = "openai"
+        logger.info(
+            f"Assistant {self.assistant.name} - Provider: {provider_name}, Config: {provider_config}"
+        )
+
+        # Only use legacy configuration if no provider is explicitly set
+        if provider_name == "custom":
+            # Check for legacy custom LLM URL configuration
+            if (
+                hasattr(self.assistant, "custom_llm_url")
+                and self.assistant.custom_llm_url
+            ):
+                config = {
+                    "base_url": self.assistant.custom_llm_url,
+                }
+                logger.info(
+                    f"Using legacy custom LLM URL: {self.assistant.custom_llm_url}"
+                )
+                return CustomLLMProvider(config)
+
+            # Fallback to legacy OpenAI key if no provider config
+            if (
+                hasattr(self.assistant, "openai_api_key")
+                and self.assistant.openai_api_key
+            ):
+                provider_config = {
+                    "api_key": self.assistant.openai_api_key,
+                    "model": "gpt-4o-mini",
+                }
+                logger.info("Using legacy OpenAI API key")
 
         provider_class = self.PROVIDERS.get(provider_name, OpenAIProvider)
+        logger.info(
+            f"Initialized {provider_class.__name__} with config: {provider_config}"
+        )
         return provider_class(provider_config)
 
     def _get_provider_name(self) -> str:
         """Get the name of the current provider."""
         if not self.assistant:
             return "openai"
-        return getattr(self.assistant, 'llm_provider', 'openai')
+        return getattr(self.assistant, "llm_provider", "openai")
 
     def _get_system_prompt(self) -> str:
         """Get the system prompt from assistant configuration."""
         if not self.assistant:
             return self.default_system_prompt
 
-        llm_settings = getattr(self.assistant, 'llm_settings', {})
+        llm_settings = getattr(self.assistant, "llm_settings", {})
         return llm_settings.get("system_prompt", self.default_system_prompt)
 
     async def process_transcript(
@@ -660,25 +959,25 @@ class LLMService:
             # Get LLM settings
             llm_settings = {}
             if self.assistant:
-                llm_settings = getattr(self.assistant, 'llm_settings', {})
+                llm_settings = getattr(self.assistant, "llm_settings", {})
 
             # Add call metadata to settings for custom LLM providers that need it
             enhanced_settings = llm_settings.copy()
-            enhanced_settings.update({
-                "call_sid": self.call_sid,
-                "to_number": self.to_number,
-                "from_number": self.from_number,
-                "assistant": self.assistant,
-            })
+            enhanced_settings.update(
+                {
+                    "call_sid": self.call_sid,
+                    "to_number": self.to_number,
+                    "from_number": self.from_number,
+                    "assistant": self.assistant,
+                }
+            )
 
             # Add call metadata to response callback
             enhanced_callback = self._create_enhanced_callback(response_callback)
 
             # Process using the configured provider
             await self.provider.process_transcript(
-                self.conversation_history,
-                enhanced_settings,
-                enhanced_callback
+                self.conversation_history, enhanced_settings, enhanced_callback
             )
 
         except Exception as e:
@@ -693,25 +992,25 @@ class LLMService:
             )
 
     def _create_enhanced_callback(
-        self, 
-        original_callback: Callable[[str, bool, Dict[str, Any]], None]
+        self, original_callback: Callable[[str, bool, Dict[str, Any]], None]
     ) -> Callable[[str, bool, Dict[str, Any]], None]:
         """Create an enhanced callback that adds call metadata and updates conversation history."""
-        
-        async def enhanced_callback(content: str, is_final: bool, metadata: Dict[str, Any]) -> None:
+
+        async def enhanced_callback(
+            content: str, is_final: bool, metadata: Dict[str, Any]
+        ) -> None:
             # Add call metadata
             metadata["call_sid"] = self.call_sid
-            
+
             # Update conversation history if this is the final response
             if is_final and metadata.get("full_response"):
-                self.conversation_history.append({
-                    "role": "assistant", 
-                    "content": metadata["full_response"]
-                })
-            
+                self.conversation_history.append(
+                    {"role": "assistant", "content": metadata["full_response"]}
+                )
+
             # Call the original callback
             await original_callback(content, is_final, metadata)
-        
+
         return enhanced_callback
 
     def get_conversation_history(self) -> list:
@@ -741,7 +1040,10 @@ class LLMService:
             "anthropic": {
                 "required_fields": ["api_key"],
                 "optional_fields": ["base_url", "model"],
-                "default_models": ["claude-3-5-sonnet-latest", "claude-3-haiku-20240307"],
+                "default_models": [
+                    "claude-3-5-sonnet-latest",
+                    "claude-3-haiku-20240307",
+                ],
                 "pip_install": "anthropic",
             },
             "gemini": {
