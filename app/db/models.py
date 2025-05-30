@@ -339,6 +339,27 @@ class Assistant(Base):
     max_idle_messages = Column(Integer, nullable=True)
     idle_timeout = Column(Integer, nullable=True)
 
+    # Tools configuration as JSON
+    tools_settings = Column(
+        JSON,
+        nullable=True,
+        default=lambda: {
+            "enabled_tools": [],  # List of enabled tool names: ["endCall", "transferCall"]
+            "end_call": {
+                "enabled": False,
+                "scenarios": [],  # List of scenarios when to end call
+                "custom_message": None,  # Custom end call message
+            },
+            "transfer_call": {
+                "enabled": False,
+                "scenarios": [],  # List of scenarios when to transfer
+                "transfer_numbers": [],  # List of phone numbers to transfer to
+                "custom_message": None,  # Custom transfer message
+            },
+            "custom_tools": [],  # List of custom tool definitions
+        },
+    )
+
     # Additional settings
     custom_settings = Column(JSON, nullable=True)
     is_active = Column(Boolean, nullable=True, default=True)

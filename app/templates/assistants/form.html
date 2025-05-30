@@ -1010,7 +1010,103 @@
                 </div>
             </div>
 
-            <!-- Section 4: Integration Settings -->
+            <!-- Section 4: Tools Configuration -->
+            <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+                <div class="px-6 py-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-b border-gray-700/50">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-white">Tools Configuration</h3>
+                                <p class="text-gray-400 text-sm">Configure call ending and transfer capabilities</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="toggleTools()" class="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-colors">
+                            <span id="tools-toggle-text">Configure</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="tools-configuration" class="hidden p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <!-- End Call Tool -->
+                        <div class="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 3l1.5 1.5M21 21l-1.5-1.5M4.5 4.5l15 15"></path>
+                                    </svg>
+                                    <h4 class="text-base font-semibold text-white">End Call Tool</h4>
+                                </div>
+                                <input type="checkbox" name="end_call_enabled" id="end_call_enabled" onchange="toggleEndCallConfig()"
+                                    {% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('enabled', False) %}checked{% endif %}
+                                    class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500 focus:ring-offset-gray-800">
+                            </div>
+                            <div id="end_call_config" class="space-y-3" {% if not assistant or not assistant.tools_settings or not assistant.tools_settings.get('end_call', {}).get('enabled', False) %}style="display: none;"{% endif %}>
+                                <div>
+                                    <label for="end_call_scenarios" class="block text-sm font-medium text-gray-300 mb-2">End Call Scenarios</label>
+                                    <textarea name="end_call_scenarios" id="end_call_scenarios" rows="2"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                        placeholder="Customer says goodbye, conversation complete, etc.">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('scenarios') %}{{ assistant.tools_settings.end_call.scenarios | join(', ') }}{% endif %}</textarea>
+                                    <p class="text-xs text-gray-400 mt-1">Comma-separated scenarios when the AI should end the call</p>
+                                </div>
+                                <div>
+                                    <label for="end_call_custom_message" class="block text-sm font-medium text-gray-300 mb-2">Custom End Call Message</label>
+                                    <input type="text" name="end_call_custom_message" id="end_call_custom_message"
+                                        value="{% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('custom_message') %}{{ assistant.tools_settings.end_call.custom_message }}{% endif %}"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                                        placeholder="Thank you for calling. Goodbye!">
+                                    <p class="text-xs text-gray-400 mt-1">Message to say before ending the call</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Transfer Call Tool -->
+                        <div class="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                    </svg>
+                                    <h4 class="text-base font-semibold text-white">Transfer Call Tool</h4>
+                                </div>
+                                <input type="checkbox" name="transfer_call_enabled" id="transfer_call_enabled" onchange="toggleTransferCallConfig()"
+                                    {% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('enabled', False) %}checked{% endif %}
+                                    class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-yellow-600 focus:ring-yellow-500 focus:ring-offset-gray-800">
+                            </div>
+                            <div id="transfer_call_config" class="space-y-3" {% if not assistant or not assistant.tools_settings or not assistant.tools_settings.get('transfer_call', {}).get('enabled', False) %}style="display: none;"{% endif %}>
+                                <div>
+                                    <label for="transfer_call_scenarios" class="block text-sm font-medium text-gray-300 mb-2">Transfer Call Scenarios</label>
+                                    <textarea name="transfer_call_scenarios" id="transfer_call_scenarios" rows="2"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                                        placeholder="Customer needs human help, complex issue, escalation needed, etc.">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('scenarios') %}{{ assistant.tools_settings.transfer_call.scenarios | join(', ') }}{% endif %}</textarea>
+                                    <p class="text-xs text-gray-400 mt-1">Comma-separated scenarios when the AI should transfer the call</p>
+                                </div>
+                                <div>
+                                    <label for="transfer_call_numbers" class="block text-sm font-medium text-gray-300 mb-2">Transfer Phone Numbers</label>
+                                    <textarea name="transfer_call_numbers" id="transfer_call_numbers" rows="2"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                                        placeholder="+1234567890, +0987654321">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('transfer_numbers') %}{{ assistant.tools_settings.transfer_call.transfer_numbers | join(', ') }}{% endif %}</textarea>
+                                    <p class="text-xs text-gray-400 mt-1">Comma-separated phone numbers to transfer calls to</p>
+                                </div>
+                                <div>
+                                    <label for="transfer_call_custom_message" class="block text-sm font-medium text-gray-300 mb-2">Custom Transfer Message</label>
+                                    <input type="text" name="transfer_call_custom_message" id="transfer_call_custom_message"
+                                        value="{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('custom_message') %}{{ assistant.tools_settings.transfer_call.custom_message }}{% endif %}"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
+                                        placeholder="Please hold while I transfer your call.">
+                                    <p class="text-xs text-gray-400 mt-1">Message to say before transferring the call</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 5: Integration Settings -->
             <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
                 <div class="px-6 py-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-b border-gray-700/50">
                     <div class="flex items-center justify-between">
@@ -1120,7 +1216,7 @@
                 </div>
             </div>
 
-            <!-- Section 5: Advanced Settings -->
+            <!-- Section 6: Advanced Settings -->
             <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
                 <div class="px-6 py-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-b border-gray-700/50">
                     <div class="flex items-center justify-between">
@@ -1870,9 +1966,9 @@ function removeEnumOption(button) {
 // Template variables
 const ASSISTANT_DATA = {
     provider: "{{ assistant.llm_provider if assistant and assistant.llm_provider else 'openai' }}",
-    model: {% if assistant and assistant.llm_provider_config and assistant.llm_provider_config.model %}"{{ assistant.llm_provider_config.model }}"{% else %}null{% endif %},
-    apiKey: "{{ assistant.llm_provider_config.api_key if assistant and assistant.llm_provider_config and assistant.llm_provider_config.api_key else '' }}",
-    baseUrl: "{{ assistant.llm_provider_config.base_url if assistant and assistant.llm_provider_config and assistant.llm_provider_config.base_url else '' }}",
+    model: "{{ assistant.llm_provider_config.model if assistant and assistant.llm_provider_config and assistant.llm_provider_config.get('model') else '' }}",
+    apiKey: "{{ assistant.llm_provider_config.api_key if assistant and assistant.llm_provider_config and assistant.llm_provider_config.get('api_key') else '' }}",
+    baseUrl: "{{ assistant.llm_provider_config.base_url if assistant and assistant.llm_provider_config and assistant.llm_provider_config.get('base_url') else '' }}",
     ttsProvider: "{{ assistant.tts_settings.provider if assistant and assistant.tts_settings and assistant.tts_settings.get('provider') else 'elevenlabs' }}",
     ttsVoice: "{{ assistant.tts_settings.voice_id if assistant and assistant.tts_settings and assistant.tts_settings.voice_id else 'rachel' }}",
     ttsModel: "{{ assistant.tts_settings.model_id if assistant and assistant.tts_settings and assistant.tts_settings.model_id else 'turbo' }}"
@@ -2023,6 +2119,55 @@ function updateTTSProviderOptions() {
             this.name = 'tts_voice_id';
         }
     });
+}
+
+// Tools configuration toggle functions
+function toggleEndCallConfig() {
+    const checkbox = document.getElementById('end_call_enabled');
+    const config = document.getElementById('end_call_config');
+    if (checkbox.checked) {
+        config.style.display = 'block';
+    } else {
+        config.style.display = 'none';
+    }
+}
+
+function toggleTransferCallConfig() {
+    const checkbox = document.getElementById('transfer_call_enabled');
+    const config = document.getElementById('transfer_call_config');
+    if (checkbox.checked) {
+        config.style.display = 'block';
+    } else {
+        config.style.display = 'none';
+    }
+}
+
+// Add event listeners when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Tools configuration event listeners
+    const endCallCheckbox = document.getElementById('end_call_enabled');
+    const transferCallCheckbox = document.getElementById('transfer_call_enabled');
+    
+    if (endCallCheckbox) {
+        endCallCheckbox.addEventListener('change', toggleEndCallConfig);
+    }
+    
+    if (transferCallCheckbox) {
+        transferCallCheckbox.addEventListener('change', toggleTransferCallConfig);
+    }
+});
+
+// Tools section toggle function
+function toggleTools() {
+    const section = document.getElementById('tools-configuration');
+    const toggle = document.getElementById('tools-toggle-text');
+    if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        toggle.textContent = 'Collapse';
+    } else {
+        section.classList.add('hidden');
+        toggle.textContent = 'Configure';
+    }
 }
 </script>
 {% endblock %} 

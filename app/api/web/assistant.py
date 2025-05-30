@@ -406,6 +406,14 @@ async def create_assistant(
     structured_data_prompt: Optional[str] = Form(None),
     # Recording settings
     recording_enabled: bool = Form(False),
+    # Tools configuration
+    end_call_enabled: bool = Form(False),
+    end_call_scenarios: Optional[str] = Form(None),
+    end_call_custom_message: Optional[str] = Form(None),
+    transfer_call_enabled: bool = Form(False),
+    transfer_call_scenarios: Optional[str] = Form(None),
+    transfer_call_numbers: Optional[str] = Form(None),
+    transfer_call_custom_message: Optional[str] = Form(None),
 ):
     """Create a new assistant."""
     # Check if an assistant with this phone number already exists
@@ -487,6 +495,8 @@ async def create_assistant(
             "model": empty_to_none(llm_provider_model),
             "base_url": empty_to_none(llm_provider_base_url),
         },
+        # Clear legacy custom_llm_url when using a different provider
+        "custom_llm_url": llm_provider_base_url if llm_provider == "custom" else None,
         # Service API Keys
         "deepgram_api_key": empty_to_none(deepgram_api_key),
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
@@ -575,6 +585,22 @@ async def create_assistant(
             "recordings_dir": "recordings",
             "create_database_records": True,
         } if recording_enabled else None,
+        # Tools configuration
+        "tools_settings": {
+            "enabled_tools": [],  # Will be populated below
+            "end_call": {
+                "enabled": end_call_enabled,
+                "scenarios": [s.strip() for s in end_call_scenarios.split(",")] if end_call_scenarios and end_call_scenarios.strip() else [],
+                "custom_message": empty_to_none(end_call_custom_message),
+            },
+            "transfer_call": {
+                "enabled": transfer_call_enabled,
+                "scenarios": [s.strip() for s in transfer_call_scenarios.split(",")] if transfer_call_scenarios and transfer_call_scenarios.strip() else [],
+                "transfer_numbers": [n.strip() for n in transfer_call_numbers.split(",")] if transfer_call_numbers and transfer_call_numbers.strip() else [],
+                "custom_message": empty_to_none(transfer_call_custom_message),
+            },
+            "custom_tools": [],  # For future custom tool definitions
+        },
     }
 
     # Handle custom settings separately
@@ -682,10 +708,17 @@ async def create_assistant(
     if custom_settings:
         assistant_data["custom_settings"] = custom_settings
 
+    # Populate enabled_tools list based on tool configurations
+    if assistant_data.get("tools_settings"):
+        enabled_tools = []
+        if assistant_data["tools_settings"]["end_call"]["enabled"]:
+            enabled_tools.append("endCall")
+        if assistant_data["tools_settings"]["transfer_call"]["enabled"]:
+            enabled_tools.append("transferCall")
+        assistant_data["tools_settings"]["enabled_tools"] = enabled_tools
+
     # Remove None values and empty dictionaries
-    assistant_data = {
-        k: v for k, v in assistant_data.items() if v is not None and v != {}
-    }
+    assistant_data = {k: v for k, v in assistant_data.items() if v is not None and v != {}}
 
     # Create the assistant
     try:
@@ -859,6 +892,14 @@ async def update_assistant(
     structured_data_prompt: Optional[str] = Form(None),
     # Recording settings
     recording_enabled: bool = Form(False),
+    # Tools configuration
+    end_call_enabled: bool = Form(False),
+    end_call_scenarios: Optional[str] = Form(None),
+    end_call_custom_message: Optional[str] = Form(None),
+    transfer_call_enabled: bool = Form(False),
+    transfer_call_scenarios: Optional[str] = Form(None),
+    transfer_call_numbers: Optional[str] = Form(None),
+    transfer_call_custom_message: Optional[str] = Form(None),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
@@ -940,8 +981,10 @@ async def update_assistant(
         "llm_provider_config": {
             "api_key": empty_to_none(llm_provider_api_key),
             "model": empty_to_none(llm_provider_model),
-            "base_url": empty_to_none(llm_provider_base_url),
+            "base_url": empty_to_none(llm_provider_base_url) if llm_provider == "custom" else None,
         },
+        # Clear legacy custom_llm_url when using a different provider
+        "custom_llm_url": llm_provider_base_url if llm_provider == "custom" else None,
         # Service API Keys
         "deepgram_api_key": empty_to_none(deepgram_api_key),
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
@@ -1030,6 +1073,22 @@ async def update_assistant(
             "recordings_dir": "recordings",
             "create_database_records": True,
         } if recording_enabled else None,
+        # Tools configuration
+        "tools_settings": {
+            "enabled_tools": [],  # Will be populated below
+            "end_call": {
+                "enabled": end_call_enabled,
+                "scenarios": [s.strip() for s in end_call_scenarios.split(",")] if end_call_scenarios and end_call_scenarios.strip() else [],
+                "custom_message": empty_to_none(end_call_custom_message),
+            },
+            "transfer_call": {
+                "enabled": transfer_call_enabled,
+                "scenarios": [s.strip() for s in transfer_call_scenarios.split(",")] if transfer_call_scenarios and transfer_call_scenarios.strip() else [],
+                "transfer_numbers": [n.strip() for n in transfer_call_numbers.split(",")] if transfer_call_numbers and transfer_call_numbers.strip() else [],
+                "custom_message": empty_to_none(transfer_call_custom_message),
+            },
+            "custom_tools": [],  # For future custom tool definitions
+        },
     }
 
     # Handle custom settings separately
@@ -1130,6 +1189,15 @@ async def update_assistant(
 
     if custom_settings:
         update_data["custom_settings"] = custom_settings
+
+    # Populate enabled_tools list based on tool configurations
+    if update_data.get("tools_settings"):
+        enabled_tools = []
+        if update_data["tools_settings"]["end_call"]["enabled"]:
+            enabled_tools.append("endCall")
+        if update_data["tools_settings"]["transfer_call"]["enabled"]:
+            enabled_tools.append("transferCall")
+        update_data["tools_settings"]["enabled_tools"] = enabled_tools
 
     # Remove None values and empty dictionaries
     update_data = {k: v for k, v in update_data.items() if v is not None and v != {}}
