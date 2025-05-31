@@ -1,0 +1,939 @@
+{# Add safe fallback accessor macros at the top #}
+{% macro get_fallback(assistant, index, key, default='') %}
+  {%- if assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('fallbacks') and assistant.llm_fallback_providers.fallbacks|length > index -%}
+    {{- assistant.llm_fallback_providers.fallbacks[index].get(key, default) -}}
+  {%- else -%}
+    {{- default -}}
+  {%- endif -%}
+{% endmacro %}
+
+{% macro get_fallback_config(assistant, index, key, default='') %}
+  {%- if assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('fallbacks') and assistant.llm_fallback_providers.fallbacks|length > index -%}
+    {{- assistant.llm_fallback_providers.fallbacks[index].get('config', {}).get(key, default) -}}
+  {%- else -%}
+    {{- default -}}
+  {%- endif -%}
+{% endmacro %}
+
+{% macro fallback_exists(assistant, index) %}
+  {%- if assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('fallbacks') and assistant.llm_fallback_providers.fallbacks|length > index -%}
+    true
+  {%- else -%}
+    false
+  {%- endif -%}
+{% endmacro %}
+
+<div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+    <div class="px-6 py-4 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border-b border-gray-700/50">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1C9.716 21 3 14.284 3 6V5z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">AI Configuration</h3>
+                    <p class="text-gray-400 text-sm">Configure language models and voice settings</p>
+                </div>
+            </div>
+            <button type="button" onclick="toggleAIConfig()" class="text-purple-400 hover:text-purple-300 text-sm font-medium transition-colors">
+                <span id="ai-toggle-text">Configure</span>
+            </button>
+        </div>
+    </div>
+    <div id="ai-configuration" class="hidden p-6">
+        <!-- AI Tabs -->
+        <div class="border-b border-gray-700/50">
+            <nav class="flex space-x-8 px-6" aria-label="AI Configuration Tabs">
+                <button type="button" onclick="switchAITab('llm')" class="ai-tab active border-b-2 border-blue-500 py-4 px-1 text-sm font-medium text-blue-400" id="llm-tab">
+                    Language Model
+                </button>
+                <button type="button" onclick="switchAITab('tts')" class="ai-tab border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-400 hover:text-gray-300" id="tts-tab">
+                    Text-to-Speech
+                </button>
+                <button type="button" onclick="switchAITab('stt')" class="ai-tab border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-400 hover:text-gray-300" id="stt-tab">
+                    Speech-to-Text
+                </button>
+            </nav>
+        </div>
+
+        <!-- LLM Tab Content -->
+        <div id="llm-content" class="ai-tab-content p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- LLM Provider Selection -->
+                <div class="lg:col-span-2">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                        <label for="llm_provider" class="block text-sm font-medium text-gray-300">LLM Provider</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Choose Your AI Provider 🤖</div>
+                                <div class="space-y-2 text-xs">
+                                    <div><strong>OpenAI:</strong> GPT-4o, GPT-3.5 - Reliable, general purpose</div>
+                                    <div><strong>Anthropic:</strong> Claude models - Advanced reasoning, safety-focused</div>
+                                    <div><strong>Google Gemini:</strong> Latest Google models - Multimodal capabilities</div>
+                                    <div><strong>xAI Grok:</strong> Real-time data, less restrictive</div>
+                                    <div><strong>Groq:</strong> Ultra-fast inference speed</div>
+                                    <div><strong>Custom:</strong> Your own API endpoint</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <select name="llm_provider" id="llm_provider" required
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        onchange="updateProviderOptions()">
+                        <option value="openai" {% if assistant and assistant.llm_provider == 'openai' %}selected{% endif %}>🚀 OpenAI (GPT Models)</option>
+                        <option value="anthropic" {% if assistant and assistant.llm_provider == 'anthropic' %}selected{% endif %}>🧠 Anthropic (Claude Models)</option>
+                        <option value="gemini" {% if assistant and assistant.llm_provider == 'gemini' %}selected{% endif %}>🌟 Google Gemini</option>
+                        <option value="xai" {% if assistant and assistant.llm_provider == 'xai' %}selected{% endif %}>⚡ xAI (Grok Models)</option>
+                        <option value="groq" {% if assistant and assistant.llm_provider == 'groq' %}selected{% endif %}>🔥 Groq (Ultra Fast)</option>
+                        <option value="custom" {% if assistant and assistant.llm_provider == 'custom' %}selected{% endif %}>🔧 Custom Endpoint</option>
+                    </select>
+                </div>
+
+                <!-- Provider API Key -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                        </svg>
+                        <label for="llm_provider_api_key" class="block text-sm font-medium text-gray-300">API Key</label>
+                        <span class="text-xs text-gray-500 italic">Required</span>
+                    </div>
+                    <input type="password" name="llm_provider_api_key" id="llm_provider_api_key"
+                        value="{{ assistant.llm_provider_config.api_key if assistant and assistant.llm_provider_config else '' }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="Enter your API key">
+                    <p id="api-key-help" class="mt-2 text-xs text-gray-400">
+                        Enter your OpenAI API key
+                    </p>
+                </div>
+
+                <!-- Provider Model -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1C9.716 21 3 14.284 3 6V5z"></path>
+                        </svg>
+                        <label for="llm_provider_model" class="block text-sm font-medium text-gray-300">Model</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Choose Your Model 🧠</div>
+                                <div id="model-help-content" class="space-y-2 text-xs">
+                                    <div><strong>GPT-4o:</strong> Most advanced, best for complex tasks</div>
+                                    <div><strong>GPT-4o-mini:</strong> Faster and cheaper, good balance</div>
+                                    <div><strong>GPT-3.5-turbo:</strong> Fast and cost-effective</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <select name="llm_provider_model" id="llm_provider_model"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <!-- Custom Base URL (for some providers) -->
+                <div id="base-url-container" class="lg:col-span-2 hidden">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                        </svg>
+                        <label for="llm_provider_base_url" class="block text-sm font-medium text-gray-300">Base URL</label>
+                        <span class="text-xs text-gray-500 italic">Optional</span>
+                    </div>
+                    <input type="text" name="llm_provider_base_url" id="llm_provider_base_url"
+                        value="{{ assistant.llm_provider_config.base_url if assistant and assistant.llm_provider_config else '' }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="https://api.example.com/v1">
+                    <p id="base-url-help" class="mt-2 text-xs text-gray-400">
+                        Custom API endpoint URL (leave blank for default)
+                    </p>
+                </div>
+
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <label for="llm_temperature" class="block text-sm font-medium text-gray-300">Creativity Level (Temperature)</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">AI Creativity Control 🎨</div>
+                                <div class="space-y-2 text-xs">
+                                    <div><strong>0.0-0.3:</strong> Very focused, predictable responses</div>
+                                    <div><strong>0.4-0.7:</strong> Balanced creativity (Recommended for most uses)</div>
+                                    <div><strong>0.8-1.0:</strong> More creative, varied responses</div>
+                                    <div><strong>1.0+:</strong> Very creative, potentially unpredictable</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="number" step="0.1" min="0" max="2" name="llm_temperature" id="llm_temperature"
+                        value="{{ assistant.llm_settings.temperature if assistant and assistant.llm_settings else 0.7 }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    <div class="mt-1 text-xs text-gray-400">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">
+                            💡 Recommended: 0.7
+                        </span>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path>
+                        </svg>
+                        <label for="llm_max_tokens" class="block text-sm font-medium text-gray-300">Response Length (Max Tokens)</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Maximum Response Length 📏</div>
+                                <div class="space-y-2 text-xs">
+                                    <div><strong>~4 tokens = 1 word</strong></div>
+                                    <div><strong>500 tokens:</strong> ~125 words (short answers)</div>
+                                    <div><strong>1000 tokens:</strong> ~250 words (recommended for calls)</div>
+                                    <div><strong>2000+ tokens:</strong> Longer responses (may feel unnatural in calls)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="number" step="50" min="50" max="4000" name="llm_max_tokens" id="llm_max_tokens"
+                        value="{{ assistant.llm_settings.max_tokens if assistant and assistant.llm_settings else 1000 }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    <div class="mt-1 text-xs text-gray-400">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">
+                            💡 Recommended: 1000 tokens (~250 words)
+                        </span>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C20.168 18.477 18.582 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                        </svg>
+                        <label for="llm_system_prompt" class="block text-sm font-medium text-gray-300">AI Personality & Instructions</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Define Your AI's Personality 🎭</div>
+                                <div class="text-xs">
+                                    This tells the AI how to behave during calls. Be specific about tone, knowledge areas, and conversation style. This is the most important setting for call quality!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="llm_system_prompt" name="llm_system_prompt" rows="4"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.">{{ assistant.llm_settings.system_prompt if assistant and assistant.llm_settings else 'You are a helpful voice assistant having a phone conversation. Keep your responses concise and natural.' }}</textarea>
+                    <div class="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                        <div class="text-xs text-blue-200">
+                            <strong>💡 Pro Tips:</strong> Mention your business type, preferred tone (friendly, professional), and any specific knowledge areas. Keep responses conversational for phone calls!
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m0 0V1a1 1 0 011-1h2a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1V1a1 1 0 011-1h2a1 1 0 011 1v3z"></path>
+                        </svg>
+                        <label for="welcome_message" class="block text-sm font-medium text-gray-300">Greeting Message</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">First Impression Matters! 👋</div>
+                                <div class="text-xs">
+                                    This is the very first thing callers hear when they connect. Make it warm, professional, and set clear expectations about what your AI can help with.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="welcome_message" name="welcome_message" rows="2"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="Hello! I'm your AI assistant. How can I help you today?">{{ assistant.llm_settings.welcome_message if assistant and assistant.llm_settings else 'Hello! I\'m your AI assistant. How can I help you today?' }}</textarea>
+                    <div class="mt-2 text-xs text-gray-400">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
+                            🎯 Keep it under 15 seconds when spoken
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Fallback Providers Section -->
+                <div class="lg:col-span-2">
+                    <div class="border border-gray-600/50 rounded-xl p-6 bg-gray-800/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="text-lg font-semibold text-white">Fallback Providers</h4>
+                                    <p class="text-gray-400 text-sm">Configure backup LLM providers for reliability</p>
+                                </div>
+                            </div>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="fallback_enabled" id="fallback_enabled" 
+                                    class="sr-only peer" 
+                                    {% if assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('enabled') %}checked{% endif %}
+                                    onchange="toggleFallbackProviders()">
+                                <div class="relative w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                            </label>
+                        </div>
+
+                        <div id="fallback-providers-content" class="{% if not (assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('enabled')) %}hidden{% endif %}">
+                            <div class="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                <div class="text-xs text-amber-200">
+                                    <strong>🛡️ Reliability Insurance:</strong> If your primary provider fails, the system will automatically try these fallback providers in order. Recommended for critical applications.
+                                </div>
+                            </div>
+
+                            <!-- Fallback Provider 1 -->
+                            <div class="fallback-provider border border-gray-600/50 rounded-lg p-4 mb-4" data-fallback="0">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h5 class="text-sm font-medium text-white flex items-center">
+                                        <span class="w-6 h-6 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-2">1</span>
+                                        First Fallback Provider
+                                    </h5>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" name="fallback_0_enabled" class="fallback-checkbox sr-only peer" 
+                                            {% if get_fallback(assistant, 0, 'enabled') %}checked{% endif %}
+                                            onchange="toggleFallbackProvider(0)">
+                                        <div class="relative w-9 h-5 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
+                                    </label>
+                                </div>
+                                <div class="fallback-config {% if not get_fallback(assistant, 0, 'enabled') %}hidden{% endif %}">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Provider</label>
+                                            <select name="fallback_0_provider" class="fallback-provider-select block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-amber-500" onchange="updateFallbackModelOptions(0)">
+                                                <option value="">Select Provider</option>
+                                                <option value="openai" {% if get_fallback(assistant, 0, 'provider') == 'openai' %}selected{% endif %}>🚀 OpenAI</option>
+                                                <option value="anthropic" {% if get_fallback(assistant, 0, 'provider') == 'anthropic' %}selected{% endif %}>🧠 Anthropic</option>
+                                                <option value="gemini" {% if get_fallback(assistant, 0, 'provider') == 'gemini' %}selected{% endif %}>🌟 Gemini</option>
+                                                <option value="xai" {% if get_fallback(assistant, 0, 'provider') == 'xai' %}selected{% endif %}>⚡ xAI</option>
+                                                <option value="groq" {% if get_fallback(assistant, 0, 'provider') == 'groq' %}selected{% endif %}>🔥 Groq</option>
+                                                <option value="custom" {% if get_fallback(assistant, 0, 'provider') == 'custom' %}selected{% endif %}>🔧 Custom</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Model</label>
+                                            <select name="fallback_0_model" class="fallback-model-select block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-amber-500">
+                                                <option value="">Select Model</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">API Key</label>
+                                            <input type="password" name="fallback_0_api_key" 
+                                                value="{{ get_fallback_config(assistant, 0, 'api_key') }}"
+                                                class="block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500" 
+                                                placeholder="Enter API key">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label class="block text-xs font-medium text-gray-300 mb-1">Base URL (Optional)</label>
+                                        <input type="text" name="fallback_0_base_url" 
+                                            value="{{ get_fallback_config(assistant, 0, 'base_url') }}"
+                                            class="block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-amber-500" 
+                                            placeholder="https://api.example.com/v1">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fallback Provider 2 -->
+                            <div class="fallback-provider border border-gray-600/50 rounded-lg p-4 mb-4" data-fallback="1">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h5 class="text-sm font-medium text-white flex items-center">
+                                        <span class="w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-2">2</span>
+                                        Second Fallback Provider
+                                    </h5>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" name="fallback_1_enabled" class="fallback-checkbox sr-only peer" 
+                                            {% if get_fallback(assistant, 1, 'enabled') %}checked{% endif %}
+                                            onchange="toggleFallbackProvider(1)">
+                                        <div class="relative w-9 h-5 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-orange-500"></div>
+                                    </label>
+                                </div>
+                                <div class="fallback-config {% if not get_fallback(assistant, 1, 'enabled') %}hidden{% endif %}">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Provider</label>
+                                            <select name="fallback_1_provider" class="fallback-provider-select block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-orange-500" onchange="updateFallbackModelOptions(1)">
+                                                <option value="">Select Provider</option>
+                                                <option value="openai" {% if get_fallback(assistant, 1, 'provider') == 'openai' %}selected{% endif %}>🚀 OpenAI</option>
+                                                <option value="anthropic" {% if get_fallback(assistant, 1, 'provider') == 'anthropic' %}selected{% endif %}>🧠 Anthropic</option>
+                                                <option value="gemini" {% if get_fallback(assistant, 1, 'provider') == 'gemini' %}selected{% endif %}>🌟 Gemini</option>
+                                                <option value="xai" {% if get_fallback(assistant, 1, 'provider') == 'xai' %}selected{% endif %}>⚡ xAI</option>
+                                                <option value="groq" {% if get_fallback(assistant, 1, 'provider') == 'groq' %}selected{% endif %}>🔥 Groq</option>
+                                                <option value="custom" {% if get_fallback(assistant, 1, 'provider') == 'custom' %}selected{% endif %}>🔧 Custom</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Model</label>
+                                            <select name="fallback_1_model" class="fallback-model-select block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-orange-500">
+                                                <option value="">Select Model</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">API Key</label>
+                                            <input type="password" name="fallback_1_api_key" 
+                                                value="{{ get_fallback_config(assistant, 1, 'api_key') }}"
+                                                class="block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-500" 
+                                                placeholder="Enter API key">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label class="block text-xs font-medium text-gray-300 mb-1">Base URL (Optional)</label>
+                                        <input type="text" name="fallback_1_base_url" 
+                                            value="{{ get_fallback_config(assistant, 1, 'base_url') }}"
+                                            class="block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-orange-500" 
+                                            placeholder="https://api.example.com/v1">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fallback Provider 3 -->
+                            <div class="fallback-provider border border-gray-600/50 rounded-lg p-4" data-fallback="2">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h5 class="text-sm font-medium text-white flex items-center">
+                                        <span class="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-2">3</span>
+                                        Third Fallback Provider
+                                    </h5>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" name="fallback_2_enabled" class="fallback-checkbox sr-only peer" 
+                                            {% if get_fallback(assistant, 2, 'enabled') %}checked{% endif %}
+                                            onchange="toggleFallbackProvider(2)">
+                                        <div class="relative w-9 h-5 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-red-500"></div>
+                                    </label>
+                                </div>
+                                <div class="fallback-config {% if not get_fallback(assistant, 2, 'enabled') %}hidden{% endif %}">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Provider</label>
+                                            <select name="fallback_2_provider" class="fallback-provider-select block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-red-500" onchange="updateFallbackModelOptions(2)">
+                                                <option value="">Select Provider</option>
+                                                <option value="openai" {% if get_fallback(assistant, 2, 'provider') == 'openai' %}selected{% endif %}>🚀 OpenAI</option>
+                                                <option value="anthropic" {% if get_fallback(assistant, 2, 'provider') == 'anthropic' %}selected{% endif %}>🧠 Anthropic</option>
+                                                <option value="gemini" {% if get_fallback(assistant, 2, 'provider') == 'gemini' %}selected{% endif %}>🌟 Gemini</option>
+                                                <option value="xai" {% if get_fallback(assistant, 2, 'provider') == 'xai' %}selected{% endif %}>⚡ xAI</option>
+                                                <option value="groq" {% if get_fallback(assistant, 2, 'provider') == 'groq' %}selected{% endif %}>🔥 Groq</option>
+                                                <option value="custom" {% if get_fallback(assistant, 2, 'provider') == 'custom' %}selected{% endif %}>🔧 Custom</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">Model</label>
+                                            <select name="fallback_2_model" class="fallback-model-select block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-red-500">
+                                                <option value="">Select Model</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-300 mb-1">API Key</label>
+                                            <input type="password" name="fallback_2_api_key" 
+                                                value="{{ get_fallback_config(assistant, 2, 'api_key') }}"
+                                                class="block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-red-500" 
+                                                placeholder="Enter API key">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label class="block text-xs font-medium text-gray-300 mb-1">Base URL (Optional)</label>
+                                        <input type="text" name="fallback_2_base_url" 
+                                            value="{{ get_fallback_config(assistant, 2, 'base_url') }}"
+                                            class="block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-red-500" 
+                                            placeholder="https://api.example.com/v1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TTS Tab Content -->
+        <div id="tts-content" class="ai-tab-content hidden p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- TTS Provider Selection -->
+                <div class="lg:col-span-2">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                        </svg>
+                        <label for="tts_provider" class="block text-sm font-medium text-gray-300">TTS Provider</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Choose Your TTS Provider 🎙️</div>
+                                <div class="space-y-2 text-xs">
+                                    <div><strong>ElevenLabs:</strong> Premium voice quality, extensive customization options</div>
+                                    <div><strong>Deepgram Aura:</strong> Ultra-low latency (3x faster), optimized for real-time AI</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <select name="tts_provider" id="tts_provider"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        onchange="updateTTSProviderOptions()">
+                        <option value="elevenlabs" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider', 'elevenlabs') == 'elevenlabs' %}selected{% endif %}>🎭 ElevenLabs (Premium Quality)</option>
+                        <option value="deepgram" {% if assistant and assistant.tts_settings and assistant.tts_settings.provider == 'deepgram' %}selected{% endif %}>⚡ Deepgram Aura (Ultra Fast)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                        </svg>
+                        <label for="tts_model_id" class="block text-sm font-medium text-gray-300">Voice Quality Model</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Voice Quality vs Speed ⚡🎵</div>
+                                <div id="tts-model-help" class="space-y-2 text-xs">
+                                    <!-- Content will be updated by JavaScript based on provider -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <select name="tts_model_id" id="tts_model_id"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <!-- Options will be populated by JavaScript based on provider -->
+                    </select>
+                    <div id="tts-model-recommendation" class="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                        <!-- Content will be updated by JavaScript based on provider -->
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                        <label for="tts_voice_id" class="block text-sm font-medium text-gray-300">Voice Character</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Choose Your Voice Personality 🎭</div>
+                                <div class="text-xs">
+                                    Each voice has a unique personality and tone. Test different voices to find the one that best represents your brand and resonates with your callers.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <select name="tts_voice_id" id="tts_voice_id"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <!-- Options will be populated by JavaScript based on provider -->
+                    </select>
+                    <div id="custom_voice_container" class="mt-3 hidden">
+                        <input type="text" id="custom_voice_id" name="tts_voice_id"
+                            value="{{ assistant.tts_settings.voice_id if assistant and assistant.tts_settings and assistant.tts_settings.voice_id not in ['rachel', 'domi', 'bella', 'antoni', 'eli', 'josh', 'asteria', 'luna', 'stella', 'orion', 'zeus', 'thalia'] else '' }}"
+                            placeholder="Enter custom voice ID"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <p class="mt-2 text-xs text-gray-400" id="custom-voice-help">Enter your custom voice ID</p>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center space-x-2 mb-2">
+                        <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        <label for="tts_latency" class="block text-sm font-medium text-gray-300">Response Speed</label>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">How Fast Should AI Respond? ⚡</div>
+                                <div class="space-y-1 text-xs">
+                                    <div><strong>Ultra Low:</strong> Experimental, fastest possible (may have quality issues)</div>
+                                    <div><strong>Low:</strong> Very fast, good for real-time conversations (Recommended)</div>
+                                    <div><strong>Medium:</strong> Balanced speed and stability</div>
+                                    <div><strong>High:</strong> Slower but most stable</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <select name="tts_latency" id="tts_latency"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <option value="0" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 0 %}selected{% endif %}>🚀 Ultra Low (Experimental)</option>
+                        <option value="1" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 1 %}selected{% endif %}>⚡ Low (Recommended)</option>
+                        <option value="2" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 2 %}selected{% endif %}>⚖️ Medium</option>
+                        <option value="3" {% if assistant and assistant.tts_settings and assistant.tts_settings.latency == 3 %}selected{% endif %}>🔒 High (Most Stable)</option>
+                    </select>
+                </div>
+                <!-- Provider-specific settings -->
+                <div id="elevenlabs-settings" class="lg:col-span-2 provider-settings">
+                    <h5 class="text-sm font-medium text-white mb-4 flex items-center">
+                        <svg class="w-4 h-4 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"></path>
+                        </svg>
+                        ElevenLabs Voice Controls
+                    </h5>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                                <label for="tts_stability" class="block text-sm font-medium text-gray-300">Voice Consistency</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Voice Stability Control 🎯</div>
+                                        <div class="space-y-1 text-xs">
+                                            <div><strong>0.0-0.3:</strong> More variation, expressive but inconsistent</div>
+                                            <div><strong>0.4-0.6:</strong> Balanced consistency (Recommended)</div>
+                                            <div><strong>0.7-1.0:</strong> Very consistent, may sound monotone</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="number" step="0.1" min="0" max="1" name="tts_stability" id="tts_stability"
+                                value="{{ assistant.tts_settings.stability if assistant and assistant.tts_settings else 0.5 }}"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                            <div class="mt-1 text-xs text-gray-400">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">
+                                    💡 Sweet spot: 0.4-0.6
+                                </span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                                </svg>
+                                <label for="tts_similarity_boost" class="block text-sm font-medium text-gray-300">Voice Accuracy</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">How Close to Original Voice? 🎯</div>
+                                        <div class="space-y-1 text-xs">
+                                            <div><strong>0.0-0.5:</strong> More creative interpretation</div>
+                                            <div><strong>0.6-0.8:</strong> Balanced accuracy (Recommended)</div>
+                                            <div><strong>0.9-1.0:</strong> Very close to original voice</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="number" step="0.1" min="0" max="1" name="tts_similarity_boost" id="tts_similarity_boost"
+                                value="{{ assistant.tts_settings.similarity_boost if assistant and assistant.tts_settings else 0.75 }}"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                            <div class="mt-1 text-xs text-gray-400">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-500/20 text-orange-400">
+                                    💡 Recommended: 0.75
+                                </span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m0 0V1a1 1 0 011-1h2a1 1 0 011 1v8a1 1 0 01-1 1H5a1 1 0 01-1-1V1a1 1 0 011-1h2a1 1 0 011 1v3z"></path>
+                                </svg>
+                                <label for="tts_style" class="block text-sm font-medium text-gray-300">Speaking Style Variation</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Style & Expression Control 🎨</div>
+                                        <div class="space-y-1 text-xs">
+                                            <div><strong>0.0:</strong> Natural baseline voice (Recommended for business)</div>
+                                            <div><strong>0.1-0.5:</strong> Slight style variation</div>
+                                            <div><strong>0.6-1.0:</strong> More expressive, dramatic style</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="number" step="0.1" min="0" max="1" name="tts_style" id="tts_style"
+                                value="{{ assistant.tts_settings.style if assistant and assistant.tts_settings else 0.0 }}"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                            <div class="mt-1 text-xs text-gray-400">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-pink-500/20 text-pink-400">
+                                    💡 Business calls: Keep at 0.0
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <div class="flex items-center space-x-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                <input type="checkbox" name="tts_use_speaker_boost" id="tts_use_speaker_boost"
+                                    {% if not assistant or (assistant.tts_settings and assistant.tts_settings.use_speaker_boost) %}checked{% endif %}
+                                    class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2">
+                                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 14.142M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+                                        </svg>
+                                        <label for="tts_use_speaker_boost" class="text-sm font-medium text-white">Enhanced Audio Quality</label>
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">
+                                            🔥 Recommended
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1">Boosts voice clarity and reduces background noise. Perfect for phone calls and noisy environments.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deepgram-specific settings -->
+                <div id="deepgram-settings" class="lg:col-span-2 provider-settings hidden">
+                    <h5 class="text-sm font-medium text-white mb-4 flex items-center">
+                        <svg class="w-4 h-4 text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        Deepgram Aura Controls
+                    </h5>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                                </svg>
+                                <label for="tts_encoding" class="block text-sm font-medium text-gray-300">Audio Encoding</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Audio Format for Output 🎵</div>
+                                        <div class="space-y-1 text-xs">
+                                            <div><strong>mulaw:</strong> 8kHz µ-law (Recommended for Twilio/phone calls)</div>
+                                            <div><strong>linear16:</strong> 16-bit PCM (High quality)</div>
+                                            <div><strong>alaw:</strong> 8kHz A-law (Alternative phone format)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <select name="tts_encoding" id="tts_encoding"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                <option value="mulaw" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('encoding') == 'mulaw' %}selected{% endif %}>📞 µ-law (Phone Calls - Recommended)</option>
+                                <option value="linear16" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('encoding') == 'linear16' %}selected{% endif %}>🎵 Linear16 (High Quality)</option>
+                                <option value="alaw" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('encoding') == 'alaw' %}selected{% endif %}>📡 A-law (Alternative Phone)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                                <label for="tts_sample_rate" class="block text-sm font-medium text-gray-300">Sample Rate (Hz)</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Audio Quality vs File Size ⚖️</div>
+                                        <div class="space-y-1 text-xs">
+                                            <div><strong>8000Hz:</strong> Phone quality (recommended for calls)</div>
+                                            <div><strong>16000Hz:</strong> Good quality, balanced</div>
+                                            <div><strong>24000Hz:</strong> High quality</div>
+                                            <div><strong>48000Hz:</strong> Studio quality (large files)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <select name="tts_sample_rate" id="tts_sample_rate"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                <option value="8000" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('sample_rate') == 8000 %}selected{% endif %}>📞 8000 Hz (Phone Quality - Recommended)</option>
+                                <option value="16000" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('sample_rate') == 16000 %}selected{% endif %}>🎵 16000 Hz (Good Quality)</option>
+                                <option value="24000" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('sample_rate') == 24000 %}selected{% endif %}>🎶 24000 Hz (High Quality)</option>
+                                <option value="48000" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('sample_rate') == 48000 %}selected{% endif %}>🎧 48000 Hz (Studio Quality)</option>
+                            </select>
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <div class="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-white">Ultra-Low Latency</span>
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-400">
+                                        ⚡ 3x Faster than ElevenLabs
+                                    </span>
+                                </div>
+                                <p class="text-xs text-green-200">Deepgram Aura provides ultra-low latency TTS optimized for real-time AI conversations. Perfect for voice bots and interactive applications.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STT Tab Content -->
+        <div id="stt-content" class="ai-tab-content hidden p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                    <label for="stt_model" class="block text-sm font-medium text-gray-300 mb-2">Model</label>
+                    <select name="stt_model" id="stt_model"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <option value="nova-3" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova-3' %}selected{% endif %}>Nova-3 (Latest - Keyterms Support)</option>
+                        <option value="nova-2" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova-2' %}selected{% endif %}>Nova-2 (Keywords Support)</option>
+                        <option value="nova" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'nova' %}selected{% endif %}>Nova (Keywords Support)</option>
+                        <option value="enhanced" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'enhanced' %}selected{% endif %}>Enhanced (Keywords Support)</option>
+                        <option value="base" {% if assistant and assistant.stt_settings and assistant.stt_settings.model == 'base' %}selected{% endif %}>Base (Keywords Support)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="stt_language" class="block text-sm font-medium text-gray-300 mb-2">Language</label>
+                    <select name="stt_language" id="stt_language"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <option value="en-US" {% if assistant and assistant.stt_settings and assistant.stt_settings.language == 'en-US' %}selected{% endif %}>English (US)</option>
+                        <option value="en-GB" {% if assistant and assistant.stt_settings and assistant.stt_settings.language == 'en-GB' %}selected{% endif %}>English (UK)</option>
+                        <option value="en-AU" {% if assistant and assistant.stt_settings and assistant.stt_settings.language == 'en-AU' %}selected{% endif %}>English (Australia)</option>
+                        <option value="custom">Custom Language Code</option>
+                    </select>
+                    <div id="custom_language_container" class="mt-3 hidden">
+                        <input type="text" id="custom_language" placeholder="Enter language code (e.g., fr-FR)"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    </div>
+                </div>
+
+                <!-- Timing Settings -->
+                <div>
+                    <label for="stt_silence_threshold" class="block text-sm font-medium text-gray-300 mb-2">Silence Threshold (ms)</label>
+                    <input type="number" name="stt_silence_threshold" id="stt_silence_threshold"
+                        value="{{ assistant.stt_settings.endpointing.silence_threshold if assistant and assistant.stt_settings and assistant.stt_settings.endpointing else 500 }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                </div>
+
+                <div>
+                    <label for="stt_min_silence_duration" class="block text-sm font-medium text-gray-300 mb-2">Min Silence Duration (ms)</label>
+                    <input type="number" name="stt_min_silence_duration" id="stt_min_silence_duration"
+                        value="{{ assistant.stt_settings.endpointing.min_silence_duration if assistant and assistant.stt_settings and assistant.stt_settings.endpointing else 500 }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                </div>
+
+                <div>
+                    <label for="stt_utterance_end_ms" class="block text-sm font-medium text-gray-300 mb-2">Utterance End (ms)</label>
+                    <input type="number" name="stt_utterance_end_ms" id="stt_utterance_end_ms"
+                        value="{{ assistant.stt_settings.utterance_end_ms if assistant and assistant.stt_settings else 1000 }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                </div>
+
+                <div>
+                    <label for="stt_vad_turnoff" class="block text-sm font-medium text-gray-300 mb-2">VAD Turnoff (ms)</label>
+                    <input type="number" name="stt_vad_turnoff" id="stt_vad_turnoff"
+                        value="{{ assistant.stt_settings.vad_turnoff if assistant and assistant.stt_settings else 500 }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                </div>
+
+                <!-- Processing Options -->
+                <div class="lg:col-span-2">
+                    <h4 class="text-sm font-medium text-gray-300 mb-4">Processing Options</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" name="stt_punctuate" id="stt_punctuate"
+                                {% if not assistant or (assistant.stt_settings and assistant.stt_settings.punctuate) %}checked{% endif %}
+                                class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                            <label for="stt_punctuate" class="text-sm text-white">Add Punctuation</label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" name="stt_interim_results" id="stt_interim_results"
+                                {% if not assistant or (assistant.stt_settings and assistant.stt_settings.interim_results) %}checked{% endif %}
+                                class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                            <label for="stt_interim_results" class="text-sm text-white">Interim Results</label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" name="stt_smart_format" id="stt_smart_format"
+                                {% if not assistant or (assistant.stt_settings and assistant.stt_settings.smart_format) %}checked{% endif %}
+                                class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                            <label for="stt_smart_format" class="text-sm text-white">Smart Format</label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" name="stt_audio_denoising" id="stt_audio_denoising"
+                                {% if assistant and assistant.stt_settings and assistant.stt_settings.audio_denoising %}checked{% endif %}
+                                class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                            <div>
+                                <label for="stt_audio_denoising" class="text-sm text-white">Audio Denoising</label>
+                                <div class="group relative inline-block ml-1">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Real-time Audio Denoising 🎧</div>
+                                        <div class="text-xs">
+                                            Removes background noise from incoming audio before transcription. Uses RNNoise for high-quality noise suppression. May slightly increase latency but improves transcription accuracy in noisy environments.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Keywords and Keyterms -->
+                <div class="lg:col-span-2 border-t border-gray-700/50 pt-6">
+                    <h4 class="text-sm font-medium text-gray-300 mb-4">Keywords & Keyterms Enhancement</h4>
+                    <div class="space-y-6">
+                        <!-- Keywords -->
+                        <div id="keywords-section">
+                            <label for="stt_keywords" class="block text-sm font-medium text-gray-300 mb-2">
+                                Keywords <span class="text-gray-500">(Nova-2, Nova-1, Enhanced, Base models)</span>
+                            </label>
+                            <textarea id="stt_keywords" name="stt_keywords" rows="3"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                placeholder="OpenAI:2.0, ChatGPT:1.5, API, machine learning:1.8">{% if assistant and assistant.stt_settings and assistant.stt_settings.keywords %}{% for keyword in assistant.stt_settings.keywords %}{% if keyword is mapping %}{{ keyword.keyword }}{% if keyword.intensifier != 1.0 %}:{{ keyword.intensifier }}{% endif %}{% else %}{{ keyword }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</textarea>
+                            <div class="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                <p class="text-xs text-blue-200">
+                                    <strong>Example:</strong> Deepgram:2.0, API:1.5, speech recognition, transcription
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Keyterms -->
+                        <div id="keyterms-section">
+                            <label for="stt_keyterms" class="block text-sm font-medium text-gray-300 mb-2">
+                                Keyterms <span class="text-gray-500">(Nova-3 model only, English language)</span>
+                            </label>
+                            <textarea id="stt_keyterms" name="stt_keyterms" rows="3"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                placeholder="artificial intelligence, machine learning, neural networks, customer service">{% if assistant and assistant.stt_settings and assistant.stt_settings.keyterms %}{{ assistant.stt_settings.keyterms | join(', ') }}{% endif %}</textarea>
+                            <div class="mt-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                <p class="text-xs text-green-200">
+                                    <strong>Example:</strong> artificial intelligence, machine learning, customer service, technical support
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

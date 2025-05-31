@@ -423,6 +423,23 @@ async def create_assistant(
     transfer_call_scenarios: Optional[str] = Form(None),
     transfer_call_numbers: Optional[str] = Form(None),
     transfer_call_custom_message: Optional[str] = Form(None),
+    # Fallback providers configuration
+    fallback_enabled: bool = Form(False),
+    fallback_0_enabled: bool = Form(False),
+    fallback_0_provider: Optional[str] = Form(None),
+    fallback_0_model: Optional[str] = Form(None),
+    fallback_0_api_key: Optional[str] = Form(None),
+    fallback_0_base_url: Optional[str] = Form(None),
+    fallback_1_enabled: bool = Form(False),
+    fallback_1_provider: Optional[str] = Form(None),
+    fallback_1_model: Optional[str] = Form(None),
+    fallback_1_api_key: Optional[str] = Form(None),
+    fallback_1_base_url: Optional[str] = Form(None),
+    fallback_2_enabled: bool = Form(False),
+    fallback_2_provider: Optional[str] = Form(None),
+    fallback_2_model: Optional[str] = Form(None),
+    fallback_2_api_key: Optional[str] = Form(None),
+    fallback_2_base_url: Optional[str] = Form(None),
 ):
     """Create a new assistant."""
     # Check if an assistant with this phone number already exists
@@ -743,6 +760,39 @@ async def create_assistant(
             enabled_tools.append("transferCall")
         assistant_data["tools_settings"]["enabled_tools"] = enabled_tools
 
+    # Process fallback providers configuration
+    if fallback_enabled:
+        fallbacks = []
+        fallback_configs = [
+            (fallback_0_enabled, fallback_0_provider, fallback_0_model, fallback_0_api_key, fallback_0_base_url),
+            (fallback_1_enabled, fallback_1_provider, fallback_1_model, fallback_1_api_key, fallback_1_base_url),
+            (fallback_2_enabled, fallback_2_provider, fallback_2_model, fallback_2_api_key, fallback_2_base_url),
+        ]
+        
+        for enabled, provider, model, api_key, base_url in fallback_configs:
+            if enabled and provider:
+                fallback_config = {
+                    "enabled": True,
+                    "provider": provider,
+                    "config": {
+                        "api_key": empty_to_none(api_key),
+                        "model": empty_to_none(model),
+                        "base_url": empty_to_none(base_url),
+                        "custom_config": {}
+                    }
+                }
+                fallbacks.append(fallback_config)
+        
+        assistant_data["llm_fallback_providers"] = {
+            "enabled": True,
+            "fallbacks": fallbacks
+        }
+    else:
+        assistant_data["llm_fallback_providers"] = {
+            "enabled": False,
+            "fallbacks": []
+        }
+
     # Remove None values and empty dictionaries
     assistant_data = {k: v for k, v in assistant_data.items() if v is not None and v != {}}
 
@@ -953,6 +1003,23 @@ async def update_assistant(
     transfer_call_scenarios: Optional[str] = Form(None),
     transfer_call_numbers: Optional[str] = Form(None),
     transfer_call_custom_message: Optional[str] = Form(None),
+    # Fallback providers configuration
+    fallback_enabled: bool = Form(False),
+    fallback_0_enabled: bool = Form(False),
+    fallback_0_provider: Optional[str] = Form(None),
+    fallback_0_model: Optional[str] = Form(None),
+    fallback_0_api_key: Optional[str] = Form(None),
+    fallback_0_base_url: Optional[str] = Form(None),
+    fallback_1_enabled: bool = Form(False),
+    fallback_1_provider: Optional[str] = Form(None),
+    fallback_1_model: Optional[str] = Form(None),
+    fallback_1_api_key: Optional[str] = Form(None),
+    fallback_1_base_url: Optional[str] = Form(None),
+    fallback_2_enabled: bool = Form(False),
+    fallback_2_provider: Optional[str] = Form(None),
+    fallback_2_model: Optional[str] = Form(None),
+    fallback_2_api_key: Optional[str] = Form(None),
+    fallback_2_base_url: Optional[str] = Form(None),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
@@ -1268,6 +1335,39 @@ async def update_assistant(
         if update_data["tools_settings"]["transfer_call"]["enabled"]:
             enabled_tools.append("transferCall")
         update_data["tools_settings"]["enabled_tools"] = enabled_tools
+
+    # Process fallback providers configuration
+    if fallback_enabled:
+        fallbacks = []
+        fallback_configs = [
+            (fallback_0_enabled, fallback_0_provider, fallback_0_model, fallback_0_api_key, fallback_0_base_url),
+            (fallback_1_enabled, fallback_1_provider, fallback_1_model, fallback_1_api_key, fallback_1_base_url),
+            (fallback_2_enabled, fallback_2_provider, fallback_2_model, fallback_2_api_key, fallback_2_base_url),
+        ]
+        
+        for enabled, provider, model, api_key, base_url in fallback_configs:
+            if enabled and provider:
+                fallback_config = {
+                    "enabled": True,
+                    "provider": provider,
+                    "config": {
+                        "api_key": empty_to_none(api_key),
+                        "model": empty_to_none(model),
+                        "base_url": empty_to_none(base_url),
+                        "custom_config": {}
+                    }
+                }
+                fallbacks.append(fallback_config)
+        
+        update_data["llm_fallback_providers"] = {
+            "enabled": True,
+            "fallbacks": fallbacks
+        }
+    else:
+        update_data["llm_fallback_providers"] = {
+            "enabled": False,
+            "fallbacks": []
+        }
 
     # Remove None values and empty dictionaries
     update_data = {k: v for k, v in update_data.items() if v is not None and v != {}}
