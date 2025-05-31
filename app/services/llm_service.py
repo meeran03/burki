@@ -437,7 +437,7 @@ Use this context when relevant to provide accurate and detailed responses.""",
                     # If no tool calls, treat as regular response
                     if response.content:
                         await response_callback(
-                            "", True, {"full_response": response.content}
+                            response.content, True, {"full_response": response.content}
                         )
 
                 except Exception as tool_error:
@@ -456,11 +456,8 @@ Use this context when relevant to provide accurate and detailed responses.""",
 
         except Exception as e:
             logger.error(f"LangChain {self.provider_name} error: {e}")
-            await response_callback(
-                "I apologize, but I'm having trouble processing that right now.",
-                True,
-                {"error": str(e)},
-            )
+            # Re-raise the exception so fallback providers can be tried
+            raise e
 
     async def _stream_response(
         self,
@@ -479,7 +476,7 @@ Use this context when relevant to provide accurate and detailed responses.""",
 
             # Send final response indicator
             if collected_response:
-                await response_callback("", True, {"full_response": collected_response})
+                await response_callback(collected_response, True, {"full_response": collected_response})
 
         except Exception as e:
             logger.error(f"Streaming error: {e}")
@@ -488,7 +485,7 @@ Use this context when relevant to provide accurate and detailed responses.""",
                 response = await llm.ainvoke(messages)
                 if response.content:
                     await response_callback(
-                        "", True, {"full_response": response.content}
+                        response.content, True, {"full_response": response.content}
                     )
             except Exception as fallback_error:
                 logger.error(f"Fallback error: {fallback_error}")
@@ -548,11 +545,8 @@ class CustomLLMProvider(BaseLLMProvider):
         except Exception as e:
             logger.error(f"Custom LLM error: {e}")
             logger.exception(e)
-            await response_callback(
-                "I apologize, but I'm having trouble processing that right now.",
-                True,
-                {"error": str(e)},
-            )
+            # Re-raise the exception so fallback providers can be tried
+            raise e
 
     async def _process_custom_llm_response(
         self,
@@ -642,7 +636,7 @@ class CustomLLMProvider(BaseLLMProvider):
         # Only send final response if we haven't already sent a tool action
         if collected_response and not current_tool_call:
             await response_callback(
-                "",
+                collected_response,
                 True,
                 {"full_response": collected_response},
             )
@@ -683,8 +677,11 @@ class LLMService:
         self.from_number = from_number
         self.assistant = assistant
 
-        # Initialize LLM provider
-        self.provider = self._initialize_provider()
+        # Initialize primary and fallback providers
+        self.primary_provider = self._initialize_provider()
+        self.fallback_providers = self._initialize_fallback_providers()
+        self.current_provider_name = self._get_provider_name()
+        self.current_provider_index = -1  # -1 for primary, 0+ for fallbacks
 
         # Default system prompt
         self.default_system_prompt = """You are a helpful AI assistant for a customer service call center. 
@@ -697,7 +694,8 @@ class LLMService:
 
         if call_sid:
             logger.info(
-                f"Started new conversation for call {call_sid} using {self._get_provider_name()}"
+                f"Started new conversation for call {call_sid} using {self.current_provider_name} "
+                f"with {len(self.fallback_providers)} fallback(s) available"
             )
 
     def _initialize_provider(self) -> BaseLLMProvider:
@@ -779,6 +777,142 @@ class LLMService:
         llm_settings = getattr(self.assistant, "llm_settings", {})
         return llm_settings.get("system_prompt", self.default_system_prompt)
 
+    def _initialize_fallback_providers(self) -> list:
+        """Initialize fallback providers based on assistant configuration."""
+        fallback_providers = []
+        
+        if not self.assistant:
+            return fallback_providers
+            
+        fallback_config = getattr(self.assistant, "llm_fallback_providers", {})
+        
+        if not fallback_config.get("enabled", False):
+            return fallback_providers
+            
+        fallbacks = fallback_config.get("fallbacks", [])
+        
+        for fallback in fallbacks:
+            if not fallback.get("enabled", False):
+                continue
+                
+            provider_name = fallback.get("provider")
+            provider_config = fallback.get("config", {})
+            
+            if not provider_name or not provider_config:
+                continue
+                
+            try:
+                if self.PROVIDERS.get(provider_name) == "langchain":
+                    provider = LangChainProvider(provider_config, provider_name)
+                elif provider_name == "custom":
+                    provider = CustomLLMProvider(provider_config)
+                else:
+                    logger.warning(f"Unknown fallback provider {provider_name}, skipping")
+                    continue
+                    
+                fallback_providers.append({
+                    "name": provider_name,
+                    "provider": provider,
+                    "config": provider_config
+                })
+                logger.info(f"Initialized fallback provider: {provider_name}")
+                
+            except Exception as e:
+                logger.error(f"Failed to initialize fallback provider {provider_name}: {e}")
+                continue
+                
+        return fallback_providers
+
+    def _get_current_provider(self) -> BaseLLMProvider:
+        """Get the currently active provider (primary or fallback)."""
+        if self.current_provider_index == -1:
+            return self.primary_provider
+        elif 0 <= self.current_provider_index < len(self.fallback_providers):
+            return self.fallback_providers[self.current_provider_index]["provider"]
+        else:
+            # Should not happen, but fallback to primary
+            logger.error(f"Invalid provider index {self.current_provider_index}, falling back to primary")
+            self.current_provider_index = -1
+            return self.primary_provider
+
+    def _get_current_provider_name(self) -> str:
+        """Get the name of the currently active provider."""
+        if self.current_provider_index == -1:
+            return self._get_provider_name()
+        elif 0 <= self.current_provider_index < len(self.fallback_providers):
+            return self.fallback_providers[self.current_provider_index]["name"]
+        else:
+            return self._get_provider_name()
+
+    async def _try_next_provider(
+        self,
+        transcript: str,
+        is_final: bool,
+        metadata: Dict[str, Any],
+        response_callback: Callable[[str, bool, Dict[str, Any]], None],
+        enhanced_settings: Dict[str, Any],
+        enhanced_callback: Callable[[str, bool, Dict[str, Any]], None],
+        last_error: str
+    ) -> bool:
+        """
+        Try the next fallback provider.
+        
+        Args:
+            transcript: The transcribed text
+            is_final: Whether this is a final transcript
+            metadata: Additional metadata about the transcript
+            response_callback: Original callback function
+            enhanced_settings: Enhanced settings with call metadata
+            enhanced_callback: Enhanced callback with metadata
+            last_error: Error from the previous provider
+            
+        Returns:
+            bool: True if a fallback was attempted, False if no more fallbacks
+        """
+        # Move to next provider
+        self.current_provider_index += 1
+        
+        if self.current_provider_index >= len(self.fallback_providers):
+            # No more fallbacks available
+            logger.error(
+                f"All LLM providers failed for call {self.call_sid}. "
+                f"Primary: {self._get_provider_name()}, "
+                f"Fallbacks: {[f['name'] for f in self.fallback_providers]}. "
+                f"Last error: {last_error}"
+            )
+            await response_callback(
+                "I apologize, but I'm experiencing technical difficulties and cannot process your request at the moment.",
+                True,
+                {"call_sid": self.call_sid, "error": "All LLM providers failed", "last_error": last_error},
+            )
+            return False
+            
+        # Try the current fallback provider
+        current_provider = self._get_current_provider()
+        current_name = self._get_current_provider_name()
+        
+        logger.warning(
+            f"Primary provider failed for call {self.call_sid}, trying fallback {self.current_provider_index + 1}: {current_name}"
+        )
+        
+        try:
+            await current_provider.process_transcript(
+                self.conversation_history, enhanced_settings, enhanced_callback
+            )
+            
+            # Update current provider name for logging
+            self.current_provider_name = current_name
+            logger.info(f"Successfully switched to fallback provider {current_name} for call {self.call_sid}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Fallback provider {current_name} failed for call {self.call_sid}: {e}")
+            # Recursively try the next fallback
+            return await self._try_next_provider(
+                transcript, is_final, metadata, response_callback, 
+                enhanced_settings, enhanced_callback, str(e)
+            )
+
     async def process_transcript(
         self,
         transcript: str,
@@ -822,16 +956,43 @@ class LLMService:
             # Add call metadata to response callback
             enhanced_callback = self._create_enhanced_callback(response_callback)
 
-            # Process using the configured provider
-            await self.provider.process_transcript(
-                self.conversation_history, enhanced_settings, enhanced_callback
-            )
+            # Try the current provider (primary or previously successful fallback)
+            current_provider = self._get_current_provider()
+            current_name = self._get_current_provider_name()
+
+            try:
+                # Process using the current provider
+                await current_provider.process_transcript(
+                    self.conversation_history, enhanced_settings, enhanced_callback
+                )
+                
+            except Exception as e:
+                logger.error(
+                    f"LLM provider {current_name} failed for call {self.call_sid}: {e}"
+                )
+                
+                # Try fallback providers if we haven't exhausted them
+                fallback_attempted = await self._try_next_provider(
+                    transcript, is_final, metadata, response_callback,
+                    enhanced_settings, enhanced_callback, str(e)
+                )
+                
+                # If no fallback was attempted or all failed, the error response 
+                # was already sent in _try_next_provider
+                if not fallback_attempted:
+                    # Remove the user message from history since we couldn't process it
+                    if self.conversation_history and self.conversation_history[-1]["role"] == "user":
+                        self.conversation_history.pop()
 
         except Exception as e:
             logger.error(
-                f"Error processing transcript for call {self.call_sid}: {e}",
+                f"Critical error processing transcript for call {self.call_sid}: {e}",
                 exc_info=True,
             )
+            # Remove the user message from history since we couldn't process it
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
+                self.conversation_history.pop()
+                
             await response_callback(
                 "I apologize, but I'm having trouble processing that right now.",
                 True,
