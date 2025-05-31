@@ -1,0 +1,108 @@
+<div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+    <div class="px-6 py-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-b border-gray-700/50">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Integration Settings</h3>
+                    <p class="text-gray-400 text-sm">API keys and webhook configuration</p>
+                </div>
+            </div>
+            <button type="button" onclick="toggleIntegration()" class="text-orange-400 hover:text-orange-300 text-sm font-medium transition-colors">
+                <span id="integration-toggle-text">Configure</span>
+            </button>
+        </div>
+    </div>
+    <div id="integration-settings" class="hidden p-6">
+        <div class="space-y-8">
+            <!-- API Keys -->
+            <div>
+                <h4 class="text-base font-semibold text-white mb-4">API Keys <span class="text-gray-400 text-sm font-normal">(Optional - System defaults will be used if not provided)</span></h4>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="relative">
+                        <label for="openai_api_key" class="block text-sm font-medium text-gray-300 mb-2">OpenAI API Key</label>
+                        <input type="password" name="openai_api_key" id="openai_api_key"
+                            value="{{ assistant.openai_api_key if assistant and assistant.openai_api_key else '' }}"
+                            class="block w-full px-4 py-3 pr-12 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="sk-...">
+                        <button type="button" onclick="togglePassword('openai_api_key')" class="absolute right-3 top-9 text-gray-400 hover:text-gray-300">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="relative">
+                        <label for="deepgram_api_key" class="block text-sm font-medium text-gray-300 mb-2">Deepgram API Key</label>
+                        <input type="password" name="deepgram_api_key" id="deepgram_api_key"
+                            value="{{ assistant.deepgram_api_key if assistant and assistant.deepgram_api_key else '' }}"
+                            class="block w-full px-4 py-3 pr-12 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="sk-...">
+                        <button type="button" onclick="togglePassword('deepgram_api_key')" class="absolute right-3 top-9 text-gray-400 hover:text-gray-300">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="relative">
+                        <label for="elevenlabs_api_key" class="block text-sm font-medium text-gray-300 mb-2">ElevenLabs API Key</label>
+                        <input type="password" name="elevenlabs_api_key" id="elevenlabs_api_key"
+                            value="{{ assistant.elevenlabs_api_key if assistant and assistant.elevenlabs_api_key else '' }}"
+                            class="block w-full px-4 py-3 pr-12 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="sk-...">
+                        <button type="button" onclick="togglePassword('elevenlabs_api_key')" class="absolute right-3 top-9 text-gray-400 hover:text-gray-300">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div>
+                        <label for="twilio_account_sid" class="block text-sm font-medium text-gray-300 mb-2">Twilio Account SID</label>
+                        <input type="password" name="twilio_account_sid" id="twilio_account_sid"
+                            value="{{ assistant.twilio_account_sid if assistant and assistant.twilio_account_sid else '' }}"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="AC...">
+                    </div>
+
+                    <div class="relative">
+                        <label for="twilio_auth_token" class="block text-sm font-medium text-gray-300 mb-2">Twilio Auth Token</label>
+                        <input type="password" name="twilio_auth_token" id="twilio_auth_token"
+                            value="{{ assistant.twilio_auth_token if assistant and assistant.twilio_auth_token else '' }}"
+                            class="block w-full px-4 py-3 pr-12 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="...">
+                        <button type="button" onclick="togglePassword('twilio_auth_token')" class="absolute right-3 top-9 text-gray-400 hover:text-gray-300">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Webhook Configuration -->
+            <div>
+                <h4 class="text-base font-semibold text-white mb-4">Webhook Configuration</h4>
+                <div>
+                    <label for="webhook_url" class="block text-sm font-medium text-gray-300 mb-2">Webhook URL</label>
+                    <input type="url" name="webhook_url" id="webhook_url"
+                        value="{{ assistant.webhook_url if assistant else '' }}"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="https://your-app.com/webhook">
+                    <p class="mt-2 text-xs text-gray-400">
+                        If provided, webhooks will be sent for call status updates and end-of-call reports
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

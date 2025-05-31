@@ -254,6 +254,12 @@ class Assistant(Base):
         "custom_config": {}
     })
 
+    # LLM Fallback Providers Configuration
+    llm_fallback_providers = Column(JSON, nullable=True, default=lambda: {
+        "enabled": False,
+        "fallbacks": []
+    })
+
     # Legacy API Keys (for backward compatibility - will be deprecated)
     openai_api_key = Column(String(255), nullable=True)
     custom_llm_url = Column(String(255), nullable=True)
