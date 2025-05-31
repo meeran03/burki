@@ -6,16 +6,17 @@ Assistant routes
 from typing import Optional
 import time
 import json
+import logging
 from io import StringIO
 import os
-from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response, UploadFile, File
 from fastapi.responses import (
     HTMLResponse,
     RedirectResponse
 )
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc, asc
 
 from app.db.database import get_db
@@ -46,6 +47,9 @@ start_time = time.time()
 # Environment variables for configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 
 # ========== Template Context Helpers ==========
@@ -404,6 +408,11 @@ async def create_assistant(
     webhook_url: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
     structured_data_prompt: Optional[str] = Form(None),
+    # RAG settings
+    rag_enabled: bool = Form(False),
+    rag_search_limit: Optional[int] = Form(None),
+    rag_similarity_threshold: Optional[float] = Form(None),
+    rag_chunk_size: Optional[int] = Form(None),
     # Recording settings
     recording_enabled: bool = Form(False),
     # Tools configuration
@@ -601,6 +610,23 @@ async def create_assistant(
             },
             "custom_tools": [],  # For future custom tool definitions
         },
+        # RAG settings
+        "rag_settings": (
+            {
+                "enabled": rag_enabled,
+                "search_limit": rag_search_limit if rag_search_limit is not None else 3,
+                "similarity_threshold": rag_similarity_threshold if rag_similarity_threshold is not None else 0.7,
+                "embedding_model": "text-embedding-3-small",
+                "chunking_strategy": "recursive",
+                "chunk_size": rag_chunk_size if rag_chunk_size is not None else 1000,
+                "chunk_overlap": 200,
+                "auto_process": True,
+                "include_metadata": True,
+                "context_window_tokens": 4000,
+            }
+            if rag_enabled or any([rag_search_limit, rag_similarity_threshold, rag_chunk_size])
+            else None
+        ),
     }
 
     # Handle custom settings separately
@@ -794,6 +820,27 @@ async def edit_assistant_form(request: Request, assistant_id: int, current_user:
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
+    # Load active documents using RAG service (filters out soft-deleted documents)
+    documents = []
+    try:
+        # Check if RAG is available and load documents properly
+        try:
+            from app.services.rag_service import RAGService
+            rag_service = RAGService.create_default_instance()
+            # Get only active documents (is_active = True)
+            documents = await rag_service.get_assistant_documents(
+                assistant_id, 
+                include_processing=True  # Include documents being processed
+            )
+        except ImportError:
+            # RAG not available, just use empty list
+            logger.warning("RAG service not available for loading documents")
+            documents = []
+    except Exception as e:
+        # If there's an error loading documents, just log it and continue
+        logger.warning(f"Could not load documents: {e}")
+        documents = []
+
     # Get available phone numbers from Twilio
     phone_numbers = TwilioService.get_available_phone_numbers()
 
@@ -821,6 +868,7 @@ async def edit_assistant_form(request: Request, assistant_id: int, current_user:
         get_template_context(
             request,
             assistant=assistant,
+            documents=documents,  # Pass documents separately
             phone_numbers=phone_numbers,
             default_schema=default_schema,
         ),
@@ -890,6 +938,11 @@ async def update_assistant(
     webhook_url: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
     structured_data_prompt: Optional[str] = Form(None),
+    # RAG settings
+    rag_enabled: bool = Form(False),
+    rag_search_limit: Optional[int] = Form(None),
+    rag_similarity_threshold: Optional[float] = Form(None),
+    rag_chunk_size: Optional[int] = Form(None),
     # Recording settings
     recording_enabled: bool = Form(False),
     # Tools configuration
@@ -1089,6 +1142,23 @@ async def update_assistant(
             },
             "custom_tools": [],  # For future custom tool definitions
         },
+        # RAG settings
+        "rag_settings": (
+            {
+                "enabled": rag_enabled,
+                "search_limit": rag_search_limit if rag_search_limit is not None else 3,
+                "similarity_threshold": rag_similarity_threshold if rag_similarity_threshold is not None else 0.7,
+                "embedding_model": "text-embedding-3-small",
+                "chunking_strategy": "recursive",
+                "chunk_size": rag_chunk_size if rag_chunk_size is not None else 1000,
+                "chunk_overlap": 200,
+                "auto_process": True,
+                "include_metadata": True,
+                "context_window_tokens": 4000,
+            }
+            if rag_enabled or any([rag_search_limit, rag_similarity_threshold, rag_chunk_size])
+            else None
+        ),
     }
 
     # Handle custom settings separately
@@ -1429,3 +1499,204 @@ async def bulk_action_assistants(
     except Exception as e:
         db.rollback()
         return {"success": False, "message": f"Error: {str(e)}"}
+
+
+# ========== RAG (Document Management) Routes ==========
+
+@router.post("/assistants/{assistant_id}/documents/upload")
+async def upload_document(
+    request: Request,
+    assistant_id: int,
+    current_user: User = Depends(require_auth),
+    file: UploadFile = File(...),
+    name: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+):
+    """Upload a document to an assistant's knowledge base."""
+    try:
+        # Verify assistant ownership
+        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
+        if not assistant:
+            raise HTTPException(status_code=404, detail="Assistant not found")
+
+        # Check if RAG is available
+        try:
+            from app.services.rag_service import RAGService
+        except ImportError:
+            raise HTTPException(status_code=500, detail="RAG functionality not available")
+
+        # Validate file
+        if file.size > 10 * 1024 * 1024:  # 10MB limit
+            raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+        # Read file data
+        file_data = await file.read()
+
+        # Parse tags
+        tag_list = []
+        if tags:
+            tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+
+        # Initialize RAG service
+        rag_service = RAGService.create_default_instance()
+
+        # Upload and process document
+        document = await rag_service.upload_and_process_document(
+            file_data=file_data,
+            filename=file.filename,
+            content_type=file.content_type,
+            assistant_id=assistant_id,
+            organization_id=current_user.organization_id,
+            name=name or file.filename,
+            category=category,
+            tags=tag_list,
+        )
+
+        return {
+            "success": True,
+            "document": {
+                "id": document.id,
+                "name": document.name,
+                "filename": document.original_filename,
+                "status": document.processing_status,
+                "created_at": document.created_at.isoformat(),
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading document: {e}")
+        raise HTTPException(status_code=500, detail="Error uploading document")
+
+
+@router.get("/assistants/{assistant_id}/documents")
+async def list_documents(
+    request: Request,
+    assistant_id: int,
+    current_user: User = Depends(require_auth),
+):
+    """List documents for an assistant."""
+    try:
+        # Verify assistant ownership
+        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
+        if not assistant:
+            raise HTTPException(status_code=404, detail="Assistant not found")
+
+        # Check if RAG is available
+        try:
+            from app.services.rag_service import RAGService
+        except ImportError:
+            return {"documents": []}
+
+        # Initialize RAG service
+        rag_service = RAGService.create_default_instance()
+
+        # Get documents
+        documents = await rag_service.get_assistant_documents(assistant_id, include_processing=True)
+
+        return {
+            "documents": [
+                {
+                    "id": doc.id,
+                    "name": doc.name,
+                    "filename": doc.original_filename,
+                    "content_type": doc.content_type,
+                    "file_size": doc.file_size,
+                    "processing_status": doc.processing_status,
+                    "processing_error": doc.processing_error,
+                    "total_chunks": doc.total_chunks,
+                    "processed_chunks": doc.processed_chunks,
+                    "progress_percentage": doc.get_processing_progress(),
+                    "category": doc.category,
+                    "tags": doc.tags,
+                    "created_at": doc.created_at.isoformat(),
+                    "processed_at": doc.processed_at.isoformat() if doc.processed_at else None,
+                }
+                for doc in documents
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
+        raise HTTPException(status_code=500, detail="Error listing documents")
+
+
+@router.delete("/assistants/{assistant_id}/documents/{document_id}")
+async def delete_document(
+    request: Request,
+    assistant_id: int,
+    document_id: int,
+    current_user: User = Depends(require_auth),
+):
+    """Delete a document from an assistant's knowledge base."""
+    try:
+        # Verify assistant ownership
+        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
+        if not assistant:
+            raise HTTPException(status_code=404, detail="Assistant not found")
+
+        # Check if RAG is available
+        try:
+            from app.services.rag_service import RAGService
+        except ImportError:
+            raise HTTPException(status_code=500, detail="RAG functionality not available")
+
+        # Initialize RAG service
+        rag_service = RAGService.create_default_instance()
+
+        # Delete document
+        success = await rag_service.delete_document(document_id, assistant_id)
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        return {"success": True, "message": "Document deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting document: {e}")
+        raise HTTPException(status_code=500, detail="Error deleting document")
+
+
+@router.get("/assistants/{assistant_id}/documents/{document_id}/status")
+async def get_document_status(
+    request: Request,
+    assistant_id: int,
+    document_id: int,
+    current_user: User = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """Get processing status of a document."""
+    try:
+        # Verify assistant ownership
+        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
+        if not assistant:
+            raise HTTPException(status_code=404, detail="Assistant not found")
+
+        # Check if RAG is available
+        try:
+            from app.services.rag_service import RAGService
+        except ImportError:
+            raise HTTPException(status_code=500, detail="RAG functionality not available")
+
+        # Initialize RAG service
+        rag_service = RAGService.create_default_instance()
+
+        # Get document status
+        status = await rag_service.get_document_status(document_id)
+
+        if not status:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        return status
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document status: {e}")
+        raise HTTPException(status_code=500, detail="Error getting document status")

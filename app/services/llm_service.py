@@ -1,32 +1,36 @@
 """
 This file contains the multi-provider LLM service for handling various LLM providers
-including OpenAI, Anthropic, Google Gemini, xAI Grok, and Groq.
+including OpenAI, Anthropic, Google Gemini, xAI Grok, and Groq using LangChain.
 """
 
 # pylint: disable=broad-exception-caught,logging-fstring-interpolation
 import os
 import json
 import logging
-import asyncio
-from typing import Dict, Any, Optional, Callable, Union
+from typing import Dict, Any, Optional, Callable
 from abc import ABC, abstractmethod
 import httpx
 
-# Import all LLM provider clients
+# LangChain imports
 try:
-    from openai import AsyncOpenAI
-except ImportError:
-    AsyncOpenAI = None
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+    from langchain_openai import ChatOpenAI
+    from langchain_anthropic import ChatAnthropic
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_groq import ChatGroq
 
-try:
-    from anthropic import AsyncAnthropic
+    LANGCHAIN_AVAILABLE = True
 except ImportError:
-    AsyncAnthropic = None
+    LANGCHAIN_AVAILABLE = False
 
+# RAG imports
 try:
-    from groq import AsyncGroq
+    from app.services.rag_service import RAGService
+
+    RAG_AVAILABLE = True
 except ImportError:
-    AsyncGroq = None
+    RAG_AVAILABLE = False
 
 # Import tools
 from app.tools.basic import get_all_tools
@@ -157,240 +161,195 @@ class BaseLLMProvider(ABC):
             logger.exception(e)
 
 
-class OpenAIProvider(BaseLLMProvider):
-    """OpenAI LLM provider."""
+class LangChainProvider(BaseLLMProvider):
+    """LangChain-based provider for all LLM providers except custom."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], provider_name: str):
         super().__init__(config)
-        if AsyncOpenAI is None:
-            raise ImportError("openai package not installed. Run: pip install openai")
-
-        self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-
-    async def process_transcript(
-        self,
-        messages: list,
-        settings: Dict[str, Any],
-        response_callback: Callable[[str, bool, Dict[str, Any]], None],
-    ) -> None:
-        """Process transcript using OpenAI."""
-        try:
-            # Get tools from assistant if available
-            tools = []
-            assistant = settings.get("assistant")
-            if assistant:
-                tools = get_all_tools(assistant)
-
-            # Prepare the API call parameters
-            api_params = {
-                "model": self.model,
-                "messages": messages,
-                "stream": True,
-                "temperature": settings.get("temperature", 0.7),
-                "max_tokens": settings.get("max_tokens", 150),
-                "top_p": settings.get("top_p", 1.0),
-                "frequency_penalty": settings.get("frequency_penalty", 0.0),
-                "presence_penalty": settings.get("presence_penalty", 0.0),
-                "stop": settings.get("stop_sequences") or None,
-            }
-
-            # Add tools if available
-            if tools:
-                api_params["tools"] = tools
-                api_params["tool_choice"] = "auto"
-
-            stream = await self.client.chat.completions.create(**api_params)
-
-            collected_response = ""
-            current_tool_call = None
-
-            async for chunk in stream:
-                # Handle regular content
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    collected_response += content
-                    await response_callback(content, False, {})
-
-                # Handle tool calls
-                if chunk.choices[0].delta.tool_calls:
-                    tool_call = chunk.choices[0].delta.tool_calls[0]
-
-                    # Handle tool call start
-                    if tool_call.function.name:
-                        current_tool_call = {
-                            "name": tool_call.function.name,
-                            "id": tool_call.id,
-                            "arguments": "",
-                        }
-                        logger.info(f"Started tool call: {current_tool_call['name']}")
-
-                    # Accumulate arguments
-                    if tool_call.function.arguments:
-                        if current_tool_call:
-                            current_tool_call[
-                                "arguments"
-                            ] += tool_call.function.arguments
-
-                # Handle tool call completion
-                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
-                    await self._handle_tool_call(
-                        current_tool_call, assistant, response_callback
-                    )
-                    return
-
-            if collected_response:
-                await response_callback("", True, {"full_response": collected_response})
-
-        except Exception as e:
-            logger.error(f"OpenAI error: {e}")
-            await response_callback(
-                "I apologize, but I'm having trouble processing that right now.",
-                True,
-                {"error": str(e)},
-            )
-
-
-class AnthropicProvider(BaseLLMProvider):
-    """Anthropic Claude LLM provider."""
-
-    def __init__(self, config: Dict[str, Any]):
-        super().__init__(config)
-        if AsyncAnthropic is None:
+        if not LANGCHAIN_AVAILABLE:
             raise ImportError(
-                "anthropic package not installed. Run: pip install anthropic"
+                "LangChain packages not installed. Please install langchain and required provider packages."
             )
 
-        self.client = AsyncAnthropic(api_key=self.api_key, base_url=self.base_url)
+        self.provider_name = provider_name
+        self.llm = self._initialize_llm()
+        self.rag_service = None  # Will be initialized when needed
 
-    async def process_transcript(
-        self,
-        messages: list,
-        settings: Dict[str, Any],
-        response_callback: Callable[[str, bool, Dict[str, Any]], None],
-    ) -> None:
-        """Process transcript using Anthropic Claude."""
-        try:
-            # Get tools from assistant if available
-            tools = []
-            assistant = settings.get("assistant")
-            if assistant:
-                tools = get_all_tools(assistant)
+    def _initialize_llm(self) -> BaseChatModel:
+        """Initialize the appropriate LangChain LLM based on provider."""
 
-            # Convert OpenAI format messages to Anthropic format
-            anthropic_messages = self._convert_messages_to_anthropic(messages)
-            system_prompt = self._extract_system_prompt(messages)
-
-            # Prepare the API call parameters
-            api_params = {
-                "model": self.model,
-                "messages": anthropic_messages,
-                "system": system_prompt,
-                "stream": True,
-                "temperature": settings.get("temperature", 0.7),
-                "max_tokens": settings.get("max_tokens", 150),
-                "top_p": settings.get("top_p", 1.0),
-                "stop_sequences": settings.get("stop_sequences", []),
-            }
-
-            # Add tools if available
-            if tools:
-                api_params["tools"] = tools
-
-            stream = await self.client.messages.create(**api_params)
-
-            collected_response = ""
-            current_tool_call = None
-
-            async for chunk in stream:
-                # Handle regular content
-                if chunk.type == "content_block_delta" and hasattr(chunk.delta, "text"):
-                    content = chunk.delta.text
-                    collected_response += content
-                    await response_callback(content, False, {})
-
-                # Handle tool calls
-                if (
-                    chunk.type == "content_block_start"
-                    and chunk.content_block.type == "tool_use"
-                ):
-                    current_tool_call = {
-                        "name": chunk.content_block.name,
-                        "id": chunk.content_block.id,
-                        "arguments": "",
-                    }
-                    logger.info(f"Started tool call: {current_tool_call['name']}")
-
-                if chunk.type == "content_block_delta" and hasattr(
-                    chunk.delta, "partial_json"
-                ):
-                    if current_tool_call:
-                        current_tool_call["arguments"] += chunk.delta.partial_json
-
-                # Handle message completion
-                if chunk.type == "message_stop" and current_tool_call:
-                    # For Anthropic, parse arguments as JSON
-                    if current_tool_call["arguments"]:
-                        try:
-                            current_tool_call["arguments"] = json.dumps(
-                                json.loads(current_tool_call["arguments"])
-                            )
-                        except json.JSONDecodeError:
-                            logger.warning(
-                                f"Failed to parse Anthropic tool arguments: {current_tool_call['arguments']}"
-                            )
-
-                    await self._handle_tool_call(
-                        current_tool_call, assistant, response_callback
-                    )
-                    return
-
-            if collected_response:
-                await response_callback("", True, {"full_response": collected_response})
-
-        except Exception as e:
-            logger.error(f"Anthropic error: {e}")
-            await response_callback(
-                "I apologize, but I'm having trouble processing that right now.",
-                True,
-                {"error": str(e)},
+        if self.provider_name == "openai":
+            return ChatOpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                model=self.model or "gpt-4o-mini",
+                streaming=True,
+                **self.custom_config,
             )
 
-    def _convert_messages_to_anthropic(self, messages: list) -> list:
-        """Convert OpenAI format messages to Anthropic format."""
-        anthropic_messages = []
+        elif self.provider_name == "anthropic":
+            return ChatAnthropic(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                model=self.model or "claude-3-5-sonnet-latest",
+                streaming=True,
+                **self.custom_config,
+            )
+
+        elif self.provider_name == "gemini":
+            return ChatGoogleGenerativeAI(
+                google_api_key=self.api_key,
+                model=self.model or "gemini-2.0-flash",
+                streaming=True,
+                **self.custom_config,
+            )
+
+        elif self.provider_name == "groq":
+            return ChatGroq(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                model=self.model or "llama-3.3-70b-versatile",
+                streaming=True,
+                **self.custom_config,
+            )
+
+        elif self.provider_name == "xai":
+            # xAI uses OpenAI-compatible API
+            return ChatOpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url or "https://api.x.ai/v1",
+                model=self.model or "grok-beta",
+                streaming=True,
+                **self.custom_config,
+            )
+
+        else:
+            raise ValueError(f"Unsupported provider: {self.provider_name}")
+
+    def _convert_to_langchain_messages(self, messages: list) -> list:
+        """Convert message format to LangChain messages."""
+        langchain_messages = []
+
         for msg in messages:
             if msg["role"] == "system":
-                continue  # System messages are handled separately
+                langchain_messages.append(SystemMessage(content=msg["content"]))
             elif msg["role"] == "user":
-                anthropic_messages.append({"role": "user", "content": msg["content"]})
+                langchain_messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
-                anthropic_messages.append(
-                    {"role": "assistant", "content": msg["content"]}
+                langchain_messages.append(AIMessage(content=msg["content"]))
+
+        return langchain_messages
+
+    def _initialize_rag_service(self) -> None:
+        """Initialize RAG service if not already initialized."""
+        if not RAG_AVAILABLE:
+            return
+
+        if self.rag_service is None:
+            try:
+                self.rag_service = RAGService.create_default_instance()
+                logger.info("RAG service initialized for LangChain provider")
+            except Exception as e:
+                logger.warning(f"Failed to initialize RAG service: {e}")
+
+    async def _enhance_messages_with_rag(
+        self, messages: list, assistant_id: int
+    ) -> list:
+        """
+        Enhance messages with relevant document context using RAG.
+
+        Args:
+            messages: Original messages
+            assistant_id: Assistant ID for document filtering
+
+        Returns:
+            list: Enhanced messages with document context
+        """
+        if not RAG_AVAILABLE:
+            return messages
+
+        try:
+            # Initialize RAG service if needed
+            self._initialize_rag_service()
+
+            if not self.rag_service:
+                return messages
+
+            # Get the latest user message for context retrieval
+            user_messages = [msg for msg in messages if msg["role"] == "user"]
+            if not user_messages:
+                return messages
+
+            latest_query = user_messages[-1]["content"]
+
+            # Search for relevant documents
+            relevant_chunks = await self.rag_service.search_documents(
+                query=latest_query,
+                assistant_id=assistant_id,
+                limit=3,  # Limit to top 3 most relevant chunks
+                similarity_threshold=0.3,
+            )
+
+            if not relevant_chunks:
+                logger.debug(
+                    f"No relevant documents found for assistant {assistant_id}"
                 )
-        return anthropic_messages
+                return messages
 
-    def _extract_system_prompt(self, messages: list) -> str:
-        """Extract system prompt from messages."""
-        for msg in messages:
-            if msg["role"] == "system":
-                return msg["content"]
-        return "You are a helpful assistant."
+            # Build context from retrieved documents
+            context_parts = []
+            for chunk in relevant_chunks:
+                doc_info = chunk.get("document", {})
+                context_parts.append(
+                    f"From document '{doc_info.get('name', 'Unknown')}': {chunk['content']}"
+                )
 
+            context = "\n\n".join(context_parts)
 
-class GeminiProvider(BaseLLMProvider):
-    """Google Gemini LLM provider using OpenAI compatibility."""
+            # Find the system message and enhance it with context
+            enhanced_messages = []
+            context_added = False
 
-    def __init__(self, config: Dict[str, Any]):
-        super().__init__(config)
-        if AsyncOpenAI is None:
-            raise ImportError("openai package not installed. Run: pip install openai")
+            for msg in messages:
+                if msg["role"] == "system" and not context_added:
+                    # Add document context to system prompt
+                    enhanced_content = f"""{msg["content"]}
 
-        # Use Gemini's OpenAI-compatible endpoint
-        self.client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-            or "https://generativelanguage.googleapis.com/v1beta/openai/",
-        )
+## Available Document Context:
+The following information from the knowledge base may be relevant to answer questions:
+
+{context}
+
+Use this context when relevant to provide accurate and detailed responses. If the context doesn't contain relevant information for the user's query, rely on your general knowledge."""
+
+                    enhanced_messages.append(
+                        {"role": "system", "content": enhanced_content}
+                    )
+                    context_added = True
+                else:
+                    enhanced_messages.append(msg)
+
+            # If no system message exists, add one with context
+            if not context_added:
+                system_message = {
+                    "role": "system",
+                    "content": f"""You are a helpful AI assistant. Use the following document context when relevant:
+
+## Available Document Context:
+{context}
+
+Use this context when relevant to provide accurate and detailed responses.""",
+                }
+                enhanced_messages.insert(0, system_message)
+
+            logger.info(
+                f"Enhanced messages with {len(relevant_chunks)} document chunks for assistant {assistant_id}"
+            )
+            return enhanced_messages
+
+        except Exception as e:
+            logger.error(f"Error enhancing messages with RAG: {e}")
+            return messages
 
     async def process_transcript(
         self,
@@ -398,7 +357,7 @@ class GeminiProvider(BaseLLMProvider):
         settings: Dict[str, Any],
         response_callback: Callable[[str, bool, Dict[str, Any]], None],
     ) -> None:
-        """Process transcript using Google Gemini."""
+        """Process transcript using LangChain with optional RAG enhancement."""
         try:
             # Get tools from assistant if available
             tools = []
@@ -406,260 +365,134 @@ class GeminiProvider(BaseLLMProvider):
             if assistant:
                 tools = get_all_tools(assistant)
 
-            # Prepare the API call parameters
-            api_params = {
-                "model": self.model or "gemini-2.0-flash",
-                "messages": messages,
-                "stream": True,
-                "temperature": settings.get("temperature", 0.7),
-                "max_tokens": settings.get("max_tokens", 150),
-                "top_p": settings.get("top_p", 1.0),
-                "stop": settings.get("stop_sequences") or None,
-            }
+            # Check if RAG should be enabled
+            enable_rag = False
 
-            # Add tools if available
+            if assistant and RAG_AVAILABLE:
+                # Check if assistant has documents
+                rag_settings = getattr(assistant, "rag_settings", {})
+                enable_rag = rag_settings.get(
+                    "enabled", True
+                )  # Default to enabled if documents exist
+
+            # Enhance messages with RAG if enabled
+            if enable_rag and assistant:
+                messages = await self._enhance_messages_with_rag(
+                    messages, assistant.id
+                )
+
+            # Convert messages to LangChain format
+            langchain_messages = self._convert_to_langchain_messages(messages)
+
+            # Configure LLM parameters - create a copy of the LLM with specific settings
+            llm_kwargs = {}
+
+            # Add provider-specific parameters
+            if self.provider_name in ["openai", "xai", "groq"]:
+                llm_kwargs.update(
+                    {
+                        "temperature": settings.get("temperature", 0.7),
+                        "max_tokens": settings.get("max_tokens", 150),
+                        "top_p": settings.get("top_p", 1.0),
+                        "frequency_penalty": settings.get("frequency_penalty", 0.0),
+                        "presence_penalty": settings.get("presence_penalty", 0.0),
+                    }
+                )
+            else:
+                # For Anthropic, Gemini
+                llm_kwargs.update(
+                    {
+                        "temperature": settings.get("temperature", 0.7),
+                        "max_tokens": settings.get("max_tokens", 150),
+                        "top_p": settings.get("top_p", 1.0),
+                    }
+                )
+
+            # Configure the LLM with runtime parameters
+            configured_llm = self.llm.bind(**llm_kwargs)
+
+            # Handle tools if available
             if tools:
-                api_params["tools"] = tools
-                api_params["tool_choice"] = "auto"
+                # For tool calling, we need to use the bind_tools method
+                llm_with_tools = configured_llm.bind_tools(tools)
 
-            stream = await self.client.chat.completions.create(**api_params)
+                # Process with tools - use ainvoke for tool calls (non-streaming)
+                try:
+                    response = await llm_with_tools.ainvoke(langchain_messages)
 
-            collected_response = ""
-            current_tool_call = None
+                    # Check if there are tool calls
+                    if hasattr(response, "tool_calls") and response.tool_calls:
+                        for tool_call in response.tool_calls:
+                            # Convert LangChain tool call format to our format
+                            formatted_tool_call = {
+                                "name": tool_call["name"],
+                                "id": tool_call.get("id", ""),
+                                "arguments": json.dumps(tool_call.get("args", {})),
+                            }
+                            await self._handle_tool_call(
+                                formatted_tool_call, assistant, response_callback
+                            )
+                            return
 
-            async for chunk in stream:
-                # Handle regular content
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    collected_response += content
-                    await response_callback(content, False, {})
+                    # If no tool calls, treat as regular response
+                    if response.content:
+                        await response_callback(
+                            "", True, {"full_response": response.content}
+                        )
 
-                # Handle tool calls (same as OpenAI format)
-                if chunk.choices[0].delta.tool_calls:
-                    tool_call = chunk.choices[0].delta.tool_calls[0]
-
-                    # Handle tool call start
-                    if tool_call.function.name:
-                        current_tool_call = {
-                            "name": tool_call.function.name,
-                            "id": tool_call.id,
-                            "arguments": "",
-                        }
-                        logger.info(f"Started tool call: {current_tool_call['name']}")
-
-                    # Accumulate arguments
-                    if tool_call.function.arguments:
-                        if current_tool_call:
-                            current_tool_call[
-                                "arguments"
-                            ] += tool_call.function.arguments
-
-                # Handle tool call completion
-                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
-                    await self._handle_tool_call(
-                        current_tool_call, assistant, response_callback
+                except Exception as tool_error:
+                    logger.warning(
+                        f"Tool calling failed, falling back to streaming: {tool_error}"
                     )
-                    return
-
-            if collected_response:
-                await response_callback("", True, {"full_response": collected_response})
+                    # Fall back to regular streaming if tool calling fails
+                    await self._stream_response(
+                        configured_llm, langchain_messages, response_callback
+                    )
+            else:
+                # Regular streaming without tools
+                await self._stream_response(
+                    configured_llm, langchain_messages, response_callback
+                )
 
         except Exception as e:
-            logger.error(f"Gemini error: {e}")
+            logger.error(f"LangChain {self.provider_name} error: {e}")
             await response_callback(
                 "I apologize, but I'm having trouble processing that right now.",
                 True,
                 {"error": str(e)},
             )
 
-
-class XAIProvider(BaseLLMProvider):
-    """xAI Grok LLM provider using OpenAI compatibility."""
-
-    def __init__(self, config: Dict[str, Any]):
-        super().__init__(config)
-        if AsyncOpenAI is None:
-            raise ImportError("openai package not installed. Run: pip install openai")
-
-        # Use xAI's OpenAI-compatible endpoint
-        self.client = AsyncOpenAI(
-            api_key=self.api_key, base_url=self.base_url or "https://api.x.ai/v1"
-        )
-
-    async def process_transcript(
+    async def _stream_response(
         self,
+        llm: BaseChatModel,
         messages: list,
-        settings: Dict[str, Any],
         response_callback: Callable[[str, bool, Dict[str, Any]], None],
     ) -> None:
-        """Process transcript using xAI Grok."""
+        """Handle streaming response from LangChain LLM."""
+        collected_response = ""
+
         try:
-            # Get tools from assistant if available
-            tools = []
-            assistant = settings.get("assistant")
-            if assistant:
-                tools = get_all_tools(assistant)
+            async for chunk in llm.astream(messages):
+                if chunk.content:
+                    collected_response += chunk.content
+                    await response_callback(chunk.content, False, {})
 
-            # Prepare the API call parameters
-            api_params = {
-                "model": self.model or "grok-beta",
-                "messages": messages,
-                "stream": True,
-                "temperature": settings.get("temperature", 0.7),
-                "max_tokens": settings.get("max_tokens", 150),
-                "top_p": settings.get("top_p", 1.0),
-                "frequency_penalty": settings.get("frequency_penalty", 0.0),
-                "presence_penalty": settings.get("presence_penalty", 0.0),
-                "stop": settings.get("stop_sequences") or None,
-            }
-
-            # Add tools if available
-            if tools:
-                api_params["tools"] = tools
-                api_params["tool_choice"] = "auto"
-
-            stream = await self.client.chat.completions.create(**api_params)
-
-            collected_response = ""
-            current_tool_call = None
-
-            async for chunk in stream:
-                # Handle regular content
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    collected_response += content
-                    await response_callback(content, False, {})
-
-                # Handle tool calls (same as OpenAI format)
-                if chunk.choices[0].delta.tool_calls:
-                    tool_call = chunk.choices[0].delta.tool_calls[0]
-
-                    # Handle tool call start
-                    if tool_call.function.name:
-                        current_tool_call = {
-                            "name": tool_call.function.name,
-                            "id": tool_call.id,
-                            "arguments": "",
-                        }
-                        logger.info(f"Started tool call: {current_tool_call['name']}")
-
-                    # Accumulate arguments
-                    if tool_call.function.arguments:
-                        if current_tool_call:
-                            current_tool_call[
-                                "arguments"
-                            ] += tool_call.function.arguments
-
-                # Handle tool call completion
-                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
-                    await self._handle_tool_call(
-                        current_tool_call, assistant, response_callback
-                    )
-                    return
-
+            # Send final response indicator
             if collected_response:
                 await response_callback("", True, {"full_response": collected_response})
 
         except Exception as e:
-            logger.error(f"xAI error: {e}")
-            await response_callback(
-                "I apologize, but I'm having trouble processing that right now.",
-                True,
-                {"error": str(e)},
-            )
-
-
-class GroqProvider(BaseLLMProvider):
-    """Groq LLM provider."""
-
-    def __init__(self, config: Dict[str, Any]):
-        super().__init__(config)
-        if AsyncGroq is None:
-            raise ImportError("groq package not installed. Run: pip install groq")
-
-        self.client = AsyncGroq(api_key=self.api_key, base_url=self.base_url)
-
-    async def process_transcript(
-        self,
-        messages: list,
-        settings: Dict[str, Any],
-        response_callback: Callable[[str, bool, Dict[str, Any]], None],
-    ) -> None:
-        """Process transcript using Groq."""
-        try:
-            # Get tools from assistant if available
-            tools = []
-            assistant = settings.get("assistant")
-            if assistant:
-                tools = get_all_tools(assistant)
-
-            # Prepare the API call parameters
-            api_params = {
-                "model": self.model or "llama-3.3-70b-versatile",
-                "messages": messages,
-                "stream": True,
-                "temperature": settings.get("temperature", 0.7),
-                "max_tokens": settings.get("max_tokens", 150),
-                "top_p": settings.get("top_p", 1.0),
-                "frequency_penalty": settings.get("frequency_penalty", 0.0),
-                "presence_penalty": settings.get("presence_penalty", 0.0),
-                "stop": settings.get("stop_sequences") or None,
-            }
-
-            # Add tools if available
-            if tools:
-                api_params["tools"] = tools
-                api_params["tool_choice"] = "auto"
-
-            stream = await self.client.chat.completions.create(**api_params)
-
-            collected_response = ""
-            current_tool_call = None
-
-            async for chunk in stream:
-                # Handle regular content
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    collected_response += content
-                    await response_callback(content, False, {})
-
-                # Handle tool calls (same as OpenAI format)
-                if chunk.choices[0].delta.tool_calls:
-                    tool_call = chunk.choices[0].delta.tool_calls[0]
-
-                    # Handle tool call start
-                    if tool_call.function.name:
-                        current_tool_call = {
-                            "name": tool_call.function.name,
-                            "id": tool_call.id,
-                            "arguments": "",
-                        }
-                        logger.info(f"Started tool call: {current_tool_call['name']}")
-
-                    # Accumulate arguments
-                    if tool_call.function.arguments:
-                        if current_tool_call:
-                            current_tool_call[
-                                "arguments"
-                            ] += tool_call.function.arguments
-
-                # Handle tool call completion
-                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
-                    await self._handle_tool_call(
-                        current_tool_call, assistant, response_callback
+            logger.error(f"Streaming error: {e}")
+            # If streaming fails, try a single non-streaming call
+            try:
+                response = await llm.ainvoke(messages)
+                if response.content:
+                    await response_callback(
+                        "", True, {"full_response": response.content}
                     )
-                    return
-
-            if collected_response:
-                await response_callback("", True, {"full_response": collected_response})
-
-        except Exception as e:
-            logger.error(f"Groq error: {e}")
-            await response_callback(
-                "I apologize, but I'm having trouble processing that right now.",
-                True,
-                {"error": str(e)},
-            )
+            except Exception as fallback_error:
+                logger.error(f"Fallback error: {fallback_error}")
+                raise e
 
 
 class CustomLLMProvider(BaseLLMProvider):
@@ -817,16 +650,16 @@ class CustomLLMProvider(BaseLLMProvider):
 
 class LLMService:
     """
-    Multi-provider LLM service for handling various LLM providers.
+    Multi-provider LLM service for handling various LLM providers using LangChain.
     """
 
     PROVIDERS = {
-        "openai": OpenAIProvider,
-        "anthropic": AnthropicProvider,
-        "gemini": GeminiProvider,
-        "xai": XAIProvider,
-        "groq": GroqProvider,
-        "custom": CustomLLMProvider,
+        "openai": "langchain",
+        "anthropic": "langchain",
+        "gemini": "langchain",
+        "xai": "langchain",
+        "groq": "langchain",
+        "custom": "custom",
     }
 
     def __init__(
@@ -876,7 +709,7 @@ class LLMService:
                 "model": "gpt-4o-mini",
             }
             logger.info("No assistant provided, using default OpenAI provider")
-            return OpenAIProvider(config)
+            return LangChainProvider(config, "openai")
 
         # Use new provider configuration (prioritize this over legacy settings)
         provider_name = getattr(self.assistant, "llm_provider", "openai")
@@ -886,7 +719,7 @@ class LLMService:
             f"Assistant {self.assistant.name} - Provider: {provider_name}, Config: {provider_config}"
         )
 
-        # Only use legacy configuration if no provider is explicitly set
+        # Handle custom provider with legacy support
         if provider_name == "custom":
             # Check for legacy custom LLM URL configuration
             if (
@@ -901,6 +734,10 @@ class LLMService:
                 )
                 return CustomLLMProvider(config)
 
+            # Use provider config for custom
+            if provider_config.get("base_url"):
+                return CustomLLMProvider(provider_config)
+
             # Fallback to legacy OpenAI key if no provider config
             if (
                 hasattr(self.assistant, "openai_api_key")
@@ -911,12 +748,22 @@ class LLMService:
                     "model": "gpt-4o-mini",
                 }
                 logger.info("Using legacy OpenAI API key")
+                return LangChainProvider(provider_config, "openai")
 
-        provider_class = self.PROVIDERS.get(provider_name, OpenAIProvider)
-        logger.info(
-            f"Initialized {provider_class.__name__} with config: {provider_config}"
-        )
-        return provider_class(provider_config)
+        # For all other providers, use LangChain
+        if self.PROVIDERS.get(provider_name) == "langchain":
+            logger.info(
+                f"Initialized LangChain {provider_name} provider with config: {provider_config}"
+            )
+            return LangChainProvider(provider_config, provider_name)
+
+        # Fallback to OpenAI if provider not found
+        logger.warning(f"Unknown provider {provider_name}, falling back to OpenAI")
+        fallback_config = {
+            "api_key": os.getenv("OPENAI_API_KEY"),
+            "model": "gpt-4o-mini",
+        }
+        return LangChainProvider(fallback_config, "openai")
 
     def _get_provider_name(self) -> str:
         """Get the name of the current provider."""
@@ -1035,7 +882,8 @@ class LLMService:
                 "required_fields": ["api_key"],
                 "optional_fields": ["base_url", "model"],
                 "default_models": ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
-                "pip_install": "openai",
+                "pip_install": "langchain-openai",
+                "note": "Uses LangChain OpenAI integration",
             },
             "anthropic": {
                 "required_fields": ["api_key"],
@@ -1044,34 +892,36 @@ class LLMService:
                     "claude-3-5-sonnet-latest",
                     "claude-3-haiku-20240307",
                 ],
-                "pip_install": "anthropic",
+                "pip_install": "langchain-anthropic",
+                "note": "Uses LangChain Anthropic integration",
             },
             "gemini": {
                 "required_fields": ["api_key"],
-                "optional_fields": ["base_url", "model"],
+                "optional_fields": ["model"],
                 "default_models": ["gemini-2.0-flash", "gemini-1.5-pro"],
-                "pip_install": "openai",
-                "note": "Uses OpenAI compatibility mode",
+                "pip_install": "langchain-google-genai",
+                "note": "Uses LangChain Google Generative AI integration",
             },
             "xai": {
                 "required_fields": ["api_key"],
                 "optional_fields": ["base_url", "model"],
                 "default_models": ["grok-beta", "grok-2-1212"],
-                "pip_install": "openai",
-                "note": "Uses OpenAI compatibility mode",
+                "pip_install": "langchain-openai",
+                "note": "Uses LangChain OpenAI integration with xAI endpoint",
             },
             "groq": {
                 "required_fields": ["api_key"],
                 "optional_fields": ["base_url", "model"],
                 "default_models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
-                "pip_install": "groq",
+                "pip_install": "langchain-groq",
+                "note": "Uses LangChain Groq integration",
             },
             "custom": {
                 "required_fields": ["base_url"],
                 "optional_fields": ["api_key", "model"],
                 "default_models": [],
                 "pip_install": "httpx",
-                "note": "For custom LLM endpoints",
+                "note": "For custom LLM endpoints (unchanged implementation)",
             },
         }
         return requirements.get(provider, {})

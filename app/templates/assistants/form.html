@@ -890,7 +890,203 @@
                 </div>
             </div>
 
-            <!-- Section 3: Call Management -->
+            <!-- Section 3: RAG (Knowledge Base) -->
+            <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+                <div class="px-6 py-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-b border-gray-700/50">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-white">Knowledge Base (RAG)</h3>
+                                <p class="text-gray-400 text-sm">Upload documents to enhance AI responses with your knowledge</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="toggleRAG()" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition-colors">
+                            <span id="rag-toggle-text">Configure</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="rag-configuration" class="hidden p-6">
+                    <!-- RAG Settings -->
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                                <h4 class="text-base font-semibold text-white">RAG Settings</h4>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <input type="checkbox" name="rag_enabled" id="rag_enabled" onchange="toggleRAGSettings()"
+                                    {% if not assistant or (assistant.rag_settings and assistant.rag_settings.get('enabled', True)) %}checked{% endif %}
+                                    class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-gray-800">
+                                <label for="rag_enabled" class="text-sm font-medium text-white">Enable Knowledge Base</label>
+                            </div>
+                        </div>
+
+                        <div id="rag-settings-container" class="{% if assistant and assistant.rag_settings and not assistant.rag_settings.get('enabled', True) %}hidden{% endif %}">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                                <div>
+                                    <label for="rag_search_limit" class="block text-sm font-medium text-gray-300 mb-2">Max Documents per Query</label>
+                                    <input type="number" min="1" max="10" name="rag_search_limit" id="rag_search_limit"
+                                        value="{{ assistant.rag_settings.search_limit if assistant and assistant.rag_settings else 3 }}"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors">
+                                    <p class="text-xs text-gray-400 mt-1">Number of document chunks to retrieve per query</p>
+                                </div>
+
+                                <div>
+                                    <label for="rag_similarity_threshold" class="block text-sm font-medium text-gray-300 mb-2">Relevance Threshold</label>
+                                    <input type="number" step="0.1" min="0.1" max="1.0" name="rag_similarity_threshold" id="rag_similarity_threshold"
+                                        value="{{ assistant.rag_settings.similarity_threshold if assistant and assistant.rag_settings else 0.7 }}"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors">
+                                    <p class="text-xs text-gray-400 mt-1">Minimum similarity score (0.1-1.0)</p>
+                                </div>
+
+                                <div>
+                                    <label for="rag_chunk_size" class="block text-sm font-medium text-gray-300 mb-2">Chunk Size</label>
+                                    <select name="rag_chunk_size" id="rag_chunk_size"
+                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors">
+                                        <option value="500" {% if assistant and assistant.rag_settings and assistant.rag_settings.chunk_size == 500 %}selected{% endif %}>500 chars (Precise)</option>
+                                        <option value="1000" {% if not assistant or not assistant.rag_settings or assistant.rag_settings.chunk_size == 1000 %}selected{% endif %}>1000 chars (Balanced)</option>
+                                        <option value="1500" {% if assistant and assistant.rag_settings and assistant.rag_settings.chunk_size == 1500 %}selected{% endif %}>1500 chars (Contextual)</option>
+                                        <option value="2000" {% if assistant and assistant.rag_settings and assistant.rag_settings.chunk_size == 2000 %}selected{% endif %}>2000 chars (Large Context)</option>
+                                    </select>
+                                    <p class="text-xs text-gray-400 mt-1">Size of text chunks for processing</p>
+                                </div>
+                            </div>
+
+                            <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg mb-6">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-emerald-300">How RAG Works</span>
+                                </div>
+                                <p class="text-xs text-emerald-200">
+                                    When enabled, your AI will search through uploaded documents to find relevant information before answering questions. This allows for more accurate, context-aware responses based on your specific knowledge base.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Upload Section -->
+                    <div id="document-upload-section" class="{% if assistant and assistant.rag_settings and not assistant.rag_settings.get('enabled', True) %}hidden{% endif %}">
+                        <div class="border-t border-gray-600/50 pt-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-3">
+                                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                    </svg>
+                                    <h4 class="text-base font-semibold text-white">Upload Documents</h4>
+                                </div>
+                                <button type="button" onclick="toggleDocumentUpload()" class="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors">
+                                    <span id="upload-toggle-text">Add Documents</span>
+                                </button>
+                            </div>
+
+                            <!-- Upload Interface -->
+                            <div id="upload-interface" class="hidden mb-6">
+                                <div class="bg-gray-700/30 border-2 border-dashed border-gray-600 rounded-lg p-6 text-center">
+                                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                                    </svg>
+                                    <div class="text-sm text-gray-300">
+                                        <label for="file-upload" class="relative cursor-pointer rounded-md font-medium text-blue-400 hover:text-blue-300 focus-within:outline-none transition-colors">
+                                            <span>Upload files</span>
+                                            <input id="file-upload" name="documents[]" type="file" multiple accept=".pdf,.docx,.txt,.md" class="sr-only" onchange="handleFileUpload(event)">
+                                        </label>
+                                        <span class="text-gray-400"> or drag and drop</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-2">PDF, DOCX, TXT, MD up to 10MB each</p>
+                                </div>
+
+                                <!-- File List -->
+                                <div id="uploaded-files" class="mt-4 space-y-2"></div>
+                            </div>
+
+                            <!-- Existing Documents (for editing) -->
+                            {% if assistant and documents is defined %}
+                                {% if documents %}
+                                <div class="existing-documents">
+                                    <h5 class="text-sm font-medium text-gray-300 mb-3">Current Documents</h5>
+                                    <div class="space-y-2">
+                                        {% for document in documents %}
+                                        <div class="flex items-center justify-between p-3 bg-gray-700/30 border border-gray-600/50 rounded-lg" data-document-id="{{ document.id }}">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center">
+                                                    {% if document.document_type == 'pdf' %}
+                                                    <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"></path>
+                                                    </svg>
+                                                    {% elif document.document_type in ['docx', 'doc'] %}
+                                                    <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"></path>
+                                                    </svg>
+                                                    {% else %}
+                                                    <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"></path>
+                                                    </svg>
+                                                    {% endif %}
+                                                </div>
+                                                <div>
+                                                    <div class="text-sm font-medium text-white">{{ document.name }}</div>
+                                                    <div class="text-xs text-gray-400">
+                                                        {{ document.original_filename }} • 
+                                                        {% if document.processing_status == 'completed' %}
+                                                            <span class="text-green-400">✓ Processed</span>
+                                                        {% elif document.processing_status == 'processing' %}
+                                                            <span class="text-yellow-400">⏳ Processing...</span>
+                                                        {% elif document.processing_status == 'failed' %}
+                                                            <span class="text-red-400">✗ Failed</span>
+                                                        {% else %}
+                                                            <span class="text-gray-400">⏸ Pending</span>
+                                                        {% endif %}
+                                                        {% if document.total_chunks > 0 %}
+                                                            • {{ document.processed_chunks }}/{{ document.total_chunks }} chunks
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center space-x-2">
+                                                <span class="text-xs text-gray-400">{{ (document.file_size / 1024) | round(1) }} KB</span>
+                                                <button type="button" onclick="removeDocument(event, '{{ document.id }}')" class="text-red-400 hover:text-red-300 text-sm">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endif %}
+
+                            <!-- Instructions -->
+                            <div class="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-blue-300">Document Tips</span>
+                                </div>
+                                <ul class="text-xs text-blue-200 space-y-1">
+                                    <li>• Upload manuals, FAQs, policies, and other reference documents</li>
+                                    <li>• Supported formats: PDF, Word documents, text files, and Markdown</li>
+                                    <li>• Documents are automatically processed and indexed for fast retrieval</li>
+                                    <li>• Each document is private to this assistant only</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 4: Call Management -->
             <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
                 <div class="px-6 py-4 bg-gradient-to-r from-green-500/10 to-teal-500/10 border-b border-gray-700/50">
                     <div class="flex items-center justify-between">
@@ -1010,99 +1206,29 @@
                 </div>
             </div>
 
-            <!-- Section 4: Tools Configuration -->
+            <!-- Section 4.5: Tools Configuration -->
             <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
-                <div class="px-6 py-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-b border-gray-700/50">
+                <div class="px-6 py-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-b border-gray-700/50">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
                                 <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                 </svg>
                             </div>
                             <div>
                                 <h3 class="text-lg font-semibold text-white">Tools Configuration</h3>
-                                <p class="text-gray-400 text-sm">Configure call ending and transfer capabilities</p>
+                                <p class="text-gray-400 text-sm">Enable assistant tools for enhanced call handling</p>
                             </div>
                         </div>
-                        <button type="button" onclick="toggleTools()" class="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition-colors">
+                        <button type="button" onclick="toggleTools()" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition-colors">
                             <span id="tools-toggle-text">Configure</span>
                         </button>
                     </div>
                 </div>
                 <div id="tools-configuration" class="hidden p-6">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <!-- End Call Tool -->
-                        <div class="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center space-x-3">
-                                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 3l1.5 1.5M21 21l-1.5-1.5M4.5 4.5l15 15"></path>
-                                    </svg>
-                                    <h4 class="text-base font-semibold text-white">End Call Tool</h4>
-                                </div>
-                                <input type="checkbox" name="end_call_enabled" id="end_call_enabled" onchange="toggleEndCallConfig()"
-                                    {% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('enabled', False) %}checked{% endif %}
-                                    class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-red-600 focus:ring-red-500 focus:ring-offset-gray-800">
-                            </div>
-                            <div id="end_call_config" class="space-y-3" {% if not assistant or not assistant.tools_settings or not assistant.tools_settings.get('end_call', {}).get('enabled', False) %}style="display: none;"{% endif %}>
-                                <div>
-                                    <label for="end_call_scenarios" class="block text-sm font-medium text-gray-300 mb-2">End Call Scenarios</label>
-                                    <textarea name="end_call_scenarios" id="end_call_scenarios" rows="2"
-                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                                        placeholder="Customer says goodbye, conversation complete, etc.">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('scenarios') %}{{ assistant.tools_settings.end_call.scenarios | join(', ') }}{% endif %}</textarea>
-                                    <p class="text-xs text-gray-400 mt-1">Comma-separated scenarios when the AI should end the call</p>
-                                </div>
-                                <div>
-                                    <label for="end_call_custom_message" class="block text-sm font-medium text-gray-300 mb-2">Custom End Call Message</label>
-                                    <input type="text" name="end_call_custom_message" id="end_call_custom_message"
-                                        value="{% if assistant and assistant.tools_settings and assistant.tools_settings.get('end_call', {}).get('custom_message') %}{{ assistant.tools_settings.end_call.custom_message }}{% endif %}"
-                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                                        placeholder="Thank you for calling. Goodbye!">
-                                    <p class="text-xs text-gray-400 mt-1">Message to say before ending the call</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Transfer Call Tool -->
-                        <div class="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center space-x-3">
-                                    <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                                    </svg>
-                                    <h4 class="text-base font-semibold text-white">Transfer Call Tool</h4>
-                                </div>
-                                <input type="checkbox" name="transfer_call_enabled" id="transfer_call_enabled" onchange="toggleTransferCallConfig()"
-                                    {% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('enabled', False) %}checked{% endif %}
-                                    class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-yellow-600 focus:ring-yellow-500 focus:ring-offset-gray-800">
-                            </div>
-                            <div id="transfer_call_config" class="space-y-3" {% if not assistant or not assistant.tools_settings or not assistant.tools_settings.get('transfer_call', {}).get('enabled', False) %}style="display: none;"{% endif %}>
-                                <div>
-                                    <label for="transfer_call_scenarios" class="block text-sm font-medium text-gray-300 mb-2">Transfer Call Scenarios</label>
-                                    <textarea name="transfer_call_scenarios" id="transfer_call_scenarios" rows="2"
-                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
-                                        placeholder="Customer needs human help, complex issue, escalation needed, etc.">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('scenarios') %}{{ assistant.tools_settings.transfer_call.scenarios | join(', ') }}{% endif %}</textarea>
-                                    <p class="text-xs text-gray-400 mt-1">Comma-separated scenarios when the AI should transfer the call</p>
-                                </div>
-                                <div>
-                                    <label for="transfer_call_numbers" class="block text-sm font-medium text-gray-300 mb-2">Transfer Phone Numbers</label>
-                                    <textarea name="transfer_call_numbers" id="transfer_call_numbers" rows="2"
-                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
-                                        placeholder="+1234567890, +0987654321">{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('transfer_numbers') %}{{ assistant.tools_settings.transfer_call.transfer_numbers | join(', ') }}{% endif %}</textarea>
-                                    <p class="text-xs text-gray-400 mt-1">Comma-separated phone numbers to transfer calls to</p>
-                                </div>
-                                <div>
-                                    <label for="transfer_call_custom_message" class="block text-sm font-medium text-gray-300 mb-2">Custom Transfer Message</label>
-                                    <input type="text" name="transfer_call_custom_message" id="transfer_call_custom_message"
-                                        value="{% if assistant and assistant.tools_settings and assistant.tools_settings.get('transfer_call', {}).get('custom_message') %}{{ assistant.tools_settings.transfer_call.custom_message }}{% endif %}"
-                                        class="block w-full px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-colors"
-                                        placeholder="Please hold while I transfer your call.">
-                                    <p class="text-xs text-gray-400 mt-1">Message to say before transferring the call</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    {% include "assistants/tools_section.html" %}
                 </div>
             </div>
 
@@ -2168,6 +2294,378 @@ function toggleTools() {
         section.classList.add('hidden');
         toggle.textContent = 'Configure';
     }
+}
+
+// RAG section toggle function
+function toggleRAG() {
+    const section = document.getElementById('rag-configuration');
+    const toggle = document.getElementById('rag-toggle-text');
+    if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        toggle.textContent = 'Collapse';
+    } else {
+        section.classList.add('hidden');
+        toggle.textContent = 'Configure';
+    }
+}
+
+// Toggle RAG settings based on enabled checkbox
+function toggleRAGSettings() {
+    const checkbox = document.getElementById('rag_enabled');
+    const settingsContainer = document.getElementById('rag-settings-container');
+    const uploadSection = document.getElementById('document-upload-section');
+    
+    if (checkbox.checked) {
+        settingsContainer.classList.remove('hidden');
+        uploadSection.classList.remove('hidden');
+    } else {
+        settingsContainer.classList.add('hidden');
+        uploadSection.classList.add('hidden');
+    }
+}
+
+// Toggle document upload interface
+function toggleDocumentUpload() {
+    const uploadInterface = document.getElementById('upload-interface');
+    const toggleButton = document.getElementById('upload-toggle-text');
+    
+    if (uploadInterface.classList.contains('hidden')) {
+        uploadInterface.classList.remove('hidden');
+        toggleButton.textContent = 'Hide Upload';
+    } else {
+        uploadInterface.classList.add('hidden');
+        toggleButton.textContent = 'Add Documents';
+    }
+}
+
+// Handle file upload
+function handleFileUpload(event) {
+    const files = event.target.files;
+    const fileList = document.getElementById('uploaded-files');
+    
+    // Clear existing files
+    fileList.innerHTML = '';
+    
+    // Add each file to the list
+    Array.from(files).forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'flex items-center justify-between p-3 bg-gray-700/30 border border-gray-600/50 rounded-lg';
+        fileItem.id = `file-item-${index}`;
+        
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'flex items-center space-x-3';
+        
+        const fileIcon = document.createElement('div');
+        fileIcon.className = 'w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center';
+        
+        // Get file icon based on type
+        let iconClass = 'text-gray-400';
+        if (file.type === 'application/pdf') {
+            iconClass = 'text-red-400';
+        } else if (file.type.includes('word')) {
+            iconClass = 'text-blue-400';
+        }
+        
+        fileIcon.innerHTML = `<svg class="w-4 h-4 ${iconClass}" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"></path>
+        </svg>`;
+        
+        const fileDetails = document.createElement('div');
+        fileDetails.innerHTML = `
+            <div class="text-sm font-medium text-white">${file.name}</div>
+            <div class="text-xs text-gray-400">${(file.size / 1024).toFixed(1)} KB</div>
+            <div class="text-xs text-blue-400 hidden" id="upload-status-${index}">Ready to upload...</div>
+        `;
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'flex items-center space-x-2';
+        
+        // Upload button (only show if assistant exists)
+        if (window.location.pathname.includes('/edit')) {
+            const uploadButton = document.createElement('button');
+            uploadButton.type = 'button';
+            uploadButton.className = 'px-2 py-1 text-xs text-green-300 bg-green-500/20 hover:bg-green-500/30 rounded border border-green-500/30 transition-colors';
+            uploadButton.onclick = () => uploadSingleFile(file, index);
+            uploadButton.innerHTML = '📤 Upload';
+            uploadButton.id = `upload-btn-${index}`;
+            actionsDiv.appendChild(uploadButton);
+        }
+        
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'text-red-400 hover:text-red-300 text-sm';
+        removeButton.onclick = () => removeUploadedFile(index);
+        removeButton.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+        </svg>`;
+        
+        actionsDiv.appendChild(removeButton);
+        
+        fileInfo.appendChild(fileIcon);
+        fileInfo.appendChild(fileDetails);
+        fileItem.appendChild(fileInfo);
+        fileItem.appendChild(actionsDiv);
+        fileList.appendChild(fileItem);
+    });
+    
+    // Show upload all button if we have files and assistant exists
+    if (files.length > 0 && window.location.pathname.includes('/edit')) {
+        showUploadAllButton();
+    }
+}
+
+// Upload a single file
+async function uploadSingleFile(file, index) {
+    const assistantId = getAssistantIdFromUrl();
+    if (!assistantId) {
+        alert('Please save the assistant first before uploading documents.');
+        return;
+    }
+    
+    const statusElement = document.getElementById(`upload-status-${index}`);
+    const uploadButton = document.getElementById(`upload-btn-${index}`);
+    
+    // Show status and disable button
+    statusElement.classList.remove('hidden');
+    statusElement.textContent = 'Uploading...';
+    statusElement.className = 'text-xs text-yellow-400';
+    uploadButton.disabled = true;
+    uploadButton.textContent = '⏳ Uploading...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', file.name);
+        
+        const response = await fetch(`/assistants/${assistantId}/documents/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusElement.textContent = '✅ Uploaded successfully!';
+            statusElement.className = 'text-xs text-green-400';
+            uploadButton.textContent = '✓ Uploaded';
+            uploadButton.className = 'px-2 py-1 text-xs text-green-300 bg-green-500/30 rounded border border-green-500/50';
+            
+            // Start checking processing status
+            if (result.document && result.document.id) {
+                checkProcessingStatus(result.document.id, index);
+            }
+        } else {
+            throw new Error(result.message || 'Upload failed');
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        statusElement.textContent = `❌ Upload failed: ${error.message}`;
+        statusElement.className = 'text-xs text-red-400';
+        uploadButton.disabled = false;
+        uploadButton.textContent = '📤 Retry';
+        uploadButton.className = 'px-2 py-1 text-xs text-orange-300 bg-orange-500/20 hover:bg-orange-500/30 rounded border border-orange-500/30 transition-colors';
+    }
+}
+
+// Upload all files
+async function uploadAllFiles() {
+    const fileInput = document.getElementById('file-upload');
+    const files = Array.from(fileInput.files);
+    
+    for (let i = 0; i < files.length; i++) {
+        const uploadButton = document.getElementById(`upload-btn-${i}`);
+        if (uploadButton && !uploadButton.disabled) {
+            await uploadSingleFile(files[i], i);
+            // Small delay between uploads
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+    
+    hideUploadAllButton();
+}
+
+// Check document processing status
+async function checkProcessingStatus(documentId, index) {
+    const assistantId = getAssistantIdFromUrl();
+    const statusElement = document.getElementById(`upload-status-${index}`);
+    
+    try {
+        const response = await fetch(`/assistants/${assistantId}/documents/${documentId}/status`);
+        const status = await response.json();
+        
+        if (status.processing_status === 'completed') {
+            statusElement.textContent = '🎉 Ready for use!';
+            statusElement.className = 'text-xs text-green-400';
+        } else if (status.processing_status === 'processing') {
+            const progress = status.progress_percentage || 0;
+            statusElement.textContent = `🔄 Processing... ${progress}%`;
+            statusElement.className = 'text-xs text-blue-400';
+            // Check again in 2 seconds
+            setTimeout(() => checkProcessingStatus(documentId, index), 2000);
+        } else if (status.processing_status === 'failed') {
+            statusElement.textContent = `❌ Processing failed: ${status.processing_error || 'Unknown error'}`;
+            statusElement.className = 'text-xs text-red-400';
+        }
+    } catch (error) {
+        console.error('Status check error:', error);
+    }
+}
+
+// Show upload all button
+function showUploadAllButton() {
+    const fileList = document.getElementById('uploaded-files');
+    let uploadAllButton = document.getElementById('upload-all-button');
+    
+    if (!uploadAllButton) {
+        uploadAllButton = document.createElement('div');
+        uploadAllButton.id = 'upload-all-button';
+        uploadAllButton.className = 'mt-4 text-center';
+        uploadAllButton.innerHTML = `
+            <button type="button" onclick="uploadAllFiles()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                📤 Upload All Documents
+            </button>
+        `;
+        fileList.parentNode.appendChild(uploadAllButton);
+    }
+}
+
+// Hide upload all button
+function hideUploadAllButton() {
+    const uploadAllButton = document.getElementById('upload-all-button');
+    if (uploadAllButton) {
+        uploadAllButton.remove();
+    }
+}
+
+// Get assistant ID from current URL
+function getAssistantIdFromUrl() {
+    const path = window.location.pathname;
+    const match = path.match(/\/assistants\/(\d+)/);
+    return match ? match[1] : null;
+}
+
+// Remove uploaded file
+function removeUploadedFile(index) {
+    const fileInput = document.getElementById('file-upload');
+    const dt = new DataTransfer();
+    const { files } = fileInput;
+    
+    for (let i = 0; i < files.length; i++) {
+        if (i !== index) {
+            dt.items.add(files[i]);
+        }
+    }
+    
+    fileInput.files = dt.files;
+    handleFileUpload({ target: fileInput });
+    
+    // Hide upload all button if no files left
+    if (dt.files.length === 0) {
+        hideUploadAllButton();
+    }
+}
+
+// Remove existing document (with AJAX call)
+async function removeDocument(event, documentId) {
+    if (!confirm('Are you sure you want to remove this document? This will also delete all processed chunks.')) {
+        return;
+    }
+    
+    const assistantId = getAssistantIdFromUrl();
+    if (!assistantId) {
+        alert('Unable to determine assistant ID');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/assistants/${assistantId}/documents/${documentId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Find the document container using the data attribute (most reliable)
+            let documentElement = document.querySelector(`[data-document-id="${documentId}"]`);
+            
+            // Fallback: try to find it using DOM traversal
+            if (!documentElement) {
+                const button = event.target.closest('button');
+                documentElement = button.closest('.existing-documents .flex, .space-y-2 > .flex');
+            }
+            
+            // Final fallback: traverse up the DOM tree
+            if (!documentElement) {
+                let current = event.target;
+                while (current && current.parentNode) {
+                    if (current.classList && current.classList.contains('flex') && 
+                        current.querySelector && current.querySelector('button')) {
+                        documentElement = current;
+                        break;
+                    }
+                    current = current.parentNode;
+                }
+            }
+            
+            if (documentElement) {
+                // Add a fade-out animation before removing
+                documentElement.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+                documentElement.style.opacity = '0';
+                documentElement.style.transform = 'translateX(100%)';
+                
+                // Remove after animation
+                setTimeout(() => {
+                    documentElement.remove();
+                }, 300);
+                
+                // Show success message
+                showNotification('Document removed successfully', 'success');
+            } else {
+                console.warn('Could not find document element to remove');
+                showNotification('Document removed from database but page needs refresh', 'warning');
+            }
+        } else {
+            throw new Error(result.message || 'Failed to remove document');
+        }
+    } catch (error) {
+        console.error('Remove document error:', error);
+        showNotification(`Failed to remove document: ${error.message}`, 'error');
+    }
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all transform translate-x-full`;
+    
+    if (type === 'success') {
+        notification.classList.add('bg-green-600', 'text-white');
+        notification.innerHTML = `✅ ${message}`;
+    } else if (type === 'error') {
+        notification.classList.add('bg-red-600', 'text-white');
+        notification.innerHTML = `❌ ${message}`;
+    } else {
+        notification.classList.add('bg-blue-600', 'text-white');
+        notification.innerHTML = `ℹ️ ${message}`;
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
 }
 </script>
 {% endblock %} 
