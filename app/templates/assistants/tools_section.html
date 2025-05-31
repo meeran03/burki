@@ -113,5 +113,55 @@ if (typeof toggleEndCallConfig === 'undefined') {
             transferCallCheckbox.addEventListener('change', toggleTransferCallConfig);
         }
     });
+
+    // Tools configuration toggle functions
+function toggleEndCallConfig() {
+    const checkbox = document.getElementById('end_call_enabled');
+    const config = document.getElementById('end_call_config');
+    if (checkbox.checked) {
+        config.style.display = 'block';
+    } else {
+        config.style.display = 'none';
+    }
+}
+
+function toggleTransferCallConfig() {
+    const checkbox = document.getElementById('transfer_call_enabled');
+    const config = document.getElementById('transfer_call_config');
+    if (checkbox.checked) {
+        config.style.display = 'block';
+    } else {
+        config.style.display = 'none';
+    }
+}
+
+// Add event listeners when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Tools configuration event listeners
+    const endCallCheckbox = document.getElementById('end_call_enabled');
+    const transferCallCheckbox = document.getElementById('transfer_call_enabled');
+    
+    if (endCallCheckbox) {
+        endCallCheckbox.addEventListener('change', toggleEndCallConfig);
+    }
+    
+    if (transferCallCheckbox) {
+        transferCallCheckbox.addEventListener('change', toggleTransferCallConfig);
+    }
+});
+
+// Tools section toggle function
+function toggleTools() {
+    const section = document.getElementById('tools-configuration');
+    const toggle = document.getElementById('tools-toggle-text');
+    if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        toggle.textContent = 'Collapse';
+    } else {
+        section.classList.add('hidden');
+        toggle.textContent = 'Configure';
+    }
+}
+
 }
 </script> 
