@@ -112,7 +112,10 @@ class RecordingService:
         """
         try:
             if not mulaw_data:
+                logger.debug(f"Empty audio data for call {self.call_sid}")
                 return None
+            
+            logger.debug(f"Converting {len(mulaw_data)} bytes of μ-law audio for call {self.call_sid}")
                 
             # Convert μ-law to 16-bit PCM using Python's built-in audioop
             pcm_data = audioop.ulaw2lin(mulaw_data, 2)  # 2 bytes per sample (16-bit)
@@ -129,10 +132,11 @@ class RecordingService:
             if self.format == "mp3" and audio_segment.frame_rate < 22050:
                 audio_segment = audio_segment.set_frame_rate(22050)
             
+            logger.debug(f"Successfully converted audio segment for call {self.call_sid}: {len(audio_segment)}ms")
             return audio_segment
             
         except Exception as e:
-            logger.error(f"Error converting μ-law to AudioSegment: {e}")
+            logger.error(f"Error converting μ-law to AudioSegment for call {self.call_sid}: {e} (data length: {len(mulaw_data) if mulaw_data else 0})")
             return None
 
     async def start_recording(self) -> bool:
@@ -224,17 +228,27 @@ class RecordingService:
             bool: True if audio was recorded successfully, False otherwise
         """
         if not self.is_recording or not self.should_record_user_audio:
+            if not self.is_recording:
+                logger.debug(f"Not recording user audio for call {self.call_sid}: recording not active")
+            if not self.should_record_user_audio:
+                logger.debug(f"Not recording user audio for call {self.call_sid}: user recording disabled")
             return False
 
         try:
+            logger.debug(f"Recording user audio for call {self.call_sid}: {len(audio_data)} bytes")
+            
             # Convert μ-law to AudioSegment
             audio_segment = self._convert_mulaw_to_audiosegment(audio_data)
             if audio_segment:
                 self.user_audio_segments.append(audio_segment)
+                logger.debug(f"Added user audio segment for call {self.call_sid}: total segments = {len(self.user_audio_segments)}")
                 
                 # Also add to mixed audio if enabled
                 if self.should_record_mixed_audio:
                     self.mixed_audio_segments.append(audio_segment)
+                    logger.debug(f"Added to mixed audio for call {self.call_sid}: total mixed segments = {len(self.mixed_audio_segments)}")
+            else:
+                logger.warning(f"Failed to convert user audio segment for call {self.call_sid}")
 
             return True
 
@@ -253,17 +267,27 @@ class RecordingService:
             bool: True if audio was recorded successfully, False otherwise
         """
         if not self.is_recording or not self.should_record_assistant_audio:
+            if not self.is_recording:
+                logger.debug(f"Not recording assistant audio for call {self.call_sid}: recording not active")
+            if not self.should_record_assistant_audio:
+                logger.debug(f"Not recording assistant audio for call {self.call_sid}: assistant recording disabled")
             return False
 
         try:
+            logger.debug(f"Recording assistant audio for call {self.call_sid}: {len(audio_data)} bytes")
+            
             # Convert μ-law to AudioSegment
             audio_segment = self._convert_mulaw_to_audiosegment(audio_data)
             if audio_segment:
                 self.assistant_audio_segments.append(audio_segment)
+                logger.debug(f"Added assistant audio segment for call {self.call_sid}: total segments = {len(self.assistant_audio_segments)}")
                 
                 # Also add to mixed audio if enabled
                 if self.should_record_mixed_audio:
                     self.mixed_audio_segments.append(audio_segment)
+                    logger.debug(f"Added to mixed audio for call {self.call_sid}: total mixed segments = {len(self.mixed_audio_segments)}")
+            else:
+                logger.warning(f"Failed to convert assistant audio segment for call {self.call_sid}")
 
             return True
 
@@ -282,32 +306,53 @@ class RecordingService:
             logger.error(f"S3 service not available for saving recordings for call {self.call_sid}")
             return {}
 
+        logger.info(f"Attempting to save recordings for call {self.call_sid}")
+        logger.info(f"Audio segments available: user={len(self.user_audio_segments)}, assistant={len(self.assistant_audio_segments)}, mixed={len(self.mixed_audio_segments)}")
+
         saved_files = {}
 
         try:
             # Save user audio
             if self.user_audio_segments and self.should_record_user_audio:
+                logger.info(f"Saving {len(self.user_audio_segments)} user audio segments for call {self.call_sid}")
                 file_info = await self._save_audio_segments(
                     self.user_audio_segments, "user"
                 )
                 if file_info:
                     saved_files["user"] = file_info
+                    logger.info(f"Successfully saved user recording for call {self.call_sid}")
+                else:
+                    logger.warning(f"Failed to save user recording for call {self.call_sid}")
+            else:
+                logger.info(f"Skipping user audio save for call {self.call_sid}: segments={len(self.user_audio_segments)}, enabled={self.should_record_user_audio}")
 
             # Save assistant audio
             if self.assistant_audio_segments and self.should_record_assistant_audio:
+                logger.info(f"Saving {len(self.assistant_audio_segments)} assistant audio segments for call {self.call_sid}")
                 file_info = await self._save_audio_segments(
                     self.assistant_audio_segments, "assistant"
                 )
                 if file_info:
                     saved_files["assistant"] = file_info
+                    logger.info(f"Successfully saved assistant recording for call {self.call_sid}")
+                else:
+                    logger.warning(f"Failed to save assistant recording for call {self.call_sid}")
+            else:
+                logger.info(f"Skipping assistant audio save for call {self.call_sid}: segments={len(self.assistant_audio_segments)}, enabled={self.should_record_assistant_audio}")
 
             # Save mixed audio
             if self.mixed_audio_segments and self.should_record_mixed_audio:
+                logger.info(f"Saving {len(self.mixed_audio_segments)} mixed audio segments for call {self.call_sid}")
                 file_info = await self._save_audio_segments(
                     self.mixed_audio_segments, "mixed"
                 )
                 if file_info:
                     saved_files["mixed"] = file_info
+                    logger.info(f"Successfully saved mixed recording for call {self.call_sid}")
+                else:
+                    logger.warning(f"Failed to save mixed recording for call {self.call_sid}")
+            else:
+                logger.info(f"Skipping mixed audio save for call {self.call_sid}: segments={len(self.mixed_audio_segments)}, enabled={self.should_record_mixed_audio}")
 
             logger.info(f"Saved {len(saved_files)} recordings to S3 for call {self.call_sid}")
 

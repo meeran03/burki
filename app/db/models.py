@@ -451,6 +451,12 @@ class Call(Base):
     transcripts = relationship(
         "Transcript", back_populates="call", cascade="all, delete-orphan"
     )
+    chat_messages = relationship(
+        "ChatMessage", back_populates="call", cascade="all, delete-orphan"
+    )
+    webhook_logs = relationship(
+        "WebhookLog", back_populates="call", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return (
@@ -888,6 +894,110 @@ class DocumentChunk(Base):
     def get_text_search_field():
         """Return the name of the text search field for PostgresSearcher."""
         return "content"
+
+
+class ChatMessage(Base):
+    """
+    ChatMessage model represents individual messages in the conversation history.
+    This stores the actual LLM conversation flow (system, user, assistant messages)
+    separate from transcripts which are the raw speech-to-text output.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    
+    # Message content and metadata
+    role = Column(String(20), nullable=False, index=True)  # system, user, assistant
+    content = Column(Text, nullable=False)  # The message content
+    message_index = Column(Integer, nullable=False)  # Order within the conversation
+    
+    # Message timing
+    timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    
+    # LLM provider information
+    llm_provider = Column(String(50), nullable=True)  # Which LLM provider generated this (for assistant messages)
+    llm_model = Column(String(100), nullable=True)  # Which model was used (for assistant messages)
+    
+    # Token usage and costs (for assistant messages)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    
+    # Additional metadata
+    message_metadata = Column(JSON, nullable=True, default=lambda: {})
+
+    # Relationships
+    call = relationship("Call", back_populates="chat_messages")
+
+    # Add unique constraint for message within call
+    __table_args__ = (
+        Index('idx_call_message_index', 'call_id', 'message_index', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<ChatMessage(id={self.id}, call_id={self.call_id}, role='{self.role}', index={self.message_index})>"
+
+
+class WebhookLog(Base):
+    """
+    WebhookLog model represents webhook delivery attempts and their results.
+    """
+
+    __tablename__ = "webhook_logs"
+
+    id = Column(Integer, primary_key=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False, index=True)
+    
+    # Webhook details
+    webhook_url = Column(String(1000), nullable=False)
+    webhook_type = Column(String(50), nullable=False, index=True)  # status-update, end-of-call-report
+    
+    # Request details
+    request_payload = Column(JSON, nullable=False)  # The payload that was sent
+    request_headers = Column(JSON, nullable=True)  # Headers sent with the request
+    
+    # Response details
+    response_status_code = Column(Integer, nullable=True)  # HTTP status code
+    response_body = Column(Text, nullable=True)  # Response body (truncated if too long)
+    response_headers = Column(JSON, nullable=True)  # Response headers
+    
+    # Timing and status
+    attempted_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    response_time_ms = Column(Integer, nullable=True)  # Response time in milliseconds
+    success = Column(Boolean, nullable=False, default=False)  # Whether the webhook was successful
+    
+    # Error information
+    error_message = Column(Text, nullable=True)  # Error message if the webhook failed
+    retry_count = Column(Integer, nullable=False, default=0)  # Number of retries attempted
+    
+    # Additional metadata
+    webhook_metadata = Column(JSON, nullable=True, default=lambda: {})
+
+    # Relationships
+    call = relationship("Call", back_populates="webhook_logs")
+    assistant = relationship("Assistant")
+
+    def __repr__(self):
+        return f"<WebhookLog(id={self.id}, call_id={self.call_id}, type='{self.webhook_type}', success={self.success})>"
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the webhook attempt."""
+        return {
+            "id": self.id,
+            "call_id": self.call_id,
+            "assistant_id": self.assistant_id,
+            "webhook_url": self.webhook_url,
+            "webhook_type": self.webhook_type,
+            "success": self.success,
+            "response_status_code": self.response_status_code,
+            "response_time_ms": self.response_time_ms,
+            "attempted_at": self.attempted_at.isoformat() if self.attempted_at else None,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+        }
 
 
 # Update existing models to include document relationships
