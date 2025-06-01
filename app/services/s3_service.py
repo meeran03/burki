@@ -79,17 +79,17 @@ class S3Service:
         Upload audio file to S3.
 
         Args:
-            audio_data: Audio data as bytes
+            audio_data: Raw audio data
             call_sid: Call SID for organizing files
             recording_type: Type of recording (user, assistant, mixed)
             format: Audio format (mp3, wav)
-            metadata: Additional metadata to store with the file
+            metadata: Optional metadata dictionary
 
         Returns:
             Tuple[str, str]: S3 key and public URL
         """
         try:
-            # Generate S3 key with organized structure
+            # Generate unique filename
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             s3_key = f"recordings/{call_sid}/{recording_type}_{timestamp}.{format}"
 
@@ -107,15 +107,16 @@ class S3Service:
             # Determine content type
             content_type = "audio/mpeg" if format == "mp3" else "audio/wav"
 
-            # Upload to S3 in a thread to avoid blocking
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                self._upload_file_sync,
-                audio_data,
-                s3_key,
-                content_type,
-                upload_metadata,
+            # Upload directly to S3 without run_in_executor
+            logger.info(f"Uploading audio file to S3: {s3_key} ({len(audio_data)} bytes)")
+            
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=audio_data,
+                ContentType=content_type,
+                Metadata=upload_metadata,
+                ServerSideEncryption='AES256',  # Enable server-side encryption
             )
 
             # Generate public URL
@@ -127,25 +128,6 @@ class S3Service:
         except Exception as e:
             logger.error(f"Error uploading audio file to S3: {e}")
             raise
-
-    def _upload_file_sync(
-        self,
-        audio_data: bytes,
-        s3_key: str,
-        content_type: str,
-        metadata: Dict[str, str],
-    ) -> None:
-        """
-        Synchronous upload method to be run in executor.
-        """
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=s3_key,
-            Body=audio_data,
-            ContentType=content_type,
-            Metadata=metadata,
-            ServerSideEncryption='AES256',  # Enable server-side encryption
-        )
 
     async def download_audio_file(self, s3_key: str) -> Optional[bytes]:
         """
@@ -617,4 +599,17 @@ class S3Service:
             metadata = await self.get_file_metadata(s3_key)
             return metadata is not None
         except Exception:
-            return False 
+            return False
+
+    def _upload_file_sync(self, file_data: bytes, s3_key: str, content_type: str, metadata: Dict[str, str]) -> None:
+        """
+        Synchronous file upload method to be run in executor.
+        """
+        self.s3_client.put_object(
+            Bucket=self.bucket_name,
+            Key=s3_key,
+            Body=file_data,
+            ContentType=content_type,
+            Metadata=metadata,
+            ServerSideEncryption='AES256',
+        ) 
