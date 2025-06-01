@@ -150,6 +150,16 @@ class CallHandler:
                 "Are you still there? I'm here to help if you need anything."
             )
 
+        # Check if this is an outbound call and extract agenda
+        is_outbound = metadata and metadata.get("outbound", False)
+        agenda = None
+        custom_welcome_message = None
+        
+        if is_outbound:
+            agenda = metadata.get("agenda")
+            custom_welcome_message = metadata.get("custom_welcome_message")
+            logger.info(f"Starting outbound call {call_sid} with agenda: {agenda}")
+
         # Create a dedicated LLM service instance for this call
         # The new multi-provider LLMService handles configuration through the assistant object
         self.active_calls[call_sid].llm_service = LLMService(
@@ -158,6 +168,21 @@ class CallHandler:
             from_number=from_number,
             assistant=assistant,
         )
+
+        # Inject agenda into conversation history for outbound calls
+        if is_outbound and agenda:
+            # Add the agenda as a system message after the initial system prompt
+            # This tells the assistant what the purpose of the call is
+            agenda_message = {
+                "role": "system", 
+                "content": f"CALL AGENDA: {agenda}. This is the purpose of your outbound call. Start the conversation by addressing this agenda professionally and naturally."
+            }
+            
+            # Insert agenda after the system prompt (index 1)
+            llm_service = self.active_calls[call_sid].llm_service
+            if len(llm_service.conversation_history) > 0:
+                llm_service.conversation_history.insert(1, agenda_message)
+                logger.info(f"Injected agenda into conversation history for call {call_sid}")
 
         # Get Deepgram configuration from assistant
         deepgram_api_key = None
@@ -215,18 +240,16 @@ class CallHandler:
             metadata={"call_sid": call_sid},
         )
 
-        # Get welcome message first to reduce latency
-        welcome_message = (
-            "Hello! I'm your AI assistant. How can I help you today?<flush/>"
-        )
-        if (
-            assistant
-            and assistant.llm_settings
-            and "welcome_message" in assistant.llm_settings
-        ):
-            welcome_message = (
-                assistant.llm_settings.get("welcome_message") + "<flush/>"
-            )
+        # Determine the welcome message to use
+        welcome_message = "Hello! I'm your AI assistant. How can I help you today?<flush/>"
+        
+        # Use custom welcome message for outbound calls if provided
+        if is_outbound and custom_welcome_message:
+            welcome_message = custom_welcome_message + "<flush/>"
+            logger.info(f"Using custom welcome message for outbound call {call_sid}")
+        # Fallback to assistant's default welcome message
+        elif (assistant and assistant.llm_settings and "welcome_message" in assistant.llm_settings):
+            welcome_message = assistant.llm_settings.get("welcome_message") + "<flush/>"
 
         # Send welcome message immediately for faster response
         await self.active_calls[call_sid].tts_service.process_text(
@@ -237,7 +260,8 @@ class CallHandler:
         # Start non-critical services in background for better latency
         asyncio.create_task(self._start_background_services(call_sid, metadata, assistant, websocket))
 
-        logger.info(f"Started handling call {call_sid} with optimized initialization")
+        call_type = "outbound" if is_outbound else "inbound"
+        logger.info(f"Started handling {call_type} call {call_sid} with optimized initialization")
 
     async def _start_background_services(
         self, 
