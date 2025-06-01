@@ -633,7 +633,267 @@
         </div>
         {% endif %}
         </div>
+
+    <!-- LLM Conversation History -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-white flex items-center">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center mr-3">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                LLM Conversation History
+            </h3>
+            <div class="flex items-center space-x-3 text-sm text-gray-400">
+                <span>{{ chat_stats.total_messages }} messages</span>
+                <div class="w-px h-4 bg-gray-600"></div>
+                <span>{{ chat_stats.total_tokens }} tokens</span>
+            </div>
+        </div>
+
+        {% if chat_messages %}
+        <!-- Chat Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                <div class="text-blue-400 text-xl font-bold">{{ chat_stats.system_messages }}</div>
+                <div class="text-blue-300 text-xs">System</div>
+            </div>
+            <div class="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                <div class="text-green-400 text-xl font-bold">{{ chat_stats.user_messages }}</div>
+                <div class="text-green-300 text-xs">User</div>
+            </div>
+            <div class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
+                <div class="text-purple-400 text-xl font-bold">{{ chat_stats.assistant_messages }}</div>
+                <div class="text-purple-300 text-xs">Assistant</div>
+            </div>
+            <div class="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+                <div class="text-orange-400 text-xl font-bold">{{ chat_stats.total_tokens }}</div>
+                <div class="text-orange-300 text-xs">Total Tokens</div>
+            </div>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="space-y-4 max-h-96 overflow-y-auto pr-2">
+            {% for message in chat_messages %}
+            <div class="chat-message-item p-4 rounded-lg 
+                {% if message.role == 'system' %}bg-blue-500/10 border border-blue-500/20{% elif message.role == 'user' %}bg-green-500/10 border border-green-500/20{% else %}bg-purple-500/10 border border-purple-500/20{% endif %}">
+                
+                <!-- Message Header -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center space-x-2">
+                        {% if message.role == 'system' %}
+                        <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </div>
+                        <span class="text-blue-300 font-medium text-sm">System</span>
+                        {% elif message.role == 'user' %}
+                        <div class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                        </div>
+                        <span class="text-green-300 font-medium text-sm">User</span>
+                        {% else %}
+                        <div class="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center">
+                            <span class="text-white font-bold text-xs">ب</span>
+                        </div>
+                        <span class="text-purple-300 font-medium text-sm">Assistant</span>
+                        {% endif %}
+                        
+                        <div class="text-xs text-gray-500">#{{ message.message_index + 1 }}</div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3 text-xs text-gray-500">
+                        <span>{{ message.timestamp.strftime('%H:%M:%S') if message.timestamp else 'N/A' }}</span>
+                        {% if message.llm_provider %}
+                        <span class="px-2 py-1 bg-gray-700 rounded text-xs">{{ message.llm_provider }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Message Content -->
+                <div class="text-gray-200 text-sm leading-relaxed mb-3">
+                    {{ message.content }}
+                </div>
+                
+                <!-- Token Usage (for assistant messages) -->
+                {% if message.role == 'assistant' and message.total_tokens %}
+                <div class="flex items-center space-x-4 text-xs text-gray-500 border-t border-gray-600/50 pt-2">
+                    {% if message.llm_model %}
+                    <span class="text-gray-400">{{ message.llm_model }}</span>
+                    {% endif %}
+                    {% if message.prompt_tokens %}
+                    <span>Prompt: {{ message.prompt_tokens }}</span>
+                    {% endif %}
+                    {% if message.completion_tokens %}
+                    <span>Completion: {{ message.completion_tokens }}</span>
+                    {% endif %}
+                    <span class="font-medium">Total: {{ message.total_tokens }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-12">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-500/20 to-indigo-500/20 flex items-center justify-center">
+                <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                </svg>
+            </div>
+            <h4 class="text-lg font-medium text-white mb-2">No LLM Conversation Data</h4>
+            <p class="text-gray-400">LLM conversation history will appear here when available</p>
+        </div>
+        {% endif %}
     </div>
+
+    <!-- Webhook Delivery Logs -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-white flex items-center">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center mr-3">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                    </svg>
+                </div>
+                Webhook Delivery Logs
+            </h3>
+            <div class="flex items-center space-x-3 text-sm text-gray-400">
+                <span>{{ webhook_stats.total_attempts }} attempts</span>
+                <div class="w-px h-4 bg-gray-600"></div>
+                <span>{{ webhook_stats.successful_attempts }}/{{ webhook_stats.total_attempts }} success</span>
+            </div>
+        </div>
+
+        {% if webhook_logs %}
+        <!-- Webhook Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                <div class="text-green-400 text-xl font-bold">{{ webhook_stats.successful_attempts }}</div>
+                <div class="text-green-300 text-xs">Successful</div>
+            </div>
+            <div class="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                <div class="text-red-400 text-xl font-bold">{{ webhook_stats.failed_attempts }}</div>
+                <div class="text-red-300 text-xs">Failed</div>
+            </div>
+            <div class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                <div class="text-blue-400 text-xl font-bold">{{ "%.0f"|format(webhook_stats.avg_response_time) }}ms</div>
+                <div class="text-blue-300 text-xs">Avg Response</div>
+            </div>
+            <div class="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
+                <div class="text-purple-400 text-xl font-bold">{{ webhook_stats.webhook_types|length }}</div>
+                <div class="text-purple-300 text-xs">Types</div>
+            </div>
+        </div>
+
+        <!-- Webhook Attempts -->
+        <div class="space-y-3 max-h-96 overflow-y-auto pr-2">
+            {% for webhook in webhook_logs %}
+            <div class="webhook-log-item p-4 rounded-lg {% if webhook.success %}bg-green-500/10 border border-green-500/20{% else %}bg-red-500/10 border border-red-500/20{% endif %}">
+                
+                <!-- Webhook Header -->
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-3">
+                        {% if webhook.success %}
+                        <div class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        {% else %}
+                        <div class="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </div>
+                        {% endif %}
+                        
+                        <div>
+                            <div class="text-sm font-medium text-white">{{ webhook.webhook_type|title }}</div>
+                            <div class="text-xs text-gray-400">{{ webhook.webhook_url|truncate(50) }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-right">
+                        <div class="text-xs text-gray-500">{{ webhook.attempted_at.strftime('%H:%M:%S') if webhook.attempted_at else 'N/A' }}</div>
+                        {% if webhook.response_time_ms %}
+                        <div class="text-xs text-gray-400">{{ webhook.response_time_ms }}ms</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Response Details -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div>
+                        <div class="text-gray-400 mb-1">Response</div>
+                        {% if webhook.response_status_code %}
+                        <div class="flex items-center space-x-2">
+                            <span class="px-2 py-1 rounded {% if webhook.response_status_code < 300 %}bg-green-600{% elif webhook.response_status_code < 400 %}bg-yellow-600{% else %}bg-red-600{% endif %} text-white">
+                                {{ webhook.response_status_code }}
+                            </span>
+                            {% if webhook.retry_count > 0 %}
+                            <span class="text-gray-500">{{ webhook.retry_count }} retries</span>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <span class="text-gray-500">No response</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <div class="text-gray-400 mb-1">Error</div>
+                        {% if webhook.error_message %}
+                        <div class="text-red-400 truncate">{{ webhook.error_message|truncate(40) }}</div>
+                        {% else %}
+                        <span class="text-gray-500">None</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Expandable Details -->
+                <div class="mt-3">
+                    <button onclick="toggleWebhookDetails({{ webhook.id }})" class="text-xs text-blue-400 hover:text-blue-300">
+                        View Details
+                    </button>
+                    
+                    <div id="webhook-details-{{ webhook.id }}" class="hidden mt-3 p-3 bg-gray-900/50 rounded border border-gray-600/30">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <div class="text-gray-400 mb-2">Request Payload</div>
+                                <pre class="text-gray-300 bg-gray-800 p-2 rounded text-xs overflow-x-auto">{{ webhook.request_payload|tojson(indent=2) if webhook.request_payload else 'None' }}</pre>
+                            </div>
+                            
+                            <div>
+                                <div class="text-gray-400 mb-2">Response Body</div>
+                                <pre class="text-gray-300 bg-gray-800 p-2 rounded text-xs overflow-x-auto">{{ webhook.response_body|truncate(200) if webhook.response_body else 'None' }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-12">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/20 flex items-center justify-center">
+                <svg class="w-8 h-8 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                </svg>
+            </div>
+            <h4 class="text-lg font-medium text-white mb-2">No Webhook Logs</h4>
+            <p class="text-gray-400">Webhook delivery attempts will appear here when configured</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 
 <!-- Enhanced JavaScript for Analytics -->
 <script type="application/json" id="call-data">
@@ -1009,6 +1269,14 @@ window.generateReport = function() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+// Webhook details toggle function
+window.toggleWebhookDetails = function(webhookId) {
+    const detailsElement = document.getElementById(`webhook-details-${webhookId}`);
+    if (detailsElement) {
+        detailsElement.classList.toggle('hidden');
+    }
 }
 
 // Auto-scroll timeline to latest interaction

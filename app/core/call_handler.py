@@ -376,53 +376,70 @@ class CallHandler:
                     logger.info(f"Recordings saved to S3 for call {call_sid}: {list(saved_files.keys())}")
                     
                     # Create database records for each saved recording
-                    try:
-                        from app.services.call_service import CallService
+                    # Use a separate async task to avoid event loop issues
+                    async def create_database_records():
+                        try:
+                            logger.info(f"Starting database record creation for {len(saved_files)} recordings")
+                            from app.services.call_service import CallService
+                            logger.info(f"Successfully imported CallService")
+                            
+                            for recording_type, file_info in saved_files.items():
+                                logger.info(f"Creating database record for {recording_type} recording with S3 key: {file_info['s3_key']}")
+                                
+                                recording = await CallService.create_s3_recording(
+                                    call_sid=call_sid,
+                                    s3_key=file_info["s3_key"],
+                                    s3_url=file_info["s3_url"],
+                                    duration=file_info["duration"],
+                                    file_size=file_info["file_size"],
+                                    format=file_info["format"],
+                                    sample_rate=file_info["sample_rate"],
+                                    channels=file_info["channels"],
+                                    recording_type=recording_type,
+                                    metadata=file_info,
+                                )
+                                logger.info(f"Created database record for {recording_type} recording: {file_info['s3_key']} (ID: {recording.id if recording else None})")
+                            
+                            logger.info(f"Successfully created all {len(saved_files)} database records for call {call_sid}")
                         
-                        for recording_type, file_info in saved_files.items():
-                            await CallService.create_s3_recording(
-                                call_sid=call_sid,
-                                s3_key=file_info["s3_key"],
-                                s3_url=file_info["s3_url"],
-                                duration=file_info["duration"],
-                                file_size=file_info["file_size"],
-                                format=file_info["format"],
-                                sample_rate=file_info["sample_rate"],
-                                channels=file_info["channels"],
-                                recording_type=recording_type,
-                                metadata=file_info,
-                            )
-                            logger.info(f"Created database record for {recording_type} recording: {file_info['s3_key']}")
+                        except Exception as db_error:
+                            logger.error(f"Error creating database records for recordings: {db_error}")
+                            import traceback
+                            logger.error(f"Full traceback: {traceback.format_exc()}")
                     
-                    except Exception as db_error:
-                        logger.error(f"Error creating database records for recordings: {db_error}")
+                    # Schedule the database operations as a separate task to avoid event loop conflicts
+                    asyncio.create_task(create_database_records())
                     
                     # Record billing usage
-                    try:
-                        # Get the call to record billing
-                        call = await CallService.get_call_by_sid(call_sid)
-                        if call:
-                            # Import BillingService here to avoid circular imports
-                            from app.services.billing_service import BillingService
-                            # Run billing as background task to reduce latency
-                            asyncio.create_task(BillingService.record_call_usage(call.id))
-                            logger.info(f"Scheduled billing usage recording for call {call.id}")
-                    except Exception as billing_error:
-                        logger.error(f"Error scheduling billing usage for call {call_sid}: {billing_error}")
+                    async def handle_billing():
+                        try:
+                            # Get the call to record billing
+                            call = await CallService.get_call_by_sid(call_sid)
+                            if call:
+                                # Import BillingService here to avoid circular imports
+                                from app.services.billing_service import BillingService
+                                # Run billing as background task to reduce latency
+                                asyncio.create_task(BillingService.record_call_usage(call.id))
+                                logger.info(f"Scheduled billing usage recording for call {call.id}")
+                        except Exception as billing_error:
+                            logger.error(f"Error scheduling billing usage for call {call_sid}: {billing_error}")
+                    
+                    asyncio.create_task(handle_billing())
                     
                     # Send webhook when recordings are saved
                     if assistant and assistant.webhook_url:
-                        try:
-                            # Send end-of-call webhook with recording information
-                            asyncio.create_task(
-                                WebhookService.send_end_of_call_webhook_with_recordings(
+                        async def handle_webhook():
+                            try:
+                                # Send end-of-call webhook with recording information
+                                await WebhookService.send_end_of_call_webhook_with_recordings(
                                     call_sid=call_sid,
                                     saved_files=saved_files
                                 )
-                            )
-                            logger.info(f"Scheduled end-of-call webhook with recordings for call {call_sid}")
-                        except Exception as e:
-                            logger.error(f"Error scheduling webhook for call {call_sid}: {e}")
+                                logger.info(f"Sent end-of-call webhook with recordings for call {call_sid}")
+                            except Exception as e:
+                                logger.error(f"Error sending webhook for call {call_sid}: {e}")
+                        
+                        asyncio.create_task(handle_webhook())
                 
                 recording_service.set_callbacks(
                     recording_started_callback=recording_started_callback,
@@ -732,6 +749,28 @@ class CallHandler:
                 # Clear the pending LLM task as it's complete
                 if call_sid in self.active_calls:
                     self.active_calls[call_sid].pending_llm_task = None
+                
+                # Store conversation history in database
+                if call_sid in self.active_calls and self.active_calls[call_sid].llm_service:
+                    llm_service = self.active_calls[call_sid].llm_service
+                    conversation_history = llm_service.get_conversation_history()
+                    assistant = self.active_calls[call_sid].assistant
+                    
+                    # Get current LLM provider info
+                    llm_provider = llm_service._get_current_provider_name() if hasattr(llm_service, '_get_current_provider_name') else None
+                    llm_model = None
+                    if assistant and assistant.llm_provider_config:
+                        llm_model = assistant.llm_provider_config.get("model")
+                    
+                    # Store conversation history asynchronously
+                    asyncio.create_task(
+                        CallService.store_conversation_history(
+                            call_sid=call_sid,
+                            conversation_history=conversation_history,
+                            llm_provider=llm_provider,
+                            llm_model=llm_model
+                        )
+                    )
                 
                 # Store assistant response in database asynchronously with timing
                 if response:
@@ -1238,21 +1277,67 @@ class CallHandler:
                 logger.error(f"Error scheduling call status update for {call_sid}: {e}", exc_info=True)
 
             # Send end-of-call webhook if assistant and webhook URL are configured
-            # Only send if recordings are not enabled, otherwise webhook is sent when recordings are saved
+            # Always send webhook with a fallback to ensure it's delivered
             assistant = self.active_calls[call_sid].assistant
             if assistant and assistant.webhook_url:
-                recording_enabled = (assistant.recording_settings and 
-                                   assistant.recording_settings.get('enabled', False))
-                
-                if not recording_enabled:
-                    try:
-                        # Send immediate webhook since no recordings to wait for
-                        asyncio.create_task(
-                            WebhookService.send_end_of_call_webhook_immediate(call_sid=call_sid)
-                        )
-                        logger.info(f"Scheduled immediate end-of-call webhook for call {call_sid} (no recordings)")
-                    except Exception as e:
-                        logger.error(f"Error scheduling end-of-call webhook for call {call_sid}: {e}")
+                try:
+                    # Schedule immediate webhook (will be sent if no recordings, or as fallback)
+                    asyncio.create_task(
+                        WebhookService.send_end_of_call_webhook_immediate(call_sid=call_sid)
+                    )
+                    logger.info(f"Scheduled end-of-call webhook for call {call_sid}")
+                    
+                    # If recordings are enabled, also try to send with recordings after a delay
+                    recording_enabled = (assistant.recording_settings and 
+                                       assistant.recording_settings.get('enabled', False))
+                    
+                    if recording_enabled:
+                        async def delayed_webhook_with_recordings():
+                            """Try to send webhook with recordings after 30 seconds."""
+                            await asyncio.sleep(30)  # Wait for recordings to complete
+                            
+                            # Check if recordings were created and send enhanced webhook
+                            try:
+                                from app.db.database import get_db
+                                from app.db.models import Recording
+                                
+                                # Check if any recordings were created for this call
+                                db = next(get_db())
+                                call_obj = await CallService.get_call_by_sid(call_sid)
+                                if call_obj:
+                                    recordings = db.query(Recording).filter(Recording.call_id == call_obj.id).all()
+                                    if recordings:
+                                        logger.info(f"Found {len(recordings)} recordings for call {call_sid}, sending enhanced webhook")
+                                        # Create a saved_files dict for the enhanced webhook
+                                        saved_files = {}
+                                        for recording in recordings:
+                                            saved_files[recording.recording_type] = {
+                                                "s3_key": recording.s3_key,
+                                                "s3_url": recording.s3_url,
+                                                "duration": recording.duration,
+                                                "file_size": recording.file_size,
+                                                "format": recording.format,
+                                                "sample_rate": recording.sample_rate,
+                                                "channels": recording.channels,
+                                            }
+                                        
+                                        # Send end-of-call webhook with recording information
+                                        await WebhookService.send_end_of_call_webhook_with_recordings(
+                                            call_sid=call_sid,
+                                            saved_files=saved_files
+                                        )
+                                        logger.info(f"Sent enhanced webhook with {len(recordings)} recordings for call {call_sid}")
+                                    else:
+                                        logger.warning(f"No recordings found for call {call_sid} after 30 seconds")
+                                db.close()
+                            except Exception as e:
+                                logger.error(f"Error in delayed webhook with recordings for call {call_sid}: {e}")
+                        
+                        asyncio.create_task(delayed_webhook_with_recordings())
+                        logger.info(f"Scheduled delayed webhook check for recordings for call {call_sid}")
+                        
+                except Exception as e:
+                    logger.error(f"Error scheduling end-of-call webhook for call {call_sid}: {e}")
 
             # Clean up call state - save a reference for logging before deletion
             call_state = self.active_calls.get(call_sid)

@@ -7,7 +7,7 @@ from datetime import datetime
 import httpx
 from openai import AsyncOpenAI
 
-from app.db.models import Call, Assistant, Transcript, Recording
+from app.db.models import Call, Assistant, Transcript, Recording, WebhookLog
 from app.services.call_service import CallService
 from app.utils.url_utils import get_server_base_url
 
@@ -55,6 +55,7 @@ class WebhookService:
             logger.debug(f"No webhook URL configured for assistant {assistant.id}")
             return True  # Not an error if no webhook is configured
 
+        start_time = datetime.now()
         try:
             payload = {
                 "message": {
@@ -81,7 +82,28 @@ class WebhookService:
                     headers={"Content-Type": "application/json"}
                 )
                 
-                if response.status_code in [200, 201, 202]:
+                # Calculate response time
+                response_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                
+                success = response.status_code in [200, 201, 202]
+                response_headers = dict(response.headers) if response.headers else None
+                
+                # Log the webhook attempt
+                await WebhookService.log_webhook_attempt(
+                    call_id=call.id,
+                    assistant_id=assistant.id,
+                    webhook_url=assistant.webhook_url,
+                    webhook_type="status-update",
+                    request_payload=payload,
+                    response_status_code=response.status_code,
+                    response_body=response.text,
+                    response_headers=response_headers,
+                    response_time_ms=response_time_ms,
+                    success=success,
+                    metadata={"status": status}
+                )
+                
+                if success:
                     logger.info(f"Status update webhook sent successfully for call {call.call_sid}")
                     return True
                 else:
@@ -91,6 +113,22 @@ class WebhookService:
                     return False
 
         except Exception as e:
+            # Calculate response time even for errors
+            response_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            
+            # Log the failed webhook attempt
+            await WebhookService.log_webhook_attempt(
+                call_id=call.id,
+                assistant_id=assistant.id,
+                webhook_url=assistant.webhook_url,
+                webhook_type="status-update",
+                request_payload=payload,
+                response_time_ms=response_time_ms,
+                success=False,
+                error_message=str(e),
+                metadata={"status": status}
+            )
+            
             logger.error(f"Error sending status update webhook for call {call.call_sid}: {e}")
             return False
 
@@ -166,6 +204,7 @@ class WebhookService:
                     }
                 }
 
+                start_time = datetime.now()
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(
                         assistant.webhook_url,
@@ -173,7 +212,32 @@ class WebhookService:
                         headers={"Content-Type": "application/json"}
                     )
                     
-                    if response.status_code in [200, 201, 202]:
+                    # Calculate response time
+                    response_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                    
+                    success = response.status_code in [200, 201, 202]
+                    response_headers = dict(response.headers) if response.headers else None
+                    
+                    # Log the webhook attempt
+                    await WebhookService.log_webhook_attempt(
+                        call_id=call.id,
+                        assistant_id=assistant.id,
+                        webhook_url=assistant.webhook_url,
+                        webhook_type="end-of-call-report",
+                        request_payload=payload,
+                        response_status_code=response.status_code,
+                        response_body=response.text,
+                        response_headers=response_headers,
+                        response_time_ms=response_time_ms,
+                        success=success,
+                        metadata={
+                            "ended_reason": ended_reason,
+                            "duration_seconds": duration_seconds,
+                            "recording_url": recording_url
+                        }
+                    )
+                    
+                    if success:
                         logger.info(f"End-of-call webhook sent successfully for call {call.call_sid}")
                         return True
                     else:
@@ -185,6 +249,28 @@ class WebhookService:
                         return False
 
             except Exception as e:
+                # Calculate response time for errors if we have a start_time
+                response_time_ms = None
+                if 'start_time' in locals():
+                    response_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+                
+                # Log the failed webhook attempt if we have the payload
+                if 'payload' in locals():
+                    await WebhookService.log_webhook_attempt(
+                        call_id=call.id,
+                        assistant_id=assistant.id,
+                        webhook_url=assistant.webhook_url,
+                        webhook_type="end-of-call-report",
+                        request_payload=payload,
+                        response_time_ms=response_time_ms,
+                        success=False,
+                        error_message=str(e),
+                        metadata={
+                            "ended_reason": ended_reason,
+                            "recording_url": recording_url
+                        }
+                    )
+                
                 logger.error(f"Error sending end-of-call webhook for call {call.call_sid}: {e}")
                 # Remove from sent set since it failed
                 WebhookService._webhooks_sent.discard(call.call_sid)
@@ -636,39 +722,95 @@ Call Summary: {summary}"""
     @staticmethod
     def _construct_recording_url(recording: Recording) -> Optional[str]:
         """
-        Construct a proper HTTP URL for accessing a recording.
+        Construct the appropriate URL for a recording.
         
         Args:
-            recording: The recording object
+            recording: Recording object
             
         Returns:
-            Optional[str]: Complete HTTP URL for the recording or None if not available
+            Optional[str]: Recording URL or None
         """
-        if not recording:
+        if recording.s3_url:
+            return recording.s3_url
+        elif recording.recording_sid:
+            # Fallback to Twilio URL construction (deprecated)
+            return f"https://api.twilio.com/2010-04-01/Accounts/{os.getenv('TWILIO_ACCOUNT_SID')}/Recordings/{recording.recording_sid}.mp3"
             return None
             
-        # For S3 recordings, construct a URL pointing to our download endpoint
-        if recording.recording_source == "s3" and recording.s3_key:
-            try:
-                base_url = get_server_base_url()
-                return f"{base_url}/calls/{recording.call_id}/recording/{recording.id}"
-            except Exception as e:
-                logger.error(f"Error constructing S3 recording URL: {e}")
-                return None
-            
-        # If it's a Twilio recording with a URL and no local file, use Twilio URL
-        if recording.recording_source == "twilio" and recording.recording_url and not recording.file_path:
-            return recording.recording_url
-            
-        # For local recordings or Twilio recordings that have been downloaded,
-        # construct a URL pointing to our API endpoint
-        if recording.file_path or recording.recording_url:
-            try:
-                base_url = get_server_base_url()
-                return f"{base_url}/calls/{recording.call_id}/recording/{recording.id}"
-            except Exception as e:
-                logger.error(f"Error constructing recording URL: {e}")
-                # Fallback to Twilio URL if available
-                return recording.recording_url
+    @staticmethod
+    async def log_webhook_attempt(
+        call_id: int,
+        assistant_id: int,
+        webhook_url: str,
+        webhook_type: str,
+        request_payload: Dict[str, Any],
+        response_status_code: Optional[int] = None,
+        response_body: Optional[str] = None,
+        response_headers: Optional[Dict[str, str]] = None,
+        response_time_ms: Optional[int] = None,
+        success: bool = False,
+        error_message: Optional[str] = None,
+        retry_count: int = 0,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Optional[WebhookLog]:
+        """
+        Log a webhook attempt to the database.
+
+        Args:
+            call_id: Call ID
+            assistant_id: Assistant ID
+            webhook_url: Webhook URL
+            webhook_type: Type of webhook (status-update, end-of-call-report)
+            request_payload: The payload that was sent
+            response_status_code: HTTP response status code
+            response_body: Response body (will be truncated if too long)
+            response_headers: Response headers
+            response_time_ms: Response time in milliseconds
+            success: Whether the webhook was successful
+            error_message: Error message if failed
+            retry_count: Number of retries attempted
+            metadata: Additional metadata
+
+        Returns:
+            Optional[WebhookLog]: Created webhook log or None
+        """
+        try:
+            from app.db.database import get_async_db_session
+
+            async with await get_async_db_session() as db:
+                # Truncate response body if too long (max 10KB)
+                truncated_response_body = response_body
+                if response_body and len(response_body) > 10240:
+                    truncated_response_body = response_body[:10240] + "... [TRUNCATED]"
+
+                webhook_log_data = {
+                    "call_id": call_id,
+                    "assistant_id": assistant_id,
+                    "webhook_url": webhook_url,
+                    "webhook_type": webhook_type,
+                    "request_payload": request_payload,
+                    "request_headers": {"Content-Type": "application/json"},
+                    "response_status_code": response_status_code,
+                    "response_body": truncated_response_body,
+                    "response_headers": response_headers,
+                    "response_time_ms": response_time_ms,
+                    "success": success,
+                    "error_message": error_message,
+                    "retry_count": retry_count,
+                    "webhook_metadata": metadata or {},
+                }
+
+                webhook_log = WebhookLog(**webhook_log_data)
+                db.add(webhook_log)
+                await db.commit()
+                await db.refresh(webhook_log)
                 
+                logger.info(
+                    f"Logged webhook attempt for call {call_id}, assistant {assistant_id}, "
+                    f"type: {webhook_type}, success: {success}, status: {response_status_code}"
+                )
+
+                return webhook_log
+        except Exception as e:
+            logger.error(f"Error logging webhook attempt: {e}")
         return None 
