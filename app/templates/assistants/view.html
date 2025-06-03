@@ -644,7 +644,7 @@
                                     </div>
                                     <div>
                                         <div class="text-sm font-medium text-white">{{ call.customer_phone_number }}</div>
-                                        <div class="text-xs text-gray-400">{{ call.call_sid[:8] }}...</div>
+                                        <div class="text-xs text-gray-400">{{ call.channel_sid[:8] if call.channel_sid else 'N/A' }}...</div>
                                     </div>
                                 </div>
                             </td>

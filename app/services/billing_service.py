@@ -16,7 +16,8 @@ from app.db.models import (
     UsageRecord, 
     BillingTransaction,
     Call,
-    Assistant
+    Assistant,
+    Conversation
 )
 from app.db.database import get_async_db_session, get_db
 
@@ -421,9 +422,9 @@ class BillingService:
         try:
             async with await get_async_db_session() as db:
                 # Get call with assistant and organization info
-                query = select(Call).options(
-                    joinedload(Call.assistant).joinedload(Assistant.organization).joinedload(Organization.billing_account)
-                ).where(Call.id == call_id)
+                query = select(Conversation).options(
+                    joinedload(Conversation.assistant).joinedload(Assistant.organization).joinedload(Organization.billing_account)
+                ).where(Conversation.id == call_id)
                 result = await db.execute(query)
                 call = result.scalar_one_or_none()
                 
@@ -444,11 +445,11 @@ class BillingService:
                     call_id=call_id,
                     minutes_used=minutes_used,
                     usage_type="call",
-                    description=f"Call {call.call_sid}",
+                    description=f"Call {call.channel_sid}",
                     billing_period_start=billing_account.current_period_start,
                     billing_period_end=billing_account.current_period_end,
                     record_metadata={
-                        "call_sid": call.call_sid,
+                        "channel_sid": call.channel_sid,
                         "assistant_id": call.assistant_id,
                         "duration_seconds": call.duration,
                     }
@@ -474,6 +475,66 @@ class BillingService:
 
         except Exception as e:
             logger.error(f"Error recording call usage: {e}")
+            return False
+
+    @staticmethod
+    async def record_sms_usage(conversation_id: int, messages_count: int = 1) -> bool:
+        """
+        Record usage for SMS messages.
+        
+        Args:
+            conversation_id: The conversation ID
+            messages_count: Number of messages to record (default 1)
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            async with await get_async_db_session() as db:
+                # Get conversation with assistant and organization info
+                query = select(Conversation).options(
+                    joinedload(Conversation.assistant).joinedload(Assistant.organization).joinedload(Organization.billing_account)
+                ).where(Conversation.id == conversation_id)
+                result = await db.execute(query)
+                conversation = result.scalar_one_or_none()
+                
+                if not conversation:
+                    logger.error(f"Conversation {conversation_id} not found")
+                    return False
+
+                billing_account = conversation.assistant.organization.billing_account
+                if not billing_account:
+                    logger.warning(f"No billing account found for conversation {conversation_id}")
+                    return False
+
+                # Create usage record for SMS
+                usage_record = UsageRecord(
+                    billing_account_id=billing_account.id,
+                    conversation_id=conversation_id,
+                    messages_used=messages_count,
+                    usage_type="sms",
+                    description=f"SMS conversation {conversation.channel_sid}",
+                    billing_period_start=billing_account.current_period_start,
+                    billing_period_end=billing_account.current_period_end,
+                    record_metadata={
+                        "channel_sid": conversation.channel_sid,
+                        "assistant_id": conversation.assistant_id,
+                        "conversation_type": conversation.conversation_type,
+                    }
+                )
+
+                db.add(usage_record)
+                
+                # Note: We're not updating current_period_minutes_used for SMS
+                # You might want to add a separate field for SMS usage tracking
+                # or convert SMS to minute equivalents (e.g., 1 SMS = 0.1 minutes)
+                
+                await db.commit()
+                logger.info(f"Recorded {messages_count} SMS messages usage for conversation {conversation_id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error recording SMS usage: {e}")
             return False
 
     @staticmethod

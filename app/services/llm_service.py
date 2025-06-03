@@ -506,7 +506,7 @@ class CustomLLMProvider(BaseLLMProvider):
             # Extract call metadata from settings
             to_number = settings.get("to_number", "")
             from_number = settings.get("from_number", "")
-            call_sid = settings.get("call_sid", "")
+            channel_sid = settings.get("channel_sid", "")
             assistant = settings.get("assistant")
 
             # Temporarily store assistant in config for access in _process_custom_llm_response
@@ -522,7 +522,7 @@ class CustomLLMProvider(BaseLLMProvider):
                 "messages": messages,
                 "phoneNumber": {"number": to_number or ""},
                 "call": {
-                    "phoneCallProviderId": call_sid or "",
+                    "phoneCallProviderId": channel_sid or "",
                     "customer": {"number": from_number or ""},
                 },
             }
@@ -658,7 +658,7 @@ class LLMService:
 
     def __init__(
         self,
-        call_sid: Optional[str] = None,
+        channel_sid: Optional[str] = None,
         to_number: Optional[str] = None,
         from_number: Optional[str] = None,
         assistant: Optional[Any] = None,
@@ -667,12 +667,12 @@ class LLMService:
         Initialize the LLM service.
 
         Args:
-            call_sid: The unique identifier for this call
+            channel_sid: The unique identifier for this call
             to_number: The destination phone number
             from_number: The caller's phone number
             assistant: Assistant object containing LLM configuration
         """
-        self.call_sid = call_sid
+        self.channel_sid = channel_sid
         self.to_number = to_number
         self.from_number = from_number
         self.assistant = assistant
@@ -692,9 +692,9 @@ class LLMService:
         system_prompt = self._get_system_prompt()
         self.conversation_history = [{"role": "system", "content": system_prompt}]
 
-        if call_sid:
+        if channel_sid:
             logger.info(
-                f"Started new conversation for call {call_sid} using {self.current_provider_name} "
+                f"Started new conversation for call {channel_sid} using {self.current_provider_name} "
                 f"with {len(self.fallback_providers)} fallback(s) available"
             )
 
@@ -875,7 +875,7 @@ class LLMService:
         if self.current_provider_index >= len(self.fallback_providers):
             # No more fallbacks available
             logger.error(
-                f"All LLM providers failed for call {self.call_sid}. "
+                f"All LLM providers failed for call {self.channel_sid}. "
                 f"Primary: {self._get_provider_name()}, "
                 f"Fallbacks: {[f['name'] for f in self.fallback_providers]}. "
                 f"Last error: {last_error}"
@@ -883,7 +883,7 @@ class LLMService:
             await response_callback(
                 "I apologize, but I'm experiencing technical difficulties and cannot process your request at the moment.",
                 True,
-                {"call_sid": self.call_sid, "error": "All LLM providers failed", "last_error": last_error},
+                {"channel_sid": self.channel_sid, "error": "All LLM providers failed", "last_error": last_error},
             )
             return False
             
@@ -892,7 +892,7 @@ class LLMService:
         current_name = self._get_current_provider_name()
         
         logger.warning(
-            f"Primary provider failed for call {self.call_sid}, trying fallback {self.current_provider_index + 1}: {current_name}"
+            f"Primary provider failed for call {self.channel_sid}, trying fallback {self.current_provider_index + 1}: {current_name}"
         )
         
         try:
@@ -902,11 +902,11 @@ class LLMService:
             
             # Update current provider name for logging
             self.current_provider_name = current_name
-            logger.info(f"Successfully switched to fallback provider {current_name} for call {self.call_sid}")
+            logger.info(f"Successfully switched to fallback provider {current_name} for call {self.channel_sid}")
             return True
             
         except Exception as e:
-            logger.error(f"Fallback provider {current_name} failed for call {self.call_sid}: {e}")
+            logger.error(f"Fallback provider {current_name} failed for call {self.channel_sid}: {e}")
             # Recursively try the next fallback
             return await self._try_next_provider(
                 transcript, is_final, metadata, response_callback, 
@@ -946,7 +946,7 @@ class LLMService:
             enhanced_settings = llm_settings.copy()
             enhanced_settings.update(
                 {
-                    "call_sid": self.call_sid,
+                    "channel_sid": self.channel_sid,
                     "to_number": self.to_number,
                     "from_number": self.from_number,
                     "assistant": self.assistant,
@@ -968,7 +968,7 @@ class LLMService:
                 
             except Exception as e:
                 logger.error(
-                    f"LLM provider {current_name} failed for call {self.call_sid}: {e}"
+                    f"LLM provider {current_name} failed for call {self.channel_sid}: {e}"
                 )
                 
                 # Try fallback providers if we haven't exhausted them
@@ -986,7 +986,7 @@ class LLMService:
 
         except Exception as e:
             logger.error(
-                f"Critical error processing transcript for call {self.call_sid}: {e}",
+                f"Critical error processing transcript for call {self.channel_sid}: {e}",
                 exc_info=True,
             )
             # Remove the user message from history since we couldn't process it
@@ -996,7 +996,7 @@ class LLMService:
             await response_callback(
                 "I apologize, but I'm having trouble processing that right now.",
                 True,
-                {"call_sid": self.call_sid, "error": str(e)},
+                {"channel_sid": self.channel_sid, "error": str(e)},
             )
 
     def _create_enhanced_callback(
@@ -1008,7 +1008,7 @@ class LLMService:
             content: str, is_final: bool, metadata: Dict[str, Any]
         ) -> None:
             # Add call metadata
-            metadata["call_sid"] = self.call_sid
+            metadata["channel_sid"] = self.channel_sid
 
             # Update conversation history if this is the final response
             if is_final and metadata.get("full_response"):

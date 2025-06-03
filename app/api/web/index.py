@@ -10,7 +10,7 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import (
-    Call,
+    Conversation,
     Transcript,
     Assistant,
     User,
@@ -116,23 +116,24 @@ async def dashboard(
 
     if assistant_ids:
         total_calls = (
-            db.query(Call).filter(Call.assistant_id.in_(assistant_ids)).count()
+            db.query(Conversation).filter(Conversation.assistant_id.in_(assistant_ids), Conversation.conversation_type == "call").count()
         )
         active_calls = (
-            db.query(Call)
-            .filter(Call.assistant_id.in_(assistant_ids), Call.status == "ongoing")
+            db.query(Conversation)
+            .filter(Conversation.assistant_id.in_(assistant_ids), Conversation.status == "ongoing", Conversation.conversation_type == "call")
             .count()
         )
         completed_calls = (
-            db.query(Call)
-            .filter(Call.assistant_id.in_(assistant_ids), Call.status == "completed")
+            db.query(Conversation)
+            .filter(Conversation.assistant_id.in_(assistant_ids), Conversation.status == "completed", Conversation.conversation_type == "call")
             .count()
         )
         failed_calls = (
-            db.query(Call)
+            db.query(Conversation)
             .filter(
-                Call.assistant_id.in_(assistant_ids),
-                Call.status.in_(["failed", "no-answer", "busy"]),
+                Conversation.assistant_id.in_(assistant_ids),
+                Conversation.status.in_(["failed", "no-answer", "busy"]),
+                Conversation.conversation_type == "call",
             )
             .count()
         )
@@ -145,11 +146,12 @@ async def dashboard(
     # Calculate average call duration for completed calls
     if assistant_ids:
         completed_calls_with_duration = (
-            db.query(Call)
+            db.query(Conversation)
             .filter(
-                Call.assistant_id.in_(assistant_ids),
-                Call.status == "completed",
-                Call.duration.isnot(None),
+                Conversation.assistant_id.in_(assistant_ids),
+                Conversation.status == "completed",
+                Conversation.duration.isnot(None),
+                Conversation.conversation_type == "call",
             )
             .all()
         )
@@ -166,8 +168,8 @@ async def dashboard(
         transcript_confidence = (
             db.query(Transcript.confidence)
             .filter(
-                Transcript.call_id.in_(
-                    db.query(Call.id).filter(Call.assistant_id.in_(assistant_ids))
+                Transcript.conversation_id.in_(
+                    db.query(Conversation.id).filter(Conversation.assistant_id.in_(assistant_ids))
                 ),
                 Transcript.confidence.isnot(None),
             )
@@ -187,9 +189,9 @@ async def dashboard(
     # Get recent calls with enhanced data
     if assistant_ids:
         recent_calls = (
-            db.query(Call)
-            .filter(Call.assistant_id.in_(assistant_ids))
-            .order_by(Call.started_at.desc())
+            db.query(Conversation)
+            .filter(Conversation.assistant_id.in_(assistant_ids), Conversation.conversation_type == "call")
+            .order_by(Conversation.started_at.desc())
             .limit(10)
             .all()
         )
@@ -200,7 +202,7 @@ async def dashboard(
     assistant_metrics = []
     for assistant in active_assistants:
         assistant_calls = (
-            db.query(Call).filter(Call.assistant_id == assistant.id).count()
+            db.query(Conversation).filter(Conversation.assistant_id == assistant.id, Conversation.conversation_type == "call").count()
         )
         assistant_metrics.append(
             {
@@ -297,18 +299,19 @@ async def organization_page(
 
     if assistant_ids:
         total_calls = (
-            db.query(Call).filter(Call.assistant_id.in_(assistant_ids)).count()
+            db.query(Conversation).filter(Conversation.assistant_id.in_(assistant_ids), Conversation.conversation_type == "call").count()
         )
         completed_calls = (
-            db.query(Call)
-            .filter(Call.assistant_id.in_(assistant_ids), Call.status == "completed")
+            db.query(Conversation)
+            .filter(Conversation.assistant_id.in_(assistant_ids), Conversation.status == "completed", Conversation.conversation_type == "call")
             .count()
         )
         failed_calls = (
-            db.query(Call)
+            db.query(Conversation)
             .filter(
-                Call.assistant_id.in_(assistant_ids),
-                Call.status.in_(["failed", "no-answer", "busy"]),
+                Conversation.assistant_id.in_(assistant_ids),
+                Conversation.status.in_(["failed", "no-answer", "busy"]),
+                Conversation.conversation_type == "call",
             )
             .count()
         )

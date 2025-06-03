@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.models import Assistant
 from app.db.database import get_async_db_session
 from app.twilio.twilio_service import TwilioService
-from app.utils.url_utils import get_twiml_webhook_url
+from app.utils.url_utils import get_twiml_webhook_url, get_sms_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -271,31 +271,35 @@ class AssistantService:
         if not assistant or not assistant.phone_number or not assistant.is_active:
             return False
 
-        # Get the webhook URL
-        webhook_url = get_twiml_webhook_url()
+        # Get the webhook URLs
+        voice_webhook_url = get_twiml_webhook_url()
+        sms_webhook_url = get_sms_webhook_url()
+        
         logger.info(
-            f"Configuring Twilio webhook for {assistant.phone_number} to {webhook_url}"
+            f"Configuring Twilio webhooks for {assistant.phone_number} - "
+            f"Voice: {voice_webhook_url}, SMS: {sms_webhook_url}"
         )
 
-        # Use assistant-specific Twilio credentials if available
+        # Use assistant-specific Twil`io credentials if available
         account_sid = assistant.twilio_account_sid
         auth_token = assistant.twilio_auth_token
 
-        # Update the webhook
-        success = TwilioService.update_phone_webhook(
+        # Update both voice and SMS webhooks
+        success = TwilioService.update_all_webhooks(
             phone_number=assistant.phone_number,
-            webhook_url=webhook_url,
+            voice_webhook_url=voice_webhook_url,
+            sms_webhook_url=sms_webhook_url,
             account_sid=account_sid,
             auth_token=auth_token,
         )
 
         if success:
             logger.info(
-                f"Successfully configured Twilio webhook for {assistant.phone_number}"
+                f"Successfully configured Twilio voice and SMS webhooks for {assistant.phone_number}"
             )
         else:
             logger.warning(
-                f"Failed to configure Twilio webhook for {assistant.phone_number}"
+                f"Failed to configure Twilio webhooks for {assistant.phone_number}"
             )
 
         return success

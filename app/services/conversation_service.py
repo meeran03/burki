@@ -8,131 +8,42 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Call, Recording, Transcript, ChatMessage
+from app.db.models import Conversation, Recording, Transcript, ChatMessage
 from app.db.database import get_async_db_session
 
 logger = logging.getLogger(__name__)
 
 
-class CallService:
+class ConversationService:
     """
-    Service class for handling Call, Recording, and Transcript operations.
+    Service class for handling Conversation, Recording, and Transcript operations.
     """
 
     RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", "recordings")
 
     @staticmethod
-    async def create_call(
-        assistant_id: int,
-        call_sid: str,
-        to_phone_number: str,
-        customer_phone_number: str,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Call:
+    async def get_conversation_by_sid(channel_sid: str) -> Optional[Conversation]:
         """
-        Create a new call record.
+        Get conversation by SID with assistant relationship eagerly loaded.
 
         Args:
-            assistant_id: Assistant ID
-            call_sid: Twilio Call SID
-            to_phone_number: Assistant's phone number
-            customer_phone_number: Caller's phone number
-            metadata: Additional metadata
+            channel_sid: Call SID
 
         Returns:
-            Call: Created call record
-        """
-        try:
-            async with await get_async_db_session() as db:
-                call_data = {
-                    "call_sid": call_sid,
-                    "assistant_id": assistant_id,
-                    "to_phone_number": to_phone_number,
-                    "customer_phone_number": customer_phone_number,
-                    "call_meta": metadata or {},
-                    "status": "ongoing",
-                }
-
-                call = Call(**call_data)
-                db.add(call)
-                await db.commit()
-                await db.refresh(call)
-                logger.info(f"Created call record with ID: {call.id}, SID: {call_sid}")
-
-                return call
-        except SQLAlchemyError as e:
-            logger.error(f"Error creating call record: {e}")
-            raise
-
-    @staticmethod
-    async def get_call_by_sid(call_sid: str) -> Optional[Call]:
-        """
-        Get call by SID with assistant relationship eagerly loaded.
-
-        Args:
-            call_sid: Call SID
-
-        Returns:
-            Optional[Call]: Found call or None
+            Optional[Conversation]: Found call or None
         """
         async with await get_async_db_session() as db:
-            query = select(Call).options(selectinload(Call.assistant)).where(Call.call_sid == call_sid)
+            query = (
+                select(Conversation)
+                .options(selectinload(Conversation.assistant))
+                .where(Conversation.channel_sid == channel_sid)
+            )
             result = await db.execute(query)
             return result.scalar_one_or_none()
 
     @staticmethod
-    async def update_call_status(
-        call_sid: str, status: str, duration: Optional[int] = None
-    ) -> Optional[Call]:
-        """
-        Update call status.
-
-        Args:
-            call_sid: Call SID
-            status: New status (ongoing, completed, failed)
-            duration: Call duration in seconds
-
-        Returns:
-            Optional[Call]: Updated call or None
-        """
-        try:
-            call = await CallService.get_call_by_sid(call_sid)
-            if not call:
-                return None
-
-            async with await get_async_db_session() as db:
-                # Store the previous status for webhook notification
-                previous_status = call.status
-
-                # Update status and duration
-                call.status = status
-
-                if status == "completed" or status == "failed":
-                    call.ended_at = datetime.datetime.utcnow()
-
-                    # Calculate duration if not provided
-                    if duration is None and call.started_at:
-                        call.duration = int(
-                            (
-                                datetime.datetime.utcnow() - call.started_at
-                            ).total_seconds()
-                        )
-                    else:
-                        call.duration = duration
-
-                db.add(call)
-                await db.commit()
-                await db.refresh(call)
-                logger.info(f"Updated call status to {status} for call SID: {call_sid}")
-
-                return call
-        except SQLAlchemyError as e:
-            logger.error(f"Error updating call status: {e}")
-            raise
-
-    @staticmethod
     async def create_s3_recording(
-        call_sid: str,
+        channel_sid: str,
         s3_key: str,
         s3_url: str,
         duration: float,
@@ -144,10 +55,10 @@ class CallService:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[Recording]:
         """
-        Create an S3-based recording for a call.
+        Create an S3-based recording for a conversation.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             s3_key: S3 object key
             s3_url: S3 public URL
             duration: Recording duration in seconds
@@ -162,15 +73,15 @@ class CallService:
             Optional[Recording]: Created recording record or None
         """
         try:
-            call = await CallService.get_call_by_sid(call_sid)
-            if not call:
-                logger.error(f"Call not found for SID: {call_sid}")
+            conversation = await ConversationService.get_conversation_by_sid(channel_sid)
+            if not conversation:
+                logger.error(f"Call not found for SID: {channel_sid}")
                 return None
 
             async with await get_async_db_session() as db:
                 # Create recording record in database
                 recording_data = {
-                    "call_id": call.id,
+                    "conversation_id": conversation.id,
                     "s3_key": s3_key,
                     "s3_url": s3_url,
                     "s3_bucket": os.getenv("AWS_S3_BUCKET_NAME"),
@@ -191,7 +102,7 @@ class CallService:
                 await db.commit()
                 await db.refresh(recording)
                 logger.info(
-                    f"Created S3 recording with ID: {recording.id} for call SID: {call_sid}, S3 key: {s3_key}"
+                    f"Created S3 recording with ID: {recording.id} for conversation SID: {channel_sid}, S3 key: {s3_key}"
                 )
 
                 return recording
@@ -204,7 +115,7 @@ class CallService:
 
     @staticmethod
     async def create_recording(
-        call_sid: str,
+        channel_sid: str,
         audio_data: bytes = None,
         format: str = "mp3",
         recording_type: str = "mixed",
@@ -224,7 +135,7 @@ class CallService:
         Create a recording for a call.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             audio_data: Audio data as bytes (for local recordings)
             format: Audio format
             recording_type: Recording type (full, segment)
@@ -244,18 +155,18 @@ class CallService:
             Optional[Tuple[Recording, str]]: Recording object and file path or None
         """
         try:
-            call = await CallService.get_call_by_sid(call_sid)
+            call = await ConversationService.get_conversation_by_sid(channel_sid)
             if not call:
-                logger.error(f"Call not found for SID: {call_sid}")
+                logger.error(f"Call not found for SID: {channel_sid}")
                 return None
 
             # Handle local recordings (save audio data to file)
             if recording_source == "local" and audio_data and not file_path:
                 # Create recordings directory if it doesn't exist
-                os.makedirs(CallService.RECORDINGS_DIR, exist_ok=True)
+                os.makedirs(ConversationService.RECORDINGS_DIR, exist_ok=True)
 
                 # Create a directory for this call
-                call_dir = os.path.join(CallService.RECORDINGS_DIR, call_sid)
+                call_dir = os.path.join(ConversationService.RECORDINGS_DIR, channel_sid)
                 os.makedirs(call_dir, exist_ok=True)
 
                 # Generate file name and path
@@ -270,7 +181,7 @@ class CallService:
             async with await get_async_db_session() as db:
                 # Create recording record in database
                 recording_data = {
-                    "call_id": call.id,
+                    "conversation_id": call.id,
                     "recording_sid": recording_sid,
                     "file_path": file_path,
                     "recording_url": recording_url,
@@ -291,7 +202,7 @@ class CallService:
                 await db.commit()
                 await db.refresh(recording)
                 logger.info(
-                    f"Created {recording_source} recording with ID: {recording.id} for call SID: {call_sid}"
+                    f"Created {recording_source} recording with ID: {recording.id} for call SID: {channel_sid}"
                 )
 
                 return recording, file_path or recording_url
@@ -304,7 +215,7 @@ class CallService:
 
     @staticmethod
     async def create_twilio_recording(
-        call_sid: str,
+        channel_sid: str,
         recording_sid: str,
         status: str = "recording",
     ) -> Optional[Recording]:
@@ -312,7 +223,7 @@ class CallService:
         Create a Twilio recording record.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             recording_sid: Twilio Recording SID
             status: Recording status
 
@@ -320,24 +231,26 @@ class CallService:
             Optional[Recording]: Created recording record or None
         """
         try:
-            result = await CallService.create_recording(
-                call_sid=call_sid,
+            result = await ConversationService.create_recording(
+                channel_sid=channel_sid,
                 format="mp3",  # Twilio default format
                 recording_type="full",
                 recording_source="twilio",
                 recording_sid=recording_sid,
                 status=status,
             )
-            
+
             # Check if result is None (call not found)
             if result is None:
-                logger.error(f"Failed to create recording: call {call_sid} not found in database")
+                logger.error(
+                    f"Failed to create recording: call {channel_sid} not found in database"
+                )
                 return None
-            
+
             # Unpack the tuple safely
             recording, _ = result
             return recording
-            
+
         except Exception as e:
             logger.error(f"Error creating Twilio recording record: {e}")
             return None
@@ -365,7 +278,9 @@ class CallService:
         """
         try:
             async with await get_async_db_session() as db:
-                query = select(Recording).where(Recording.recording_sid == recording_sid)
+                query = select(Recording).where(
+                    Recording.recording_sid == recording_sid
+                )
                 result = await db.execute(query)
                 recording = result.scalar_one_or_none()
 
@@ -393,7 +308,7 @@ class CallService:
 
     @staticmethod
     async def create_transcript(
-        call_sid: str,
+        channel_sid: str,
         content: str,
         is_final: bool = True,
         speaker: Optional[str] = None,
@@ -405,7 +320,7 @@ class CallService:
         Create a transcript for a call.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             content: Transcript content
             is_final: Whether this is a final transcript
             speaker: Speaker identifier (user, assistant)
@@ -417,15 +332,15 @@ class CallService:
             Optional[Transcript]: Created transcript or None
         """
         try:
-            call = await CallService.get_call_by_sid(call_sid)
+            call = await ConversationService.get_conversation_by_sid(channel_sid)
             if not call:
-                logger.error(f"Call not found for SID: {call_sid}")
+                logger.error(f"Call not found for SID: {channel_sid}")
                 return None
 
             async with await get_async_db_session() as db:
                 # Create transcript record
                 transcript_data = {
-                    "call_id": call.id,
+                    "conversation_id": call.id,
                     "content": content,
                     "is_final": is_final,
                     "speaker": speaker,
@@ -439,7 +354,7 @@ class CallService:
                 await db.commit()
                 await db.refresh(transcript)
                 logger.info(
-                    f"Created transcript with ID: {transcript.id} for call SID: {call_sid}"
+                    f"Created transcript with ID: {transcript.id} for call SID: {channel_sid}"
                 )
 
                 return transcript
@@ -449,25 +364,25 @@ class CallService:
 
     @staticmethod
     async def get_call_transcripts(
-        call_sid: str, speaker: Optional[str] = None
+        channel_sid: str, speaker: Optional[str] = None
     ) -> List[Transcript]:
         """
         Get all transcripts for a call.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             speaker: Filter by speaker (user, assistant)
 
         Returns:
             List[Transcript]: List of transcripts
         """
         try:
-            call = await CallService.get_call_by_sid(call_sid)
+            call = await ConversationService.get_conversation_by_sid(channel_sid)
             if not call:
                 return []
 
             async with await get_async_db_session() as db:
-                query = select(Transcript).where(Transcript.call_id == call.id)
+                query = select(Transcript).where(Transcript.conversation_id == call.id)
 
                 if speaker:
                     query = query.filter(Transcript.speaker == speaker)
@@ -483,25 +398,25 @@ class CallService:
 
     @staticmethod
     async def get_call_recordings(
-        call_sid: str, recording_type: Optional[str] = None
+        channel_sid: str, recording_type: Optional[str] = None
     ) -> List[Recording]:
         """
         Get all recordings for a call.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             recording_type: Filter by recording type (full, segment)
 
         Returns:
             List[Recording]: List of recordings
         """
         try:
-            call = await CallService.get_call_by_sid(call_sid)
+            call = await ConversationService.get_conversation_by_sid(channel_sid)
             if not call:
                 return []
 
             async with await get_async_db_session() as db:
-                query = select(Recording).where(Recording.call_id == call.id)
+                query = select(Recording).where(Recording.conversation_id == call.id)
 
                 if recording_type:
                     query = query.filter(Recording.recording_type == recording_type)
@@ -517,10 +432,11 @@ class CallService:
 
     @staticmethod
     async def create_chat_message(
-        call_sid: str,
-        role: str,
-        content: str,
-        message_index: int,
+        channel_sid: str = None,
+        conversation_id: int = None,
+        role: str = None,
+        content: str = None,
+        message_index: int = None,
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,
         prompt_tokens: Optional[int] = None,
@@ -529,10 +445,12 @@ class CallService:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[ChatMessage]:
         """
-        Create a chat message for a call.
+        Create a chat message for a call/conversation.
+        Supports both channel_sid (backward compatibility) and conversation_id.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID (for backward compatibility)
+            conversation_id: Conversation ID (preferred)
             role: Message role (system, user, assistant)
             content: Message content
             message_index: Index in the conversation
@@ -547,15 +465,22 @@ class CallService:
             Optional[ChatMessage]: Created chat message or None
         """
         try:
-            call = await CallService.get_call_by_sid(call_sid)
-            if not call:
-                logger.error(f"Call not found for SID: {call_sid}")
+            # Handle backward compatibility - if channel_sid is provided, look up the conversation
+            if channel_sid and not conversation_id:
+                call = await ConversationService.get_conversation_by_sid(channel_sid)
+                if not call:
+                    logger.error(f"Call not found for SID: {channel_sid}")
+                    return None
+                conversation_id = call.id
+
+            if not conversation_id:
+                logger.error("Neither channel_sid nor conversation_id provided")
                 return None
 
             async with await get_async_db_session() as db:
                 # Create chat message record
                 message_data = {
-                    "call_id": call.id,
+                    "conversation_id": conversation_id,  # Use conversation_id
                     "role": role,
                     "content": content,
                     "message_index": message_index,
@@ -572,7 +497,7 @@ class CallService:
                 await db.commit()
                 await db.refresh(chat_message)
                 logger.debug(
-                    f"Created chat message with ID: {chat_message.id} for call SID: {call_sid}, role: {role}"
+                    f"Created chat message with ID: {chat_message.id} for conversation ID: {conversation_id}, role: {role}"
                 )
 
                 return chat_message
@@ -582,25 +507,27 @@ class CallService:
 
     @staticmethod
     async def get_call_chat_messages(
-        call_sid: str, role: Optional[str] = None
+        channel_sid: str, role: Optional[str] = None
     ) -> List[ChatMessage]:
         """
         Get all chat messages for a call.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             role: Filter by role (system, user, assistant)
 
         Returns:
             List[ChatMessage]: List of chat messages ordered by message_index
         """
         try:
-            call = await CallService.get_call_by_sid(call_sid)
+            call = await ConversationService.get_conversation_by_sid(channel_sid)
             if not call:
                 return []
 
             async with await get_async_db_session() as db:
-                query = select(ChatMessage).where(ChatMessage.call_id == call.id)
+                query = select(ChatMessage).where(
+                    ChatMessage.conversation_id == call.id
+                )
 
                 if role:
                     query = query.filter(ChatMessage.role == role)
@@ -616,7 +543,7 @@ class CallService:
 
     @staticmethod
     async def store_conversation_history(
-        call_sid: str,
+        channel_sid: str,
         conversation_history: List[Dict[str, str]],
         llm_provider: Optional[str] = None,
         llm_model: Optional[str] = None,
@@ -626,7 +553,7 @@ class CallService:
         This method will check for existing messages and only store new ones.
 
         Args:
-            call_sid: Call SID
+            channel_sid: Call SID
             conversation_history: List of conversation messages
             llm_provider: LLM provider name
             llm_model: LLM model used
@@ -636,33 +563,235 @@ class CallService:
         """
         try:
             # Get existing messages to avoid duplicates
-            existing_messages = await CallService.get_call_chat_messages(call_sid)
+            existing_messages = await ConversationService.get_call_chat_messages(
+                channel_sid
+            )
             existing_count = len(existing_messages)
 
             # Only store new messages beyond what we already have
             new_messages = conversation_history[existing_count:]
-            
+
             for i, message in enumerate(new_messages):
                 message_index = existing_count + i
                 role = message.get("role", "")
                 content = message.get("content", "")
-                
+
                 if not role or not content:
                     continue
-                
-                await CallService.create_chat_message(
-                    call_sid=call_sid,
+
+                await ConversationService.create_chat_message(
+                    channel_sid=channel_sid,
                     role=role,
                     content=content,
                     message_index=message_index,
                     llm_provider=llm_provider if role == "assistant" else None,
                     llm_model=llm_model if role == "assistant" else None,
                 )
-            
+
             if new_messages:
-                logger.info(f"Stored {len(new_messages)} new chat messages for call {call_sid}")
-            
+                logger.info(
+                    f"Stored {len(new_messages)} new chat messages for call {channel_sid}"
+                )
+
             return True
         except Exception as e:
-            logger.error(f"Error storing conversation history for call {call_sid}: {e}")
+            logger.error(
+                f"Error storing conversation history for call {channel_sid}: {e}"
+            )
             return False
+
+    # ========== New Conversation Methods for SMS Support ==========
+
+    @staticmethod
+    async def create_conversation(
+        assistant_id: int,
+        channel_sid: str,
+        conversation_type: str,
+        to_phone_number: str,
+        customer_phone_number: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Conversation:
+        """
+        Create a new conversation record (for calls, SMS, etc).
+
+        Args:
+            assistant_id: Assistant ID
+            channel_sid: Channel-specific SID (channel_sid, message_sid, etc)
+            conversation_type: Type of conversation (call, sms, whatsapp, telegram)
+            to_phone_number: Assistant's phone number
+            customer_phone_number: Customer's phone number
+            metadata: Additional metadata
+
+        Returns:
+            Conversation: Created conversation record
+        """
+        try:
+            async with await get_async_db_session() as db:
+                conversation_data = {
+                    "channel_sid": channel_sid,
+                    "conversation_type": conversation_type,
+                    "assistant_id": assistant_id,
+                    "to_phone_number": to_phone_number,
+                    "customer_phone_number": customer_phone_number,
+                    "conversation_metadata": metadata or {},
+                    "status": "ongoing" if conversation_type == "call" else "active",
+                }
+
+                conversation = Conversation(**conversation_data)
+                db.add(conversation)
+                await db.commit()
+                await db.refresh(conversation)
+                logger.info(
+                    f"Created {conversation_type} conversation with ID: {conversation.id}, SID: {channel_sid}"
+                )
+
+                return conversation
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating conversation record: {e}")
+            raise
+
+    @staticmethod
+    async def get_conversation_by_id(conversation_id: int) -> Optional[Conversation]:
+        """
+        Get conversation by ID with assistant relationship eagerly loaded.
+
+        Args:
+            conversation_id: Conversation ID
+
+        Returns:
+            Optional[Conversation]: Found conversation or None
+        """
+        async with await get_async_db_session() as db:
+            query = (
+                select(Conversation)
+                .options(selectinload(Conversation.assistant))
+                .where(Conversation.id == conversation_id)
+            )
+            result = await db.execute(query)
+            return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_conversation_by_phone_numbers(
+        customer_phone_number: str,
+        assistant_phone_number: str,
+        conversation_type: str = "sms",
+        status_not_in: Optional[List[str]] = None,
+    ) -> Optional[Conversation]:
+        """
+        Get conversation by phone numbers.
+
+        Args:
+            customer_phone_number: Customer's phone number
+            assistant_phone_number: Assistant's phone number
+            conversation_type: Type of conversation to filter
+            status_not_in: List of statuses to exclude
+
+        Returns:
+            Optional[Conversation]: Found conversation or None (most recent if multiple exist)
+        """
+        async with await get_async_db_session() as db:
+            query = select(Conversation).where(
+                Conversation.customer_phone_number == customer_phone_number,
+                Conversation.to_phone_number == assistant_phone_number,
+                Conversation.conversation_type == conversation_type,
+            )
+
+            if status_not_in:
+                query = query.filter(~Conversation.status.in_(status_not_in))
+
+            # Order by most recent first
+            query = query.order_by(Conversation.started_at.desc())
+
+            result = await db.execute(query)
+            return result.scalars().first()  # Get the first (most recent) result
+
+    @staticmethod
+    async def update_conversation_status(
+        channel_sid: str, status: str, duration: Optional[int] = None
+    ) -> Optional[Conversation]:
+        """
+        Update conversation status by channel SID.
+
+        Args:
+            channel_sid: Channel SID (channel_sid, message_sid, etc)
+            status: New status
+            duration: Duration in seconds (for calls)
+
+        Returns:
+            Optional[Conversation]: Updated conversation or None
+        """
+        try:
+            async with await get_async_db_session() as db:
+                query = select(Conversation).where(
+                    Conversation.channel_sid == channel_sid
+                )
+                result = await db.execute(query)
+                conversation = result.scalar_one_or_none()
+
+                if not conversation:
+                    logger.error(
+                        f"Conversation not found for channel SID: {channel_sid}"
+                    )
+                    return None
+
+                # Update status
+                conversation.status = status
+
+                if (
+                    status in ["completed", "failed"]
+                    and conversation.conversation_type == "call"
+                ):
+                    conversation.ended_at = datetime.datetime.utcnow()
+
+                    # Calculate duration if not provided
+                    if duration is None and conversation.started_at:
+                        conversation.duration = int(
+                            (
+                                datetime.datetime.utcnow() - conversation.started_at
+                            ).total_seconds()
+                        )
+                    else:
+                        conversation.duration = duration
+
+                await db.commit()
+                await db.refresh(conversation)
+                logger.info(
+                    f"Updated conversation status to {status} for channel SID: {channel_sid}"
+                )
+
+                return conversation
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating conversation status: {e}")
+            raise
+
+    @staticmethod
+    async def get_chat_messages_for_conversation(
+        conversation_id: int, role: Optional[str] = None
+    ) -> List[ChatMessage]:
+        """
+        Get all chat messages for a conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            role: Filter by role (user, assistant, system)
+
+        Returns:
+            List[ChatMessage]: List of chat messages
+        """
+        try:
+            async with await get_async_db_session() as db:
+                query = select(ChatMessage).where(
+                    ChatMessage.conversation_id == conversation_id
+                )
+
+                if role:
+                    query = query.filter(ChatMessage.role == role)
+
+                # Order by message index
+                query = query.order_by(ChatMessage.message_index)
+
+                result = await db.execute(query)
+                return list(result.scalars().all())
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting conversation chat messages: {e}")
+            return []

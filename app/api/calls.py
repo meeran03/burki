@@ -9,8 +9,7 @@ import io
 from app.core.auth import get_current_user_flexible
 from app.db.database import get_db
 from app.db.models import Call, Transcript, Recording, User, Assistant
-from app.services.call_service import CallService
-from app.api.schemas import CallResponse, TranscriptResponse, RecordingResponse, APIResponse
+from app.api.schemas import CallResponse, TranscriptResponse, RecordingResponse
 
 router = APIRouter(prefix="/api/v1/calls", tags=["calls"])
 
@@ -352,7 +351,7 @@ async def get_call(
 
 
 @router.get("/sid/{call_sid}", response_model=CallResponse)
-async def get_call_by_sid(
+async def get_conversation_by_sid(
     call_sid: str, 
     current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)

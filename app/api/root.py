@@ -17,7 +17,8 @@ from twilio.twiml.voice_response import VoiceResponse, Connect
 
 from app.core.call_handler import CallHandler
 from app.core.assistant_manager import AssistantManager
-from app.services.call_service import CallService
+from app.core.sms_handler import SMSHandler
+from app.services.conversation_service import ConversationService
 from app.services.webhook_service import WebhookService
 from app.twilio.twilio_service import TwilioService
 from app.services.billing_service import BillingService
@@ -41,7 +42,23 @@ CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "http://localhost:8001/ai/chat/comp
 
 # Initialize call handler - configuration is now handled per-call through assistant objects
 call_handler = CallHandler()
+sms_handler = SMSHandler()
 assistant_manager = AssistantManager()
+
+
+# Lifecycle events for background tasks
+@router.on_event("startup")
+async def startup_event():
+    """Start background tasks on application startup."""
+    await sms_handler.start()
+    logger.info("Started background tasks")
+
+
+@router.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources on application shutdown."""
+    await sms_handler.stop()
+    logger.info("Stopped background tasks")
 
 
 @router.post("/twiml")
@@ -143,12 +160,13 @@ async def get_twiml(request: Request):
                     "custom_welcome_message": outbound_welcome_message
                 }
             
-            call = await CallService.create_call(
+            call = await ConversationService.create_conversation(
                 assistant_id=assistant.id,
-                call_sid=call_sid,
+                channel_sid=call_sid,
                 to_phone_number=actual_to_phone or "",
                 customer_phone_number=actual_customer_phone or "",
                 metadata=call_metadata,
+                conversation_type="call",
             )
             logger.info(f"Created call record in database for call {call_sid}")
             
@@ -519,4 +537,265 @@ async def initiate_outbound_call(request: Request):
         raise
     except Exception as e:
         logger.error(f"Error initiating outbound call: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.post("/sms/webhook")
+async def handle_incoming_sms(request: Request):
+    """
+    Handle incoming SMS messages from Twilio.
+    This endpoint is called by Twilio when an SMS is received.
+    """
+    try:
+        # Parse form data from Twilio
+        form_data = await request.form()
+        
+        # Extract SMS details
+        message_sid = form_data.get("MessageSid")
+        from_number = form_data.get("From")
+        to_number = form_data.get("To")
+        message_body = form_data.get("Body", "").strip()
+        
+        logger.info(f"Received SMS {message_sid} from {from_number} to {to_number}: {message_body[:100]}...")
+        
+        # Validate required fields
+        if not all([message_sid, from_number, to_number, message_body]):
+            logger.error(f"Missing required SMS fields: message_sid={message_sid}, from={from_number}, to={to_number}")
+            return Response(content="Missing required fields", status_code=400)
+        
+        # Get assistant by phone number
+        assistant = await assistant_manager.get_assistant_by_phone(to_number)
+        if not assistant:
+            logger.error(f"No assistant found for phone number {to_number}")
+            return Response(content="No assistant configured for this number", status_code=404)
+        
+        # Check billing limits
+        try:
+            usage_check = await BillingService.check_usage_limits(assistant.organization_id)
+            
+            if not usage_check.get("allowed", False):
+                logger.warning(
+                    f"SMS rejected due to billing limits for organization {assistant.organization_id}: {usage_check}"
+                )
+                
+                # Send error message back if limits exceeded
+                error_message = "Your message cannot be processed due to usage limits. Please contact your administrator."
+                if usage_check.get("needs_upgrade", False):
+                    error_message = "Monthly usage limit exceeded. Please upgrade your plan or add credits to continue."
+                
+                # Send error SMS back to user
+                TwilioService.send_sms(
+                    to_phone_number=from_number,
+                    from_phone_number=to_number,
+                    message_body=error_message,
+                    account_sid=assistant.twilio_account_sid,
+                    auth_token=assistant.twilio_auth_token,
+                )
+                
+                return Response(content="", status_code=200)  # Return 200 to Twilio
+                
+        except Exception as billing_error:
+            logger.error(f"Billing check failed for {assistant.organization_id}, allowing SMS: {billing_error}")
+        
+        # Extract additional metadata from Twilio
+        metadata = {
+            "account_sid": form_data.get("AccountSid"),
+            "messaging_service_sid": form_data.get("MessagingServiceSid"),
+            "num_media": form_data.get("NumMedia", "0"),
+            "num_segments": form_data.get("NumSegments", "1"),
+            "sms_status": form_data.get("SmsStatus"),
+            "api_version": form_data.get("ApiVersion"),
+        }
+        
+        # Process the SMS
+        response_text = await sms_handler.process_incoming_sms(
+            message_sid=message_sid,
+            from_number=from_number,
+            to_number=to_number,
+            message_body=message_body,
+            assistant=assistant,
+            metadata=metadata,
+        )
+        
+        # Send response if we have one
+        if response_text:
+            # Get Twilio credentials
+            twilio_account_sid = assistant.twilio_account_sid or os.getenv("TWILIO_ACCOUNT_SID")
+            twilio_auth_token = assistant.twilio_auth_token or os.getenv("TWILIO_AUTH_TOKEN")
+            
+            if twilio_account_sid and twilio_auth_token:
+                response_sid = TwilioService.send_sms(
+                    to_phone_number=from_number,
+                    from_phone_number=to_number,
+                    message_body=response_text,
+                    account_sid=twilio_account_sid,
+                    auth_token=twilio_auth_token,
+                )
+                
+                if response_sid:
+                    logger.info(f"Sent SMS response {response_sid} to {from_number}")
+                else:
+                    logger.error(f"Failed to send SMS response to {from_number}")
+            else:
+                logger.error("Missing Twilio credentials for sending SMS response")
+        
+        # Return empty 200 response to Twilio
+        return Response(content="", status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error handling incoming SMS: {e}", exc_info=True)
+        # Return 200 to Twilio to avoid retries on our errors
+        return Response(content="", status_code=200)
+
+
+@router.post("/sms/send")
+async def send_sms(request: Request):
+    """
+    Send an SMS message through the API.
+    
+    Expected JSON body:
+    {
+        "assistant_id": 123,
+        "to_phone_number": "+1234567890",
+        "message_body": "Hello, this is your AI assistant...",
+        "agenda": "Optional: Follow up about their recent order and confirm delivery address"
+    }
+    """
+    try:
+        # Parse JSON body
+        body = await request.json()
+        
+        assistant_id = body.get("assistant_id")
+        to_phone_number = body.get("to_phone_number")
+        message_body = body.get("message_body")
+        agenda = body.get("agenda")  # Optional agenda for conversation context
+        
+        # Validate required fields
+        if not assistant_id:
+            raise HTTPException(status_code=400, detail="assistant_id is required")
+        if not to_phone_number:
+            raise HTTPException(status_code=400, detail="to_phone_number is required")
+        if not message_body:
+            raise HTTPException(status_code=400, detail="message_body is required")
+        
+        # Validate phone number format
+        if not TwilioService.validate_phone_number(to_phone_number):
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid phone number format. Use E.164 format (e.g., +1234567890)"
+            )
+        
+        # Get the assistant
+        assistant = await assistant_manager.get_assistant_by_id(assistant_id)
+        if not assistant:
+            raise HTTPException(status_code=404, detail="Assistant not found")
+        
+        # Check billing limits
+        try:
+            usage_check = await BillingService.check_usage_limits(assistant.organization_id)
+            
+            if not usage_check.get("allowed", False):
+                error_detail = "Usage limit exceeded"
+                if usage_check.get("needs_upgrade", False):
+                    error_detail = "Monthly usage limit exceeded. Please upgrade your plan or add credits."
+                
+                raise HTTPException(status_code=429, detail=error_detail)
+                
+        except HTTPException:
+            raise
+        except Exception as billing_error:
+            logger.error(f"Billing check failed for organization {assistant.organization_id}, allowing SMS: {billing_error}")
+        
+        # Get Twilio credentials
+        twilio_account_sid = assistant.twilio_account_sid or os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_auth_token = assistant.twilio_auth_token or os.getenv("TWILIO_AUTH_TOKEN")
+        
+        if not twilio_account_sid or not twilio_auth_token:
+            raise HTTPException(status_code=500, detail="Twilio credentials not configured")
+        
+        # Send the SMS
+        message_sid = TwilioService.send_sms(
+            to_phone_number=to_phone_number,
+            from_phone_number=assistant.phone_number,
+            message_body=message_body,
+            account_sid=twilio_account_sid,
+            auth_token=twilio_auth_token,
+        )
+        
+        if not message_sid:
+            raise HTTPException(status_code=500, detail="Failed to send SMS")
+        
+        logger.info(f"Sent SMS {message_sid} from assistant {assistant_id} to {to_phone_number}")
+        
+        # Create conversation record for outbound SMS
+        try:
+            # Include agenda in metadata if provided
+            conversation_metadata = {"outbound": True}
+            if agenda:
+                conversation_metadata["agenda"] = agenda
+                logger.info(f"Outbound SMS with agenda: {agenda[:100]}...")
+            
+            conversation = await ConversationService.create_conversation(
+                assistant_id=assistant.id,
+                channel_sid=message_sid,
+                conversation_type="sms",
+                to_phone_number=to_phone_number,
+                customer_phone_number=to_phone_number,  # For outbound, customer is the recipient
+                metadata=conversation_metadata,
+            )
+            
+            if conversation:
+                # Store the message as a chat message
+                await ConversationService.create_chat_message(
+                    conversation_id=conversation.id,
+                    role="assistant",
+                    content=message_body,
+                )
+                
+                # If there's an agenda, also store it as a system message
+                if agenda:
+                    await ConversationService.create_chat_message(
+                        conversation_id=conversation.id,
+                        role="system",
+                        content=f"SMS CONVERSATION AGENDA: {agenda}",
+                    )
+                
+                # Record SMS usage for billing
+                await BillingService.record_sms_usage(conversation.id)
+                
+                # Send webhook if configured
+                if assistant.webhook_url:
+                    await WebhookService.send_sms_webhook(
+                        assistant=assistant,
+                        conversation_id=conversation.id,
+                        webhook_type="sms-sent",
+                        from_number=assistant.phone_number,
+                        to_number=to_phone_number,
+                        message_body=message_body,
+                        direction="outbound",
+                        metadata={"agenda": agenda} if agenda else None,
+                    )
+            
+        except Exception as e:
+            logger.error(f"Error creating conversation record for outbound SMS: {e}")
+        
+        # Return success response
+        response_data = {
+            "success": True,
+            "message_sid": message_sid,
+            "message": "SMS sent successfully",
+            "assistant_id": assistant_id,
+            "to_phone_number": to_phone_number,
+            "from_phone_number": assistant.phone_number,
+        }
+        
+        if agenda:
+            response_data["agenda"] = agenda
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending SMS: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")

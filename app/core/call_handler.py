@@ -6,7 +6,6 @@ This file contains the CallHandler class for managing call state and conversatio
 import logging
 import base64
 import asyncio
-import json
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,7 +14,7 @@ from fastapi import WebSocket
 from app.services.deepgram_service import DeepgramService
 from app.services.llm_service import LLMService
 from app.services.tts_service import TTSService
-from app.services.call_service import CallService
+from app.services.conversation_service import ConversationService
 from app.services.webhook_service import WebhookService
 from app.services.audio_denoising_service import AudioDenoisingService
 from app.services.recording_service import RecordingService
@@ -55,28 +54,38 @@ class CallState:
     llm_service: Optional[Any] = None  # LLM service for this call
     deepgram_service: Optional[Any] = None  # Deepgram service for this call
     tts_service: Optional[Any] = None  # TTS service for this call
-    audio_denoising_service: Optional[Any] = None  # Audio denoising service for this call
+    audio_denoising_service: Optional[Any] = (
+        None  # Audio denoising service for this call
+    )
     recording_service: Optional[Any] = None  # Recording service for this call
     assistant: Optional[Any] = None  # Assistant to use for this call
-    
+
     # Idle timeout tracking
-    last_activity_time: datetime = field(default_factory=datetime.now)  # Track last activity
+    last_activity_time: datetime = field(
+        default_factory=datetime.now
+    )  # Track last activity
     idle_message_count: int = 0  # Count of idle messages sent
     idle_timeout_task: Optional[Any] = None  # Background task for idle timeout
     idle_timeout_seconds: Optional[int] = None  # Timeout in seconds
     max_idle_messages: Optional[int] = None  # Max idle messages before ending call
     idle_message: Optional[str] = None  # Message to send when idle
-    
+
     # Timing tracking for metrics calculation
-    current_assistant_response_start: Optional[float] = None  # Track when assistant response starts
-    
+    current_assistant_response_start: Optional[float] = (
+        None  # Track when assistant response starts
+    )
+
     # Utterance accumulation following Deepgram's guidelines
-    utterance_buffer: list = field(default_factory=list)  # Buffer for accumulating is_final transcripts until speech_final
+    utterance_buffer: list = field(
+        default_factory=list
+    )  # Buffer for accumulating is_final transcripts until speech_final
     utterance_start_time: Optional[float] = None  # Start time of current utterance
     utterance_end_time: Optional[float] = None  # End time of current utterance
     utterance_timeout_task: Optional[Any] = None  # Task to handle utterance timeout
-    last_final_transcript_time: Optional[datetime] = None  # Track when last final transcript was received
-    
+    last_final_transcript_time: Optional[datetime] = (
+        None  # Track when last final transcript was received
+    )
+
     # LLM request tracking for proper cancellation
     pending_llm_task: Optional[asyncio.Task] = None  # Track pending LLM request task
 
@@ -146,15 +155,15 @@ class CallHandler:
             self.active_calls[call_sid].idle_timeout_seconds = assistant.idle_timeout
             self.active_calls[call_sid].max_idle_messages = assistant.max_idle_messages
             self.active_calls[call_sid].idle_message = (
-                assistant.idle_message or 
-                "Are you still there? I'm here to help if you need anything."
+                assistant.idle_message
+                or "Are you still there? I'm here to help if you need anything."
             )
 
         # Check if this is an outbound call and extract agenda
         is_outbound = metadata and metadata.get("outbound", False)
         agenda = None
         custom_welcome_message = None
-        
+
         if is_outbound:
             agenda = metadata.get("agenda")
             custom_welcome_message = metadata.get("custom_welcome_message")
@@ -163,7 +172,7 @@ class CallHandler:
         # Create a dedicated LLM service instance for this call
         # The new multi-provider LLMService handles configuration through the assistant object
         self.active_calls[call_sid].llm_service = LLMService(
-            call_sid=call_sid,
+            channel_sid=call_sid,
             to_number=to_number,
             from_number=from_number,
             assistant=assistant,
@@ -174,15 +183,17 @@ class CallHandler:
             # Add the agenda as a system message after the initial system prompt
             # This tells the assistant what the purpose of the call is
             agenda_message = {
-                "role": "system", 
-                "content": f"CALL AGENDA: {agenda}. This is the purpose of your outbound call. Start the conversation by addressing this agenda professionally and naturally."
+                "role": "system",
+                "content": f"CALL AGENDA: {agenda}. This is the purpose of your outbound call. Start the conversation by addressing this agenda professionally and naturally.",
             }
-            
+
             # Insert agenda after the system prompt (index 1)
             llm_service = self.active_calls[call_sid].llm_service
             if len(llm_service.conversation_history) > 0:
                 llm_service.conversation_history.insert(1, agenda_message)
-                logger.info(f"Injected agenda into conversation history for call {call_sid}")
+                logger.info(
+                    f"Injected agenda into conversation history for call {call_sid}"
+                )
 
         # Get Deepgram configuration from assistant
         deepgram_api_key = None
@@ -201,7 +212,9 @@ class CallHandler:
             language=stt_settings.get("language", "en-US"),
             punctuate=stt_settings.get("punctuate", True),
             interim_results=stt_settings.get("interim_results", True),
-            endpointing=stt_settings.get("endpointing", {}).get("silence_threshold", 10),
+            endpointing=stt_settings.get("endpointing", {}).get(
+                "silence_threshold", 10
+            ),
             utterance_end_ms=stt_settings.get("utterance_end_ms", 1000),
             smart_format=stt_settings.get("smart_format", True),
             keywords=stt_settings.get("keywords", []),
@@ -211,15 +224,16 @@ class CallHandler:
 
         # Create TTS service with assistant settings
         self.active_calls[call_sid].tts_service = TTSService.create_from_assistant(
-            call_sid=call_sid,
-            assistant=assistant
+            call_sid=call_sid, assistant=assistant
         )
 
         # Create audio denoising service if enabled in assistant settings
-        denoising_enabled = False  # Default to disabled - the current implementation has issues
+        denoising_enabled = (
+            False  # Default to disabled - the current implementation has issues
+        )
         if assistant and assistant.stt_settings:
-            denoising_enabled = assistant.stt_settings.get('audio_denoising', False)
-        
+            denoising_enabled = assistant.stt_settings.get("audio_denoising", False)
+
         self.active_calls[call_sid].audio_denoising_service = AudioDenoisingService(
             call_sid=call_sid,
             enabled=denoising_enabled,
@@ -241,38 +255,47 @@ class CallHandler:
         )
 
         # Determine the welcome message to use
-        welcome_message = "Hello! I'm your AI assistant. How can I help you today?<flush/>"
-        
+        welcome_message = (
+            "Hello! I'm your AI assistant. How can I help you today?<flush/>"
+        )
+
         # Use custom welcome message for outbound calls if provided
         if is_outbound and custom_welcome_message:
             welcome_message = custom_welcome_message + "<flush/>"
             logger.info(f"Using custom welcome message for outbound call {call_sid}")
         # Fallback to assistant's default welcome message
-        elif (assistant and assistant.llm_settings and "welcome_message" in assistant.llm_settings):
+        elif (
+            assistant
+            and assistant.llm_settings
+            and "welcome_message" in assistant.llm_settings
+        ):
             welcome_message = assistant.llm_settings.get("welcome_message") + "<flush/>"
 
         # Send welcome message immediately for faster response
         await self.active_calls[call_sid].tts_service.process_text(
-            text=welcome_message,
-            force_flush=True
+            text=welcome_message, force_flush=True
         )
 
         # Start non-critical services in background for better latency
-        asyncio.create_task(self._start_background_services(call_sid, metadata, assistant, websocket))
+        asyncio.create_task(
+            self._start_background_services(call_sid, metadata, assistant, websocket)
+        )
 
         call_type = "outbound" if is_outbound else "inbound"
-        logger.info(f"Started handling {call_type} call {call_sid} with optimized initialization")
+        logger.info(
+            f"Started handling {call_type} call {call_sid} with optimized initialization"
+        )
 
     async def _start_background_services(
-        self, 
-        call_sid: str, 
-        metadata: Dict[str, Any], 
-        assistant: Any, 
-        websocket: WebSocket
+        self,
+        call_sid: str,
+        metadata: Dict[str, Any],
+        assistant: Any,
+        websocket: WebSocket,
     ) -> None:
         """
         Start non-critical services in background to improve first message latency.
-        
+
         Args:
             call_sid: The Twilio call SID
             metadata: Call metadata
@@ -313,25 +336,34 @@ class CallHandler:
             asyncio.create_task(self._start_local_recording_async(call_sid, assistant))
 
             # Start idle timeout monitoring if configured
-            if (call_sid in self.active_calls and 
-                self.active_calls[call_sid].idle_timeout_seconds and 
-                self.active_calls[call_sid].idle_timeout_seconds > 0):
+            if (
+                call_sid in self.active_calls
+                and self.active_calls[call_sid].idle_timeout_seconds
+                and self.active_calls[call_sid].idle_timeout_seconds > 0
+            ):
                 self.active_calls[call_sid].idle_timeout_task = asyncio.create_task(
                     self._monitor_idle_timeout(call_sid)
                 )
-                logger.info(f"Started idle timeout monitoring for call {call_sid} "
-                           f"with {self.active_calls[call_sid].idle_timeout_seconds}s timeout, "
-                           f"max {self.active_calls[call_sid].max_idle_messages} messages, "
-                           f"message: '{self.active_calls[call_sid].idle_message}'")
+                logger.info(
+                    f"Started idle timeout monitoring for call {call_sid} "
+                    f"with {self.active_calls[call_sid].idle_timeout_seconds}s timeout, "
+                    f"max {self.active_calls[call_sid].max_idle_messages} messages, "
+                    f"message: '{self.active_calls[call_sid].idle_message}'"
+                )
             else:
-                logger.info(f"No idle timeout configured for call {call_sid} "
-                           f"(timeout: {self.active_calls[call_sid].idle_timeout_seconds})")
+                logger.info(
+                    f"No idle timeout configured for call {call_sid} "
+                    f"(timeout: {self.active_calls[call_sid].idle_timeout_seconds})"
+                )
 
             # Note: Initial webhook status update is now sent immediately in /twiml endpoint
             # for faster response time
 
         except Exception as e:
-            logger.error(f"Error starting background services for call {call_sid}: {e}", exc_info=True)
+            logger.error(
+                f"Error starting background services for call {call_sid}: {e}",
+                exc_info=True,
+            )
 
     async def _start_local_recording_async(self, call_sid: str, assistant: Any) -> None:
         """
@@ -346,19 +378,19 @@ class CallHandler:
             recording_enabled = False
             recording_settings = {}
             if assistant and assistant.recording_settings:
-                recording_enabled = assistant.recording_settings.get('enabled', False)
+                recording_enabled = assistant.recording_settings.get("enabled", False)
                 recording_settings = assistant.recording_settings
 
             self.active_calls[call_sid].recording_service = RecordingService(
                 call_sid=call_sid,
                 enabled=recording_enabled,
-                format=recording_settings.get('format', 'wav'),
-                sample_rate=recording_settings.get('sample_rate', 8000),
-                channels=recording_settings.get('channels', 1),
-                record_user=recording_settings.get('record_user_audio', True),
-                record_assistant=recording_settings.get('record_assistant_audio', True),
-                record_mixed=recording_settings.get('record_mixed_audio', True),
-                auto_save=recording_settings.get('auto_save', True),
+                format=recording_settings.get("format", "wav"),
+                sample_rate=recording_settings.get("sample_rate", 8000),
+                channels=recording_settings.get("channels", 1),
+                record_user=recording_settings.get("record_user_audio", True),
+                record_assistant=recording_settings.get("record_assistant_audio", True),
+                record_mixed=recording_settings.get("record_mixed_audio", True),
+                auto_save=recording_settings.get("auto_save", True),
             )
 
             # Initialize and start recording service if enabled
@@ -367,86 +399,121 @@ class CallHandler:
                 # Set up recording callbacks
                 async def recording_started_callback(call_sid: str):
                     logger.info(f"Local recording started for call {call_sid}")
-                    
+
                 async def recording_stopped_callback(call_sid: str):
                     logger.info(f"Local recording stopped for call {call_sid}")
-                    
-                async def recording_saved_callback(call_sid: str, saved_files: Dict[str, Dict[str, Any]]):
+
+                async def recording_saved_callback(
+                    call_sid: str, saved_files: Dict[str, Dict[str, Any]]
+                ):
                     """Callback when recordings are saved to S3."""
-                    logger.info(f"Recordings saved to S3 for call {call_sid}: {list(saved_files.keys())}")
-                    
+                    logger.info(
+                        f"Recordings saved to S3 for call {call_sid}: {list(saved_files.keys())}"
+                    )
+
                     # Create database records for each saved recording
                     # Use a separate async task to avoid event loop issues
                     async def create_database_records():
                         try:
-                            logger.info(f"Starting database record creation for {len(saved_files)} recordings")
-                            from app.services.call_service import CallService
-                            logger.info(f"Successfully imported CallService")
-                            
+                            logger.info(
+                                f"Starting database record creation for {len(saved_files)} recordings"
+                            )
+                            from app.services.conversation_service import (
+                                ConversationService,
+                            )
+
+                            logger.info(f"Successfully imported ConversationService")
+
                             for recording_type, file_info in saved_files.items():
-                                logger.info(f"Creating database record for {recording_type} recording with S3 key: {file_info['s3_key']}")
-                                
-                                recording = await CallService.create_s3_recording(
-                                    call_sid=call_sid,
-                                    s3_key=file_info["s3_key"],
-                                    s3_url=file_info["s3_url"],
-                                    duration=file_info["duration"],
-                                    file_size=file_info["file_size"],
-                                    format=file_info["format"],
-                                    sample_rate=file_info["sample_rate"],
-                                    channels=file_info["channels"],
-                                    recording_type=recording_type,
-                                    metadata=file_info,
+                                logger.info(
+                                    f"Creating database record for {recording_type} recording with S3 key: {file_info['s3_key']}"
                                 )
-                                logger.info(f"Created database record for {recording_type} recording: {file_info['s3_key']} (ID: {recording.id if recording else None})")
-                            
-                            logger.info(f"Successfully created all {len(saved_files)} database records for call {call_sid}")
-                        
+
+                                recording = (
+                                    await ConversationService.create_s3_recording(
+                                        channel_sid=call_sid,
+                                        s3_key=file_info["s3_key"],
+                                        s3_url=file_info["s3_url"],
+                                        duration=file_info["duration"],
+                                        file_size=file_info["file_size"],
+                                        format=file_info["format"],
+                                        sample_rate=file_info["sample_rate"],
+                                        channels=file_info["channels"],
+                                        recording_type=recording_type,
+                                        metadata=file_info,
+                                    )
+                                )
+                                logger.info(
+                                    f"Created database record for {recording_type} recording: {file_info['s3_key']} (ID: {recording.id if recording else None})"
+                                )
+
+                            logger.info(
+                                f"Successfully created all {len(saved_files)} database records for call {call_sid}"
+                            )
+
                         except Exception as db_error:
-                            logger.error(f"Error creating database records for recordings: {db_error}")
+                            logger.error(
+                                f"Error creating database records for recordings: {db_error}"
+                            )
                             import traceback
+
                             logger.error(f"Full traceback: {traceback.format_exc()}")
-                    
+
                     # Schedule the database operations as a separate task to avoid event loop conflicts
                     asyncio.create_task(create_database_records())
-                    
+
                     # Record billing usage
                     async def handle_billing():
                         try:
                             # Get the call to record billing
-                            call = await CallService.get_call_by_sid(call_sid)
-                            if call:
+                            conversation = (
+                                await ConversationService.get_conversation_by_sid(
+                                    call_sid
+                                )
+                            )
+                            if conversation:
                                 # Import BillingService here to avoid circular imports
                                 from app.services.billing_service import BillingService
+
                                 # Run billing as background task to reduce latency
-                                asyncio.create_task(BillingService.record_call_usage(call.id))
-                                logger.info(f"Scheduled billing usage recording for call {call.id}")
+                                asyncio.create_task(
+                                    BillingService.record_call_usage(conversation.id)
+                                )
+                                logger.info(
+                                    f"Scheduled billing usage recording for call {conversation.id}"
+                                )
                         except Exception as billing_error:
-                            logger.error(f"Error scheduling billing usage for call {call_sid}: {billing_error}")
-                    
+                            logger.error(
+                                f"Error scheduling billing usage for call {call_sid}: {billing_error}"
+                            )
+
                     asyncio.create_task(handle_billing())
-                    
+
                     # Send webhook when recordings are saved
                     if assistant and assistant.webhook_url:
+
                         async def handle_webhook():
                             try:
                                 # Send end-of-call webhook with recording information
                                 await WebhookService.send_end_of_call_webhook_with_recordings(
-                                    call_sid=call_sid,
-                                    saved_files=saved_files
+                                    call_sid=call_sid, saved_files=saved_files
                                 )
-                                logger.info(f"Sent end-of-call webhook with recordings for call {call_sid}")
+                                logger.info(
+                                    f"Sent end-of-call webhook with recordings for call {call_sid}"
+                                )
                             except Exception as e:
-                                logger.error(f"Error sending webhook for call {call_sid}: {e}")
-                        
+                                logger.error(
+                                    f"Error sending webhook for call {call_sid}: {e}"
+                                )
+
                         asyncio.create_task(handle_webhook())
-                
+
                 recording_service.set_callbacks(
                     recording_started_callback=recording_started_callback,
                     recording_stopped_callback=recording_stopped_callback,
                     recording_saved_callback=recording_saved_callback,
                 )
-                
+
                 # Start recording
                 await recording_service.start_recording()
                 logger.info(f"Started local recording service for call {call_sid}")
@@ -454,71 +521,92 @@ class CallHandler:
                 logger.info(f"Local recording disabled for call {call_sid}")
 
         except Exception as e:
-            logger.error(f"Error starting local recording for call {call_sid}: {e}", exc_info=True)
+            logger.error(
+                f"Error starting local recording for call {call_sid}: {e}",
+                exc_info=True,
+            )
 
     async def _monitor_idle_timeout(self, call_sid: str) -> None:
         """
         Monitor idle timeout for a call and send idle messages when appropriate.
-        
+
         Args:
             call_sid: The Twilio call SID
         """
         if call_sid not in self.active_calls:
             return
-            
+
         try:
             while self.active_calls[call_sid].is_active:
                 # Sleep for 1 second intervals to check timeout
                 await asyncio.sleep(1.0)
-                
-                if call_sid not in self.active_calls or not self.active_calls[call_sid].is_active:
+
+                if (
+                    call_sid not in self.active_calls
+                    or not self.active_calls[call_sid].is_active
+                ):
                     break
-                
+
                 call_state = self.active_calls[call_sid]
-                
+
                 # Skip if no timeout configured
                 if not call_state.idle_timeout_seconds:
                     continue
-                
+
                 # Calculate time since last activity
-                time_since_activity = (datetime.now() - call_state.last_activity_time).total_seconds()
-                
+                time_since_activity = (
+                    datetime.now() - call_state.last_activity_time
+                ).total_seconds()
+
                 # Log debug info every 10 seconds for troubleshooting
                 if int(time_since_activity) % 10 == 0 and time_since_activity > 0:
-                    logger.debug(f"Idle monitoring for call {call_sid}: {time_since_activity:.1f}s since last activity (threshold: {call_state.idle_timeout_seconds}s)")
-                
+                    logger.debug(
+                        f"Idle monitoring for call {call_sid}: {time_since_activity:.1f}s since last activity (threshold: {call_state.idle_timeout_seconds}s)"
+                    )
+
                 # Check if we've exceeded the idle timeout
                 if time_since_activity >= call_state.idle_timeout_seconds:
                     # Check if we've reached max idle messages
-                    if (call_state.max_idle_messages and 
-                        call_state.idle_message_count >= call_state.max_idle_messages):
-                        logger.info(f"Max idle messages ({call_state.max_idle_messages}) reached for call {call_sid}, ending call")
+                    if (
+                        call_state.max_idle_messages
+                        and call_state.idle_message_count
+                        >= call_state.max_idle_messages
+                    ):
+                        logger.info(
+                            f"Max idle messages ({call_state.max_idle_messages}) reached for call {call_sid}, ending call"
+                        )
                         await self.end_call(call_sid, with_twilio=True)
                         break
-                    
+
                     # Send idle message
                     if call_state.idle_message:
-                        logger.info(f"Sending idle message to call {call_sid} after {time_since_activity:.1f}s of inactivity")
-                        await call_state.tts_service.process_text(
-                            text=call_state.idle_message + "<flush/>",
-                            force_flush=True
+                        logger.info(
+                            f"Sending idle message to call {call_sid} after {time_since_activity:.1f}s of inactivity"
                         )
-                        
+                        await call_state.tts_service.process_text(
+                            text=call_state.idle_message + "<flush/>", force_flush=True
+                        )
+
                         # Increment idle message count and reset activity timer
                         call_state.idle_message_count += 1
                         call_state.last_activity_time = datetime.now()
-                        
-                        logger.info(f"Sent idle message #{call_state.idle_message_count} to call {call_sid}")
-                        
+
+                        logger.info(
+                            f"Sent idle message #{call_state.idle_message_count} to call {call_sid}"
+                        )
+
         except asyncio.CancelledError:
             logger.info(f"Idle timeout monitoring cancelled for call {call_sid}")
         except Exception as e:
-            logger.error(f"Error in idle timeout monitoring for call {call_sid}: {e}", exc_info=True)
+            logger.error(
+                f"Error in idle timeout monitoring for call {call_sid}: {e}",
+                exc_info=True,
+            )
 
     def _reset_idle_timer(self, call_sid: str) -> None:
         """
         Reset the idle timer for a call to indicate activity.
-        
+
         Args:
             call_sid: The Twilio call SID
         """
@@ -586,7 +674,9 @@ class CallHandler:
                 # Record assistant audio if recording service is enabled
                 recording_service = self.active_calls[call_sid].recording_service
                 if recording_service and recording_service.enabled:
-                    asyncio.create_task(recording_service.record_assistant_audio(audio_data))
+                    asyncio.create_task(
+                        recording_service.record_assistant_audio(audio_data)
+                    )
 
         except Exception as e:
             logger.error(
@@ -610,15 +700,16 @@ class CallHandler:
 
         try:
             # Cancel any pending LLM task first to prevent multiple responses
-            if (self.active_calls[call_sid].pending_llm_task and 
-                not self.active_calls[call_sid].pending_llm_task.done()):
+            if (
+                self.active_calls[call_sid].pending_llm_task
+                and not self.active_calls[call_sid].pending_llm_task.done()
+            ):
                 logger.info(f"Cancelling pending LLM task for call {call_sid}")
                 self.active_calls[call_sid].pending_llm_task.cancel()
                 # Wait a bit for cancellation to take effect
                 try:
                     await asyncio.wait_for(
-                        self.active_calls[call_sid].pending_llm_task, 
-                        timeout=0.1
+                        self.active_calls[call_sid].pending_llm_task, timeout=0.1
                     )
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass  # Expected when task is cancelled
@@ -645,7 +736,7 @@ class CallHandler:
                 logger.info(
                     f"Processing interrupting speech: {interrupting_transcript}"
                 )
-                
+
                 # Note: Transcript is already stored in handle_transcript method
                 # Just process with LLM for interruption response
                 # Create new LLM task and track it
@@ -687,7 +778,9 @@ class CallHandler:
             # Check if this is a message that should be spoken before an action
             if metadata.get("speak_before_action"):
                 if content:
-                    logger.info(f"Speaking message before action for {call_sid}: {content}")
+                    logger.info(
+                        f"Speaking message before action for {call_sid}: {content}"
+                    )
                     await self.active_calls[call_sid].tts_service.process_text(
                         text=content,
                         force_flush=True,  # Force flush to ensure message is spoken
@@ -723,7 +816,10 @@ class CallHandler:
                         return
 
             # Track timing for the first response chunk (when assistant starts responding)
-            if content and not self.active_calls[call_sid].current_assistant_response_start:
+            if (
+                content
+                and not self.active_calls[call_sid].current_assistant_response_start
+            ):
                 # Calculate time since call start in seconds
                 call_start_time = self.active_calls[call_sid].start_time
                 current_time = datetime.now()
@@ -745,52 +841,65 @@ class CallHandler:
             if is_final:
                 response = metadata.get("full_response", "")
                 logger.info(f"Final LLM response for {call_sid}: {response}")
-                
+
                 # Clear the pending LLM task as it's complete
                 if call_sid in self.active_calls:
                     self.active_calls[call_sid].pending_llm_task = None
-                
+
                 # Store conversation history in database
-                if call_sid in self.active_calls and self.active_calls[call_sid].llm_service:
+                if (
+                    call_sid in self.active_calls
+                    and self.active_calls[call_sid].llm_service
+                ):
                     llm_service = self.active_calls[call_sid].llm_service
                     conversation_history = llm_service.get_conversation_history()
                     assistant = self.active_calls[call_sid].assistant
-                    
+
                     # Get current LLM provider info
-                    llm_provider = llm_service._get_current_provider_name() if hasattr(llm_service, '_get_current_provider_name') else None
+                    llm_provider = (
+                        llm_service._get_current_provider_name()
+                        if hasattr(llm_service, "_get_current_provider_name")
+                        else None
+                    )
                     llm_model = None
                     if assistant and assistant.llm_provider_config:
                         llm_model = assistant.llm_provider_config.get("model")
-                    
+
                     # Store conversation history asynchronously
                     asyncio.create_task(
-                        CallService.store_conversation_history(
-                            call_sid=call_sid,
+                        ConversationService.store_conversation_history(
+                            channel_sid=call_sid,
                             conversation_history=conversation_history,
                             llm_provider=llm_provider,
-                            llm_model=llm_model
+                            llm_model=llm_model,
                         )
                     )
-                
+
                 # Store assistant response in database asynchronously with timing
                 if response:
                     # Clean up flush tags and other formatting before storing
-                    cleaned_response = response.replace("<flush/>", "").replace("<flush>", "").strip()
+                    cleaned_response = (
+                        response.replace("<flush/>", "").replace("<flush>", "").strip()
+                    )
                     if cleaned_response:  # Only store if there's actual content
                         # Calculate response end time
                         call_start_time = self.active_calls[call_sid].start_time
                         current_time = datetime.now()
-                        response_end_time = (current_time - call_start_time).total_seconds()
-                        
+                        response_end_time = (
+                            current_time - call_start_time
+                        ).total_seconds()
+
                         # Use the tracked start time or estimate it
-                        response_start_time = self.active_calls[call_sid].current_assistant_response_start
+                        response_start_time = self.active_calls[
+                            call_sid
+                        ].current_assistant_response_start
                         if response_start_time is None:
                             # Estimate response took about 2-3 seconds if we don't have start time
                             response_start_time = max(0, response_end_time - 2.5)
-                        
+
                         asyncio.create_task(
-                            CallService.create_transcript(
-                                call_sid=call_sid,
+                            ConversationService.create_transcript(
+                                channel_sid=call_sid,
                                 content=cleaned_response,
                                 is_final=True,
                                 speaker="assistant",
@@ -798,9 +907,11 @@ class CallHandler:
                                 segment_end=response_end_time,
                             )
                         )
-                        
+
                         # Reset the response start tracking for next response
-                        self.active_calls[call_sid].current_assistant_response_start = None
+                        self.active_calls[call_sid].current_assistant_response_start = (
+                            None
+                        )
             else:
                 logger.debug(f"LLM response chunk for {call_sid}: {content}")
 
@@ -837,65 +948,89 @@ class CallHandler:
             # Extract speech_final from metadata (following Deepgram's guidelines)
             speech_final = metadata.get("speech_final", False)
             utterance_end = metadata.get("utterance_end", False)
-            
+
             # Only reset idle timer on meaningful speech activity
             # Reset on speech_final (end of utterance) or final transcripts with content
             if (speech_final or is_final) and transcript.strip():
                 self._reset_idle_timer(call_sid)
-            
+
             # Handle UtteranceEnd events (fallback when speech_final doesn't work due to noise)
             if utterance_end and self.active_calls[call_sid].utterance_buffer:
-                logger.info(f"UtteranceEnd event received for call {call_sid} - processing buffered utterance")
-                
+                logger.info(
+                    f"UtteranceEnd event received for call {call_sid} - processing buffered utterance"
+                )
+
                 # Concatenate all accumulated transcripts for the complete utterance
-                complete_utterance = " ".join(self.active_calls[call_sid].utterance_buffer)
-                logger.info(f"Complete utterance from UtteranceEnd for {call_sid}: {complete_utterance}")
-                
+                complete_utterance = " ".join(
+                    self.active_calls[call_sid].utterance_buffer
+                )
+                logger.info(
+                    f"Complete utterance from UtteranceEnd for {call_sid}: {complete_utterance}"
+                )
+
                 # Store the complete utterance in database
                 asyncio.create_task(
-                    CallService.create_transcript(
-                        call_sid=call_sid,
+                    ConversationService.create_transcript(
+                        channel_sid=call_sid,
                         content=complete_utterance,
                         is_final=True,
                         speaker="user",
                         confidence=metadata.get("confidence"),
                         segment_start=self.active_calls[call_sid].utterance_start_time,
-                        segment_end=metadata.get("last_word_end"),  # Use UtteranceEnd timing
+                        segment_end=metadata.get(
+                            "last_word_end"
+                        ),  # Use UtteranceEnd timing
                     )
                 )
-                
+
                 # Check if this should be treated as an interruption
                 is_interruption = False
                 if self.active_calls[call_sid].is_ai_speaking:
                     speaking_start = self.active_calls[call_sid].ai_speaking_start_time
                     if speaking_start:
-                        speaking_duration = (datetime.now() - speaking_start).total_seconds()
-                        if speaking_duration >= self.active_calls[call_sid].min_speaking_time:
+                        speaking_duration = (
+                            datetime.now() - speaking_start
+                        ).total_seconds()
+                        if (
+                            speaking_duration
+                            >= self.active_calls[call_sid].min_speaking_time
+                        ):
                             word_count = len(complete_utterance.split())
-                            if word_count >= self.active_calls[call_sid].interruption_threshold:
+                            if (
+                                word_count
+                                >= self.active_calls[call_sid].interruption_threshold
+                            ):
                                 logger.info(
                                     f"Detected interruption via UtteranceEnd in call {call_sid} with {word_count} words "
                                     f"after {speaking_duration:.2f} seconds of AI speaking"
                                 )
-                                self.active_calls[call_sid].last_interruption_time = datetime.now()
-                                await self._handle_interruption(call_sid, complete_utterance)
+                                self.active_calls[call_sid].last_interruption_time = (
+                                    datetime.now()
+                                )
+                                await self._handle_interruption(
+                                    call_sid, complete_utterance
+                                )
                                 is_interruption = True
 
                 # Only process with LLM if it's not an interruption
                 if not is_interruption and self.active_calls[call_sid].is_active:
                     # Cancel any existing pending task first
-                    if (self.active_calls[call_sid].pending_llm_task and 
-                        not self.active_calls[call_sid].pending_llm_task.done()):
-                        logger.info(f"Cancelling previous LLM task before processing UtteranceEnd utterance for {call_sid}")
+                    if (
+                        self.active_calls[call_sid].pending_llm_task
+                        and not self.active_calls[call_sid].pending_llm_task.done()
+                    ):
+                        logger.info(
+                            f"Cancelling previous LLM task before processing UtteranceEnd utterance for {call_sid}"
+                        )
                         self.active_calls[call_sid].pending_llm_task.cancel()
                         try:
                             await asyncio.wait_for(
-                                self.active_calls[call_sid].pending_llm_task, 
-                                timeout=0.1
+                                self.active_calls[call_sid].pending_llm_task,
+                                timeout=0.1,
                             )
                         except (asyncio.CancelledError, asyncio.TimeoutError):
                             pass
-                    
+
                     # Process complete utterance with LLM
                     self.active_calls[call_sid].pending_llm_task = asyncio.create_task(
                         self.active_calls[call_sid].llm_service.process_transcript(
@@ -910,7 +1045,7 @@ class CallHandler:
                             ),
                         )
                     )
-                
+
                 # Clear the utterance buffer after processing
                 self.active_calls[call_sid].utterance_buffer = []
                 self.active_calls[call_sid].utterance_start_time = None
@@ -945,50 +1080,62 @@ class CallHandler:
                         logger.info(
                             f"Processing buffered transcript after cooldown (speech_final): {buffered_transcript}"
                         )
-                        
+
                         # Store buffered transcript in database
                         if buffered_transcript:
                             asyncio.create_task(
-                                CallService.create_transcript(
-                                    call_sid=call_sid,
+                                ConversationService.create_transcript(
+                                    channel_sid=call_sid,
                                     content=buffered_transcript,
                                     is_final=True,
                                     speaker="user",
-                                    segment_start=self._get_segment_start_time(call_sid, metadata),
-                                    segment_end=self._get_segment_end_time(call_sid, metadata),
-                                )
-                            )
-                            
-                            # Process with LLM
-                            # Cancel any existing pending task first
-                            if (self.active_calls[call_sid].pending_llm_task and 
-                                not self.active_calls[call_sid].pending_llm_task.done()):
-                                logger.info(f"Cancelling previous LLM task before processing buffered transcript for {call_sid}")
-                                self.active_calls[call_sid].pending_llm_task.cancel()
-                                try:
-                                    await asyncio.wait_for(
-                                        self.active_calls[call_sid].pending_llm_task, 
-                                        timeout=0.1
-                                    )
-                                except (asyncio.CancelledError, asyncio.TimeoutError):
-                                    pass
-                            
-                            self.active_calls[call_sid].pending_llm_task = asyncio.create_task(
-                                self.active_calls[
-                                    call_sid
-                                ].llm_service.process_transcript(
-                                    transcript=buffered_transcript,
-                                    is_final=True,
-                                    metadata={**metadata, "buffered": True},
-                                    response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
-                                        call_sid=call_sid,
-                                        content=content,
-                                        is_final=is_final,
-                                        metadata=response_metadata,
+                                    segment_start=self._get_segment_start_time(
+                                        call_sid, metadata
+                                    ),
+                                    segment_end=self._get_segment_end_time(
+                                        call_sid, metadata
                                     ),
                                 )
                             )
-                        
+
+                            # Process with LLM
+                            # Cancel any existing pending task first
+                            if (
+                                self.active_calls[call_sid].pending_llm_task
+                                and not self.active_calls[
+                                    call_sid
+                                ].pending_llm_task.done()
+                            ):
+                                logger.info(
+                                    f"Cancelling previous LLM task before processing buffered transcript for {call_sid}"
+                                )
+                                self.active_calls[call_sid].pending_llm_task.cancel()
+                                try:
+                                    await asyncio.wait_for(
+                                        self.active_calls[call_sid].pending_llm_task,
+                                        timeout=0.1,
+                                    )
+                                except (asyncio.CancelledError, asyncio.TimeoutError):
+                                    pass
+
+                            self.active_calls[call_sid].pending_llm_task = (
+                                asyncio.create_task(
+                                    self.active_calls[
+                                        call_sid
+                                    ].llm_service.process_transcript(
+                                        transcript=buffered_transcript,
+                                        is_final=True,
+                                        metadata={**metadata, "buffered": True},
+                                        response_callback=lambda content, is_final, response_metadata: self._handle_llm_response(
+                                            call_sid=call_sid,
+                                            content=content,
+                                            is_final=is_final,
+                                            metadata=response_metadata,
+                                        ),
+                                    )
+                                )
+                            )
+
                         # Reset buffer and cooldown state
                         self.active_calls[call_sid].transcript_buffer = ""
                         self.active_calls[call_sid].is_in_cooldown = False
@@ -999,60 +1146,86 @@ class CallHandler:
             if is_final and transcript.strip():
                 # Store timing for the first segment of the utterance
                 if not self.active_calls[call_sid].utterance_buffer:
-                    self.active_calls[call_sid].utterance_start_time = self._get_segment_start_time(call_sid, metadata)
-                
+                    self.active_calls[call_sid].utterance_start_time = (
+                        self._get_segment_start_time(call_sid, metadata)
+                    )
+
                 # Always update end time with the latest segment
-                self.active_calls[call_sid].utterance_end_time = self._get_segment_end_time(call_sid, metadata)
-                
+                self.active_calls[call_sid].utterance_end_time = (
+                    self._get_segment_end_time(call_sid, metadata)
+                )
+
                 # Add this final transcript to the utterance buffer
                 self.active_calls[call_sid].utterance_buffer.append(transcript.strip())
-                logger.debug(f"Added to utterance buffer for {call_sid}: {transcript.strip()}")
-                
+                logger.debug(
+                    f"Added to utterance buffer for {call_sid}: {transcript.strip()}"
+                )
+
                 # Track when we received this final transcript
                 self.active_calls[call_sid].last_final_transcript_time = datetime.now()
-                
+
                 # Cancel any existing timeout task
-                if (self.active_calls[call_sid].utterance_timeout_task and 
-                    not self.active_calls[call_sid].utterance_timeout_task.done()):
+                if (
+                    self.active_calls[call_sid].utterance_timeout_task
+                    and not self.active_calls[call_sid].utterance_timeout_task.done()
+                ):
                     self.active_calls[call_sid].utterance_timeout_task.cancel()
-                
+
                 # Start a timeout task to process the utterance if speech_final doesn't come
                 # Use min_silence_duration from assistant settings, with fallbacks
                 # Use shorter timeout when AI is not speaking for better responsiveness
                 # Use longer timeout when AI is speaking to avoid false interruptions
                 assistant = self.active_calls[call_sid].assistant
                 base_timeout = 1.5  # Default fallback
-                
+
                 if assistant and assistant.stt_settings:
                     # Get min_silence_duration from stt_settings (in ms), convert to seconds
-                    min_silence_ms = assistant.stt_settings.get("endpointing", {}).get("min_silence_duration", 1500)
+                    min_silence_ms = assistant.stt_settings.get("endpointing", {}).get(
+                        "min_silence_duration", 1500
+                    )
                     base_timeout = min_silence_ms / 1000.0  # Convert ms to seconds
-                
+
                 # Adjust timeout based on AI speaking state
-                timeout_duration = base_timeout if not self.active_calls[call_sid].is_ai_speaking else base_timeout * 2
-                
-                logger.debug(f"Setting utterance timeout for {call_sid}: {timeout_duration}s (base: {base_timeout}s, AI speaking: {self.active_calls[call_sid].is_ai_speaking})")
-                self.active_calls[call_sid].utterance_timeout_task = asyncio.create_task(
-                    self._delayed_utterance_processing(call_sid, timeout_duration)
+                timeout_duration = (
+                    base_timeout
+                    if not self.active_calls[call_sid].is_ai_speaking
+                    else base_timeout * 2
+                )
+
+                logger.debug(
+                    f"Setting utterance timeout for {call_sid}: {timeout_duration}s (base: {base_timeout}s, AI speaking: {self.active_calls[call_sid].is_ai_speaking})"
+                )
+                self.active_calls[call_sid].utterance_timeout_task = (
+                    asyncio.create_task(
+                        self._delayed_utterance_processing(call_sid, timeout_duration)
+                    )
                 )
 
             # When speech_final=true, process the complete utterance
             if speech_final and self.active_calls[call_sid].utterance_buffer:
                 # Cancel the timeout task since we got speech_final
-                if (self.active_calls[call_sid].utterance_timeout_task and 
-                    not self.active_calls[call_sid].utterance_timeout_task.done()):
+                if (
+                    self.active_calls[call_sid].utterance_timeout_task
+                    and not self.active_calls[call_sid].utterance_timeout_task.done()
+                ):
                     self.active_calls[call_sid].utterance_timeout_task.cancel()
                     self.active_calls[call_sid].utterance_timeout_task = None
-                    logger.debug(f"Cancelled utterance timeout for {call_sid} due to speech_final")
-                
+                    logger.debug(
+                        f"Cancelled utterance timeout for {call_sid} due to speech_final"
+                    )
+
                 # Concatenate all accumulated transcripts for the complete utterance
-                complete_utterance = " ".join(self.active_calls[call_sid].utterance_buffer)
-                logger.info(f"Complete utterance detected (speech_final) for {call_sid}: {complete_utterance}")
-                
+                complete_utterance = " ".join(
+                    self.active_calls[call_sid].utterance_buffer
+                )
+                logger.info(
+                    f"Complete utterance detected (speech_final) for {call_sid}: {complete_utterance}"
+                )
+
                 # Store the complete utterance in database
                 asyncio.create_task(
-                    CallService.create_transcript(
-                        call_sid=call_sid,
+                    ConversationService.create_transcript(
+                        channel_sid=call_sid,
                         content=complete_utterance,
                         is_final=True,
                         speaker="user",
@@ -1061,39 +1234,55 @@ class CallHandler:
                         segment_end=self.active_calls[call_sid].utterance_end_time,
                     )
                 )
-                
+
                 # Check if this should be treated as an interruption
                 is_interruption = False
                 if self.active_calls[call_sid].is_ai_speaking:
                     speaking_start = self.active_calls[call_sid].ai_speaking_start_time
                     if speaking_start:
-                        speaking_duration = (datetime.now() - speaking_start).total_seconds()
-                        if speaking_duration >= self.active_calls[call_sid].min_speaking_time:
+                        speaking_duration = (
+                            datetime.now() - speaking_start
+                        ).total_seconds()
+                        if (
+                            speaking_duration
+                            >= self.active_calls[call_sid].min_speaking_time
+                        ):
                             word_count = len(complete_utterance.split())
-                            if word_count >= self.active_calls[call_sid].interruption_threshold:
+                            if (
+                                word_count
+                                >= self.active_calls[call_sid].interruption_threshold
+                            ):
                                 logger.info(
                                     f"Detected interruption in call {call_sid} with {word_count} words "
                                     f"after {speaking_duration:.2f} seconds of AI speaking"
                                 )
-                                self.active_calls[call_sid].last_interruption_time = datetime.now()
-                                await self._handle_interruption(call_sid, complete_utterance)
+                                self.active_calls[call_sid].last_interruption_time = (
+                                    datetime.now()
+                                )
+                                await self._handle_interruption(
+                                    call_sid, complete_utterance
+                                )
                                 is_interruption = True
 
                 # Only process with LLM if it's not an interruption
                 if not is_interruption and self.active_calls[call_sid].is_active:
                     # Cancel any existing pending task first
-                    if (self.active_calls[call_sid].pending_llm_task and 
-                        not self.active_calls[call_sid].pending_llm_task.done()):
-                        logger.info(f"Cancelling previous LLM task before processing new utterance for {call_sid}")
+                    if (
+                        self.active_calls[call_sid].pending_llm_task
+                        and not self.active_calls[call_sid].pending_llm_task.done()
+                    ):
+                        logger.info(
+                            f"Cancelling previous LLM task before processing new utterance for {call_sid}"
+                        )
                         self.active_calls[call_sid].pending_llm_task.cancel()
                         try:
                             await asyncio.wait_for(
-                                self.active_calls[call_sid].pending_llm_task, 
-                                timeout=0.1
+                                self.active_calls[call_sid].pending_llm_task,
+                                timeout=0.1,
                             )
                         except (asyncio.CancelledError, asyncio.TimeoutError):
                             pass
-                    
+
                     # Process complete utterance with LLM
                     self.active_calls[call_sid].pending_llm_task = asyncio.create_task(
                         self.active_calls[call_sid].llm_service.process_transcript(
@@ -1108,7 +1297,7 @@ class CallHandler:
                             ),
                         )
                     )
-                
+
                 # Clear the utterance buffer after processing
                 self.active_calls[call_sid].utterance_buffer = []
                 self.active_calls[call_sid].utterance_start_time = None
@@ -1152,33 +1341,45 @@ class CallHandler:
 
         try:
             # Log audio reception for debugging
-            logger.debug(f"Received audio for call {call_sid}: {len(audio_data)} bytes, "
-                        f"sample_rate={sample_rate}, channels={channels}")
-            
+            logger.debug(
+                f"Received audio for call {call_sid}: {len(audio_data)} bytes, "
+                f"sample_rate={sample_rate}, channels={channels}"
+            )
+
             # Note: Don't reset idle timer here as audio packets flow constantly
             # Only reset on meaningful user activity (speech transcripts)
-            
+
             # Process audio through denoising service first
             processed_audio = audio_data
             denoising_service = self.active_calls[call_sid].audio_denoising_service
-            
+
             if denoising_service and denoising_service.enabled:
-                logger.debug(f"Processing audio through denoising service for call {call_sid}")
+                logger.debug(
+                    f"Processing audio through denoising service for call {call_sid}"
+                )
                 processed_audio = await denoising_service.process_audio(audio_data)
-                logger.debug(f"Denoising processed {len(audio_data)} -> {len(processed_audio)} bytes for call {call_sid}")
+                logger.debug(
+                    f"Denoising processed {len(audio_data)} -> {len(processed_audio)} bytes for call {call_sid}"
+                )
             else:
                 logger.debug(f"Audio denoising disabled for call {call_sid}")
-            
+
             # Send processed audio to Deepgram
-            logger.debug(f"Sending {len(processed_audio)} bytes to Deepgram for call {call_sid}")
-            result = await self.active_calls[call_sid].deepgram_service.send_audio(processed_audio)
+            logger.debug(
+                f"Sending {len(processed_audio)} bytes to Deepgram for call {call_sid}"
+            )
+            result = await self.active_calls[call_sid].deepgram_service.send_audio(
+                processed_audio
+            )
             logger.debug(f"Deepgram send_audio result for call {call_sid}: {result}")
-            
+
             # Record user audio if recording service is enabled
             recording_service = self.active_calls[call_sid].recording_service
             if recording_service and recording_service.enabled:
-                asyncio.create_task(recording_service.record_user_audio(processed_audio))
-            
+                asyncio.create_task(
+                    recording_service.record_user_audio(processed_audio)
+                )
+
             return result
         except Exception as e:
             logger.error(
@@ -1203,29 +1404,34 @@ class CallHandler:
             self.active_calls[call_sid].is_active = False
 
             # Cancel idle timeout task if it exists
-            if (call_sid in self.active_calls and 
-                self.active_calls[call_sid].idle_timeout_task and 
-                not self.active_calls[call_sid].idle_timeout_task.done()):
+            if (
+                call_sid in self.active_calls
+                and self.active_calls[call_sid].idle_timeout_task
+                and not self.active_calls[call_sid].idle_timeout_task.done()
+            ):
                 self.active_calls[call_sid].idle_timeout_task.cancel()
                 logger.info(f"Cancelled idle timeout task for call {call_sid}")
 
             # Cancel utterance timeout task if it exists
-            if (call_sid in self.active_calls and 
-                self.active_calls[call_sid].utterance_timeout_task and 
-                not self.active_calls[call_sid].utterance_timeout_task.done()):
+            if (
+                call_sid in self.active_calls
+                and self.active_calls[call_sid].utterance_timeout_task
+                and not self.active_calls[call_sid].utterance_timeout_task.done()
+            ):
                 self.active_calls[call_sid].utterance_timeout_task.cancel()
                 logger.info(f"Cancelled utterance timeout task for call {call_sid}")
 
             # Cancel any pending LLM task
-            if (call_sid in self.active_calls and 
-                self.active_calls[call_sid].pending_llm_task and 
-                not self.active_calls[call_sid].pending_llm_task.done()):
+            if (
+                call_sid in self.active_calls
+                and self.active_calls[call_sid].pending_llm_task
+                and not self.active_calls[call_sid].pending_llm_task.done()
+            ):
                 self.active_calls[call_sid].pending_llm_task.cancel()
                 logger.info(f"Cancelled pending LLM task for call {call_sid}")
                 try:
                     await asyncio.wait_for(
-                        self.active_calls[call_sid].pending_llm_task, 
-                        timeout=0.5
+                        self.active_calls[call_sid].pending_llm_task, timeout=0.5
                     )
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass  # Expected when task is cancelled
@@ -1266,15 +1472,20 @@ class CallHandler:
                 duration = int((datetime.now() - start_time).total_seconds())
                 # Run database operation as background task
                 asyncio.create_task(
-                    CallService.update_call_status(
-                        call_sid=call_sid,
+                    ConversationService.update_conversation_status(
+                        channel_sid=call_sid,
                         status="completed",
                         duration=duration,
                     )
                 )
-                logger.info(f"Scheduled call {call_sid} status update to completed in database")
+                logger.info(
+                    f"Scheduled call {call_sid} status update to completed in database"
+                )
             except Exception as e:
-                logger.error(f"Error scheduling call status update for {call_sid}: {e}", exc_info=True)
+                logger.error(
+                    f"Error scheduling call status update for {call_sid}: {e}",
+                    exc_info=True,
+                )
 
             # Send end-of-call webhook if assistant and webhook URL are configured
             # Always send webhook with a fallback to ensure it's delivered
@@ -1283,31 +1494,46 @@ class CallHandler:
                 try:
                     # Schedule immediate webhook (will be sent if no recordings, or as fallback)
                     asyncio.create_task(
-                        WebhookService.send_end_of_call_webhook_immediate(call_sid=call_sid)
+                        WebhookService.send_end_of_call_webhook_immediate(
+                            call_sid=call_sid
+                        )
                     )
                     logger.info(f"Scheduled end-of-call webhook for call {call_sid}")
-                    
+
                     # If recordings are enabled, also try to send with recordings after a delay
-                    recording_enabled = (assistant.recording_settings and 
-                                       assistant.recording_settings.get('enabled', False))
-                    
+                    recording_enabled = (
+                        assistant.recording_settings
+                        and assistant.recording_settings.get("enabled", False)
+                    )
+
                     if recording_enabled:
+
                         async def delayed_webhook_with_recordings():
                             """Try to send webhook with recordings after 30 seconds."""
                             await asyncio.sleep(30)  # Wait for recordings to complete
-                            
+
                             # Check if recordings were created and send enhanced webhook
                             try:
                                 from app.db.database import get_db
                                 from app.db.models import Recording
-                                
+
                                 # Check if any recordings were created for this call
                                 db = next(get_db())
-                                call_obj = await CallService.get_call_by_sid(call_sid)
+                                call_obj = (
+                                    await ConversationService.get_conversation_by_sid(
+                                        call_sid
+                                    )
+                                )
                                 if call_obj:
-                                    recordings = db.query(Recording).filter(Recording.call_id == call_obj.id).all()
+                                    recordings = (
+                                        db.query(Recording)
+                                        .filter(Recording.call_id == call_obj.id)
+                                        .all()
+                                    )
                                     if recordings:
-                                        logger.info(f"Found {len(recordings)} recordings for call {call_sid}, sending enhanced webhook")
+                                        logger.info(
+                                            f"Found {len(recordings)} recordings for call {call_sid}, sending enhanced webhook"
+                                        )
                                         # Create a saved_files dict for the enhanced webhook
                                         saved_files = {}
                                         for recording in recordings:
@@ -1320,24 +1546,34 @@ class CallHandler:
                                                 "sample_rate": recording.sample_rate,
                                                 "channels": recording.channels,
                                             }
-                                        
+
                                         # Send end-of-call webhook with recording information
                                         await WebhookService.send_end_of_call_webhook_with_recordings(
                                             call_sid=call_sid,
-                                            saved_files=saved_files
+                                            saved_files=saved_files,
                                         )
-                                        logger.info(f"Sent enhanced webhook with {len(recordings)} recordings for call {call_sid}")
+                                        logger.info(
+                                            f"Sent enhanced webhook with {len(recordings)} recordings for call {call_sid}"
+                                        )
                                     else:
-                                        logger.warning(f"No recordings found for call {call_sid} after 30 seconds")
+                                        logger.warning(
+                                            f"No recordings found for call {call_sid} after 30 seconds"
+                                        )
                                 db.close()
                             except Exception as e:
-                                logger.error(f"Error in delayed webhook with recordings for call {call_sid}: {e}")
-                        
+                                logger.error(
+                                    f"Error in delayed webhook with recordings for call {call_sid}: {e}"
+                                )
+
                         asyncio.create_task(delayed_webhook_with_recordings())
-                        logger.info(f"Scheduled delayed webhook check for recordings for call {call_sid}")
-                        
+                        logger.info(
+                            f"Scheduled delayed webhook check for recordings for call {call_sid}"
+                        )
+
                 except Exception as e:
-                    logger.error(f"Error scheduling end-of-call webhook for call {call_sid}: {e}")
+                    logger.error(
+                        f"Error scheduling end-of-call webhook for call {call_sid}: {e}"
+                    )
 
             # Clean up call state - save a reference for logging before deletion
             call_state = self.active_calls.get(call_sid)
@@ -1381,7 +1617,9 @@ class CallHandler:
             return self.active_calls[call_sid].llm_service.get_conversation_history()
         return []
 
-    def _get_segment_start_time(self, call_sid: str, metadata: Dict[str, Any]) -> Optional[float]:
+    def _get_segment_start_time(
+        self, call_sid: str, metadata: Dict[str, Any]
+    ) -> Optional[float]:
         """
         Get the segment start time from metadata.
 
@@ -1394,7 +1632,7 @@ class CallHandler:
         """
         if call_sid not in self.active_calls:
             return None
-            
+
         # Get the absolute start time from Deepgram (if available)
         deepgram_start_time = metadata.get("start_time")
         if deepgram_start_time is not None:
@@ -1402,14 +1640,16 @@ class CallHandler:
             call_start_time = self.active_calls[call_sid].start_time
             current_time = datetime.now()
             call_duration = (current_time - call_start_time).total_seconds()
-            
+
             # If deepgram_start_time is relative to the audio stream, use it directly
             # If it's absolute, we'd need to adjust it, but typically it's relative
             return deepgram_start_time
-        
+
         return None
 
-    def _get_segment_end_time(self, call_sid: str, metadata: Dict[str, Any]) -> Optional[float]:
+    def _get_segment_end_time(
+        self, call_sid: str, metadata: Dict[str, Any]
+    ) -> Optional[float]:
         """
         Get the segment end time from metadata.
 
@@ -1422,7 +1662,7 @@ class CallHandler:
         """
         if call_sid not in self.active_calls:
             return None
-            
+
         # Get the absolute end time from Deepgram (if available)
         deepgram_end_time = metadata.get("end_time")
         if deepgram_end_time is not None:
@@ -1430,36 +1670,45 @@ class CallHandler:
             call_start_time = self.active_calls[call_sid].start_time
             current_time = datetime.now()
             call_duration = (current_time - call_start_time).total_seconds()
-            
+
             # If deepgram_end_time is relative to the audio stream, use it directly
             # If it's absolute, we'd need to adjust it, but typically it's relative
             return deepgram_end_time
-        
+
         return None
 
     async def _handle_utterance_timeout(self, call_sid: str) -> None:
         """
         Handle utterance timeout when speech_final is not received within reasonable time.
-        
+
         Args:
             call_sid: The Twilio call SID
         """
-        if call_sid not in self.active_calls or not self.active_calls[call_sid].is_active:
+        if (
+            call_sid not in self.active_calls
+            or not self.active_calls[call_sid].is_active
+        ):
             return
-            
+
         try:
             # Check if we still have buffered utterances
             if self.active_calls[call_sid].utterance_buffer:
-                logger.info(f"Utterance timeout for call {call_sid} - processing buffered utterance without speech_final")
-                
+                logger.info(
+                    f"Utterance timeout for call {call_sid} - processing buffered utterance without speech_final"
+                )
+
                 # Concatenate all accumulated transcripts for the complete utterance
-                complete_utterance = " ".join(self.active_calls[call_sid].utterance_buffer)
-                logger.info(f"Complete utterance from timeout for {call_sid}: {complete_utterance}")
-                
+                complete_utterance = " ".join(
+                    self.active_calls[call_sid].utterance_buffer
+                )
+                logger.info(
+                    f"Complete utterance from timeout for {call_sid}: {complete_utterance}"
+                )
+
                 # Store the complete utterance in database
                 asyncio.create_task(
-                    CallService.create_transcript(
-                        call_sid=call_sid,
+                    ConversationService.create_transcript(
+                        channel_sid=call_sid,
                         content=complete_utterance,
                         is_final=True,
                         speaker="user",
@@ -1468,39 +1717,55 @@ class CallHandler:
                         segment_end=self.active_calls[call_sid].utterance_end_time,
                     )
                 )
-                
+
                 # Check if this should be treated as an interruption
                 is_interruption = False
                 if self.active_calls[call_sid].is_ai_speaking:
                     speaking_start = self.active_calls[call_sid].ai_speaking_start_time
                     if speaking_start:
-                        speaking_duration = (datetime.now() - speaking_start).total_seconds()
-                        if speaking_duration >= self.active_calls[call_sid].min_speaking_time:
+                        speaking_duration = (
+                            datetime.now() - speaking_start
+                        ).total_seconds()
+                        if (
+                            speaking_duration
+                            >= self.active_calls[call_sid].min_speaking_time
+                        ):
                             word_count = len(complete_utterance.split())
-                            if word_count >= self.active_calls[call_sid].interruption_threshold:
+                            if (
+                                word_count
+                                >= self.active_calls[call_sid].interruption_threshold
+                            ):
                                 logger.info(
                                     f"Detected interruption via timeout in call {call_sid} with {word_count} words "
                                     f"after {speaking_duration:.2f} seconds of AI speaking"
                                 )
-                                self.active_calls[call_sid].last_interruption_time = datetime.now()
-                                await self._handle_interruption(call_sid, complete_utterance)
+                                self.active_calls[call_sid].last_interruption_time = (
+                                    datetime.now()
+                                )
+                                await self._handle_interruption(
+                                    call_sid, complete_utterance
+                                )
                                 is_interruption = True
 
                 # Only process with LLM if it's not an interruption
                 if not is_interruption and self.active_calls[call_sid].is_active:
                     # Cancel any existing pending task first
-                    if (self.active_calls[call_sid].pending_llm_task and 
-                        not self.active_calls[call_sid].pending_llm_task.done()):
-                        logger.info(f"Cancelling previous LLM task before processing timeout utterance for {call_sid}")
+                    if (
+                        self.active_calls[call_sid].pending_llm_task
+                        and not self.active_calls[call_sid].pending_llm_task.done()
+                    ):
+                        logger.info(
+                            f"Cancelling previous LLM task before processing timeout utterance for {call_sid}"
+                        )
                         self.active_calls[call_sid].pending_llm_task.cancel()
                         try:
                             await asyncio.wait_for(
-                                self.active_calls[call_sid].pending_llm_task, 
-                                timeout=0.1
+                                self.active_calls[call_sid].pending_llm_task,
+                                timeout=0.1,
                             )
                         except (asyncio.CancelledError, asyncio.TimeoutError):
                             pass
-                    
+
                     # Process complete utterance with LLM
                     self.active_calls[call_sid].pending_llm_task = asyncio.create_task(
                         self.active_calls[call_sid].llm_service.process_transcript(
@@ -1515,35 +1780,46 @@ class CallHandler:
                             ),
                         )
                     )
-                
+
                 # Clear the utterance buffer after processing
                 self.active_calls[call_sid].utterance_buffer = []
                 self.active_calls[call_sid].utterance_start_time = None
                 self.active_calls[call_sid].utterance_end_time = None
                 self.active_calls[call_sid].utterance_timeout_task = None
-                
-        except Exception as e:
-            logger.error(f"Error handling utterance timeout for call {call_sid}: {e}", exc_info=True)
 
-    async def _delayed_utterance_processing(self, call_sid: str, timeout: float) -> None:
+        except Exception as e:
+            logger.error(
+                f"Error handling utterance timeout for call {call_sid}: {e}",
+                exc_info=True,
+            )
+
+    async def _delayed_utterance_processing(
+        self, call_sid: str, timeout: float
+    ) -> None:
         """
         Handle delayed utterance processing after a timeout.
-        
+
         Args:
             call_sid: The Twilio call SID
             timeout: The timeout duration in seconds
         """
-        if call_sid not in self.active_calls or not self.active_calls[call_sid].is_active:
+        if (
+            call_sid not in self.active_calls
+            or not self.active_calls[call_sid].is_active
+        ):
             return
-            
+
         try:
             # Wait for the specified timeout
             await asyncio.sleep(timeout)
-            
+
             # Handle utterance timeout
             await self._handle_utterance_timeout(call_sid)
-            
+
         except asyncio.CancelledError:
             logger.debug(f"Utterance timeout cancelled for call {call_sid}")
         except Exception as e:
-            logger.error(f"Error handling delayed utterance processing for call {call_sid}: {e}", exc_info=True)
+            logger.error(
+                f"Error handling delayed utterance processing for call {call_sid}: {e}",
+                exc_info=True,
+            )

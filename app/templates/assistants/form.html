@@ -43,7 +43,7 @@
                     <span class="text-green-400 text-sm">Ready to Configure</span>
                 </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
                 <div class="flex items-center space-x-3">
                     <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                         <span class="text-white text-sm font-bold">1</span>
@@ -66,11 +66,17 @@
                     <div class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
                         <span class="text-gray-400 text-sm font-bold">4</span>
                     </div>
-                    <span class="text-gray-400 text-sm">Integration</span>
+                    <span class="text-gray-400 text-sm">SMS Settings</span>
                 </div>
                 <div class="flex items-center space-x-3">
                     <div class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
                         <span class="text-gray-400 text-sm font-bold">5</span>
+                    </div>
+                    <span class="text-gray-400 text-sm">Integration</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
+                        <span class="text-gray-400 text-sm font-bold">6</span>
                     </div>
                     <span class="text-gray-400 text-sm">Advanced</span>
                 </div>
@@ -89,6 +95,9 @@
 
             <!-- Section 4: Call Management -->
             {% include "assistants/call_management.html" %}
+
+            <!-- Section 4.2: SMS Settings -->
+            {% include "assistants/sms_settings.html" %}
 
             <!-- Section 4.5: Tools Configuration -->
             <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
@@ -152,6 +161,18 @@ function toggleAIConfig() {
 function toggleCallManagement() {
     const section = document.getElementById('call-management');
     const toggle = document.getElementById('call-toggle-text');
+    if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        toggle.textContent = 'Collapse';
+    } else {
+        section.classList.add('hidden');
+        toggle.textContent = 'Configure';
+    }
+}
+
+function toggleSMSSettings() {
+    const section = document.getElementById('sms-settings');
+    const toggle = document.getElementById('sms-toggle-text');
     if (section.classList.contains('hidden')) {
         section.classList.remove('hidden');
         toggle.textContent = 'Collapse';

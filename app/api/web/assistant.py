@@ -24,7 +24,8 @@ from app.db.models import (
     Call,
     Transcript,
     Assistant,
-    User
+    User,
+    Conversation
 )
 from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
@@ -169,18 +170,22 @@ async def list_assistants(
     # Calculate statistics for each assistant
     assistants_with_stats = []
     for assistant in assistants:
-        # Get call stats
-        total_calls = db.query(Call).filter(Call.assistant_id == assistant.id).count()
+        # Get conversation stats (includes calls and SMS)
+        total_calls = db.query(Conversation).filter(Conversation.assistant_id == assistant.id).count()
         completed_calls = (
-            db.query(Call)
-            .filter(Call.assistant_id == assistant.id, Call.status == "completed")
+            db.query(Conversation)
+            .filter(Conversation.assistant_id == assistant.id, Conversation.status == "completed")
             .count()
         )
 
-        # Calculate average duration
+        # Calculate average duration (for call conversations)
         avg_duration_result = (
-            db.query(func.avg(Call.duration))
-            .filter(Call.assistant_id == assistant.id, Call.duration.isnot(None))
+            db.query(func.avg(Conversation.duration))
+            .filter(
+                Conversation.assistant_id == assistant.id, 
+                Conversation.duration.isnot(None),
+                Conversation.conversation_type == "call"
+            )
             .scalar()
         )
         avg_duration = int(avg_duration_result) if avg_duration_result else 0
@@ -189,8 +194,8 @@ async def list_assistants(
         avg_confidence = (
             db.query(func.avg(Transcript.confidence))
             .filter(
-                Transcript.call_id.in_(
-                    db.query(Call.id).filter(Call.assistant_id == assistant.id)
+                Transcript.conversation_id.in_(
+                    db.query(Conversation.id).filter(Conversation.assistant_id == assistant.id, Conversation.conversation_type == "call")
                 ),
                 Transcript.confidence.isnot(None),
             )
@@ -239,13 +244,14 @@ async def list_assistants(
         .count()
     )
     total_calls_all = (
-        db.query(Call)
+        db.query(Conversation)
         .filter(
-            Call.assistant_id.in_(
+            Conversation.assistant_id.in_(
                 db.query(Assistant.id).filter(
                     Assistant.organization_id == current_user.organization_id
                 )
-            )
+            ),
+            Conversation.conversation_type == "call"
         )
         .count()
     )
@@ -254,13 +260,14 @@ async def list_assistants(
     all_confidences = (
         db.query(func.avg(Transcript.confidence))
         .filter(
-            Transcript.call_id.in_(
-                db.query(Call.id).filter(
-                    Call.assistant_id.in_(
+            Transcript.conversation_id.in_(
+                db.query(Conversation.id).filter(
+                    Conversation.assistant_id.in_(
                         db.query(Assistant.id).filter(
                             Assistant.organization_id == current_user.organization_id
                         )
-                    )
+                    ),
+                    Conversation.conversation_type == "call"
                 )
             ),
             Transcript.confidence.isnot(None),
@@ -423,6 +430,11 @@ async def create_assistant(
     transfer_call_scenarios: Optional[str] = Form(None),
     transfer_call_numbers: Optional[str] = Form(None),
     transfer_call_custom_message: Optional[str] = Form(None),
+    # SMS settings
+    sms_conversation_ttl_hours: Optional[int] = Form(None),
+    sms_auto_end_after_hours: Optional[int] = Form(None),
+    sms_redis_enabled: bool = Form(True),
+    sms_redis_ttl_hours: Optional[int] = Form(None),
     # Fallback providers configuration
     fallback_enabled: bool = Form(False),
     fallback_0_enabled: bool = Form(False),
@@ -644,6 +656,15 @@ async def create_assistant(
             if rag_enabled or any([rag_search_limit, rag_similarity_threshold, rag_chunk_size])
             else None
         ),
+        # SMS settings
+        "sms_settings": {
+            "conversation_ttl_hours": sms_conversation_ttl_hours if sms_conversation_ttl_hours is not None else 24,
+            "auto_end_after_hours": sms_auto_end_after_hours if sms_auto_end_after_hours is not None else 72,
+            "redis_persistence": {
+                "enabled": sms_redis_enabled,
+                "ttl_hours": sms_redis_ttl_hours if sms_redis_ttl_hours is not None else 24,
+            }
+        },
     }
 
     # Handle custom settings separately
@@ -848,11 +869,11 @@ async def view_assistant(
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
-    # Get recent calls for this assistant
+    # Get recent conversations for this assistant (including calls and SMS)
     calls = (
-        db.query(Call)
-        .filter(Call.assistant_id == assistant_id)
-        .order_by(Call.started_at.desc())
+        db.query(Conversation)
+        .filter(Conversation.assistant_id == assistant_id)
+        .order_by(Conversation.started_at.desc())
         .limit(10)
         .all()
     )
@@ -1003,6 +1024,11 @@ async def update_assistant(
     transfer_call_scenarios: Optional[str] = Form(None),
     transfer_call_numbers: Optional[str] = Form(None),
     transfer_call_custom_message: Optional[str] = Form(None),
+    # SMS settings
+    sms_conversation_ttl_hours: Optional[int] = Form(None),
+    sms_auto_end_after_hours: Optional[int] = Form(None),
+    sms_redis_enabled: bool = Form(True),
+    sms_redis_ttl_hours: Optional[int] = Form(None),
     # Fallback providers configuration
     fallback_enabled: bool = Form(False),
     fallback_0_enabled: bool = Form(False),
@@ -1226,6 +1252,15 @@ async def update_assistant(
             if rag_enabled or any([rag_search_limit, rag_similarity_threshold, rag_chunk_size])
             else None
         ),
+        # SMS settings
+        "sms_settings": {
+            "conversation_ttl_hours": sms_conversation_ttl_hours if sms_conversation_ttl_hours is not None else 24,
+            "auto_end_after_hours": sms_auto_end_after_hours if sms_auto_end_after_hours is not None else 72,
+            "redis_persistence": {
+                "enabled": sms_redis_enabled,
+                "ttl_hours": sms_redis_ttl_hours if sms_redis_ttl_hours is not None else 24,
+            }
+        },
     }
 
     # Handle custom settings separately
@@ -1465,16 +1500,20 @@ async def export_assistants(
     # Calculate stats for each assistant
     export_data = []
     for assistant in assistants:
-        total_calls = db.query(Call).filter(Call.assistant_id == assistant.id).count()
+        total_calls = db.query(Conversation).filter(Conversation.assistant_id == assistant.id).count()
         completed_calls = (
-            db.query(Call)
-            .filter(Call.assistant_id == assistant.id, Call.status == "completed")
+            db.query(Conversation)
+            .filter(Conversation.assistant_id == assistant.id, Conversation.status == "completed")
             .count()
         )
 
         avg_duration_result = (
-            db.query(func.avg(Call.duration))
-            .filter(Call.assistant_id == assistant.id, Call.duration.isnot(None))
+            db.query(func.avg(Conversation.duration))
+            .filter(
+                Conversation.assistant_id == assistant.id, 
+                Conversation.duration.isnot(None),
+                Conversation.conversation_type == "call"
+            )
             .scalar()
         )
         avg_duration = int(avg_duration_result) if avg_duration_result else 0
@@ -1482,10 +1521,11 @@ async def export_assistants(
         avg_confidence = (
             db.query(func.avg(Transcript.confidence))
             .filter(
-                Transcript.call_id.in_(
-                    db.query(Call.id).filter(Call.assistant_id == assistant.id)
+                Transcript.conversation_id.in_(
+                    db.query(Conversation.id).filter(Conversation.assistant_id == assistant.id)
                 ),
                 Transcript.confidence.isnot(None),
+                Conversation.conversation_type == "call"
             )
             .scalar()
         )

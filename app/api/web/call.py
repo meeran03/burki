@@ -21,7 +21,7 @@ from sqlalchemy import func, desc, asc
 
 from app.db.database import get_db
 from app.db.models import (
-    Call,
+    Conversation,
     Recording,
     Transcript,
     Assistant,
@@ -71,7 +71,7 @@ async def download_recording(
     """Download or serve recording from S3."""
     recording = (
         db.query(Recording)
-        .filter(Recording.id == recording_id, Recording.call_id == call_id)
+        .filter(Recording.id == recording_id, Recording.conversation_id == call_id)
         .first()
     )
 
@@ -131,7 +131,7 @@ async def play_recording(
     """Serve recording for in-browser audio player from S3."""
     recording = (
         db.query(Recording)
-        .filter(Recording.id == recording_id, Recording.call_id == call_id)
+        .filter(Recording.id == recording_id, Recording.conversation_id == call_id)
         .first()
     )
     logger = logging.getLogger(__name__)
@@ -179,13 +179,13 @@ async def export_transcripts(
     request: Request, call_id: int, format: str = "txt", db: Session = Depends(get_db)
 ):
     """Export call transcripts in various formats."""
-    call = db.query(Call).filter(Call.id == call_id).first()
+    call = db.query(Conversation).filter(Conversation.id == call_id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
 
     transcripts = (
         db.query(Transcript)
-        .filter(Transcript.call_id == call_id)
+        .filter(Transcript.conversation_id == call_id)
         .order_by(Transcript.created_at)
         .all()
     )
@@ -195,7 +195,7 @@ async def export_transcripts(
 
     if format == "txt":
         # Create plain text format
-        content = f"Call Transcript - {call.call_sid}\n"
+        content = f"Call Transcript - {call.channel_sid}\n"
         content += f"Started: {call.started_at}\n"
         content += f"From: {call.customer_phone_number}\n"
         content += f"To: {call.to_phone_number}\n"
@@ -210,14 +210,14 @@ async def export_transcripts(
             content=content,
             media_type="text/plain",
             headers={
-                "Content-Disposition": f"attachment; filename=call-{call.call_sid}-transcript.txt"
+                "Content-Disposition": f"attachment; filename=call-{call.channel_sid}-transcript.txt"
             },
         )
 
     elif format == "json":
         # Create JSON format
         transcript_data = {
-            "call_sid": call.call_sid,
+            "channel_sid": call.channel_sid,
             "started_at": call.started_at.isoformat() if call.started_at else None,
             "customer_phone_number": call.customer_phone_number,
             "to_phone_number": call.to_phone_number,
@@ -237,7 +237,7 @@ async def export_transcripts(
             content=json.dumps(transcript_data, indent=2),
             media_type="application/json",
             headers={
-                "Content-Disposition": f"attachment; filename=call-{call.call_sid}-transcript.json"
+                "Content-Disposition": f"attachment; filename=call-{call.channel_sid}-transcript.json"
             },
         )
 
@@ -263,67 +263,69 @@ async def list_calls(
 ):
     """List calls with pagination, filtering, and sorting."""
     # Base query
-    query = db.query(Call)
+    query = db.query(Conversation)
 
     # Apply search filter
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (Call.call_sid.ilike(search_term))
-            | (Call.customer_phone_number.ilike(search_term))
-            | (Call.to_phone_number.ilike(search_term))
+            (Conversation.channel_sid.ilike(search_term))
+            | (Conversation.customer_phone_number.ilike(search_term))
+            | (Conversation.to_phone_number.ilike(search_term))
         )
+        # type should be call
+        query = query.filter(Conversation.conversation_type == "call")
 
     # Apply status filter
     if status:
         if status == "active":
-            query = query.filter(Call.status == "ongoing")
+            query = query.filter(Conversation.status == "ongoing")
         elif status == "completed":
-            query = query.filter(Call.status == "completed")
+            query = query.filter(Conversation.status == "completed")
         elif status == "failed":
             query = query.filter(
-                Call.status.in_(["failed", "no-answer", "busy", "canceled"])
+                Conversation.status.in_(["failed", "no-answer", "busy", "canceled"])
             )
         else:
-            query = query.filter(Call.status == status)
+            query = query.filter(Conversation.status == status)
 
     # Apply assistant filter
     if assistant_id:
-        query = query.filter(Call.assistant_id == assistant_id)
+        query = query.filter(Conversation.assistant_id == assistant_id)
 
     # Apply date range filter
     if date_range:
         today = datetime.datetime.now().date()
 
         if date_range == "today":
-            query = query.filter(func.date(Call.started_at) == today)
+            query = query.filter(func.date(Conversation.started_at) == today)
         elif date_range == "yesterday":
             yesterday = today - datetime.timedelta(days=1)
-            query = query.filter(func.date(Call.started_at) == yesterday)
+            query = query.filter(func.date(Conversation.started_at) == yesterday)
         elif date_range == "week":
             week_ago = today - datetime.timedelta(days=7)
-            query = query.filter(Call.started_at >= week_ago)
+            query = query.filter(Conversation.started_at >= week_ago)
         elif date_range == "month":
             month_ago = today - datetime.timedelta(days=30)
-            query = query.filter(Call.started_at >= month_ago)
+            query = query.filter(Conversation.started_at >= month_ago)
 
     # Get total count before pagination
     total_count = query.count()
 
     # Apply sorting
     if sort_by == "started_at":
-        order_col = Call.started_at
+        order_col = Conversation.started_at
     elif sort_by == "duration":
-        order_col = Call.duration
+        order_col = Conversation.duration
     elif sort_by == "customer_phone":
-        order_col = Call.customer_phone_number
+        order_col = Conversation.customer_phone_number
     elif sort_by == "status":
-        order_col = Call.status
+        order_col = Conversation.status
     elif sort_by == "assistant":
         order_col = Assistant.name
         query = query.join(Assistant)
     else:
-        order_col = Call.started_at
+        order_col = Conversation.started_at
 
     if sort_order == "asc":
         query = query.order_by(asc(order_col))
@@ -348,16 +350,16 @@ async def list_calls(
     calls_data = []
     for call in calls:
         recording_count = (
-            db.query(Recording).filter(Recording.call_id == call.id).count()
+            db.query(Recording).filter(Recording.conversation_id == call.id).count()
         )
         transcript_count = (
-            db.query(Transcript).filter(Transcript.call_id == call.id).count()
+            db.query(Transcript).filter(Transcript.conversation_id == call.id).count()
         )
 
         # Calculate call quality from transcripts
         avg_confidence = (
             db.query(func.avg(Transcript.confidence))
-            .filter(Transcript.call_id == call.id, Transcript.confidence.isnot(None))
+            .filter(Transcript.conversation_id == call.id, Transcript.confidence.isnot(None))
             .scalar()
         )
         quality = int(avg_confidence * 100) if avg_confidence else None
@@ -374,19 +376,20 @@ async def list_calls(
         )
 
     # Calculate overall statistics
-    total_calls = db.query(Call).count()
-    active_calls = db.query(Call).filter(Call.status == "ongoing").count()
-    completed_calls = db.query(Call).filter(Call.status == "completed").count()
+    total_calls = db.query(Conversation).count()
+    active_calls = db.query(Conversation).filter(Conversation.status == "ongoing").count()
+    completed_calls = db.query(Conversation).filter(Conversation.status == "completed").count()
     failed_calls = (
-        db.query(Call)
-        .filter(Call.status.in_(["failed", "no-answer", "busy", "canceled"]))
+        db.query(Conversation)
+        .filter(Conversation.status.in_(["failed", "no-answer", "busy", "canceled"]))
+        .filter(Conversation.conversation_type == "call")
         .count()
     )
 
     # Calculate average duration for completed calls
     avg_duration_result = (
-        db.query(func.avg(Call.duration))
-        .filter(Call.status == "completed", Call.duration.isnot(None))
+        db.query(func.avg(Conversation.duration))
+        .filter(Conversation.status == "completed", Conversation.duration.isnot(None), Conversation.conversation_type == "call" )
         .scalar()
     )
     avg_duration = int(avg_duration_result) if avg_duration_result else 0
@@ -443,17 +446,17 @@ async def list_calls(
 @router.get("/calls/{call_id}", response_class=HTMLResponse)
 async def view_call(request: Request, call_id: int, db: Session = Depends(get_db)):
     """View a call with recordings, transcripts, chat messages, and webhook logs."""
-    call = db.query(Call).filter(Call.id == call_id).first()
+    call = db.query(Conversation).filter(Conversation.id == call_id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
 
     # Get recordings for this call
-    recordings = db.query(Recording).filter(Recording.call_id == call_id).all()
+    recordings = db.query(Recording).filter(Recording.conversation_id == call_id).all()
 
     # Get transcripts for this call, ordered by creation time
     transcripts = (
         db.query(Transcript)
-        .filter(Transcript.call_id == call_id)
+        .filter(Transcript.conversation_id == call_id)
         .order_by(Transcript.created_at)
         .all()
     )
@@ -461,7 +464,7 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
     # Get chat messages for this call, ordered by message index
     chat_messages = (
         db.query(ChatMessage)
-        .filter(ChatMessage.call_id == call_id)
+        .filter(ChatMessage.conversation_id == call_id)
         .order_by(ChatMessage.message_index)
         .all()
     )
@@ -469,7 +472,7 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
     # Get webhook logs for this call, ordered by attempt time
     webhook_logs = (
         db.query(WebhookLog)
-        .filter(WebhookLog.call_id == call_id)
+        .filter(WebhookLog.conversation_id == call_id)
         .order_by(WebhookLog.attempted_at)
         .all()
     )
@@ -538,7 +541,7 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
 
 def calculate_call_metrics(call, transcripts):
     """Calculate dynamic metrics from call and transcript data."""
-    logger.info(f"Calculating metrics for call {call.call_sid if call else 'None'} with {len(transcripts)} transcripts")
+    logger.info(f"Calculating metrics for call {call.channel_sid if call else 'None'} with {len(transcripts)} transcripts")
     
     if not transcripts:
         logger.info("No transcripts found, returning default metrics")
@@ -685,73 +688,75 @@ async def export_calls(
     import csv
 
     # Get calls with same filtering as list view
-    query = db.query(Call)
+    query = db.query(Conversation)
 
     # Apply search filter
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (Call.call_sid.ilike(search_term))
-            | (Call.customer_phone_number.ilike(search_term))
-            | (Call.to_phone_number.ilike(search_term))
+            (Conversation.channel_sid.ilike(search_term))
+            | (Conversation.customer_phone_number.ilike(search_term))
+            | (Conversation.to_phone_number.ilike(search_term))
         )
+        # type should be call
+        query = query.filter(Conversation.conversation_type == "call")
 
     # Apply status filter
     if status:
         if status == "active":
-            query = query.filter(Call.status == "ongoing")
+            query = query.filter(Conversation.status == "ongoing")
         elif status == "completed":
-            query = query.filter(Call.status == "completed")
+            query = query.filter(Conversation.status == "completed")
         elif status == "failed":
             query = query.filter(
-                Call.status.in_(["failed", "no-answer", "busy", "canceled"])
+                Conversation.status.in_(["failed", "no-answer", "busy", "canceled"])
             )
         else:
-            query = query.filter(Call.status == status)
+            query = query.filter(Conversation.status == status)
 
     # Apply assistant filter
     if assistant_id:
-        query = query.filter(Call.assistant_id == assistant_id)
+        query = query.filter(Conversation.assistant_id == assistant_id)
 
     # Apply date range filter
     if date_range:
         today = datetime.datetime.now().date()
 
         if date_range == "today":
-            query = query.filter(func.date(Call.started_at) == today)
+            query = query.filter(func.date(Conversation.started_at) == today)
         elif date_range == "yesterday":
             yesterday = today - datetime.timedelta(days=1)
-            query = query.filter(func.date(Call.started_at) == yesterday)
+            query = query.filter(func.date(Conversation.started_at) == yesterday)
         elif date_range == "week":
             week_ago = today - datetime.timedelta(days=7)
-            query = query.filter(Call.started_at >= week_ago)
+            query = query.filter(Conversation.started_at >= week_ago)
         elif date_range == "month":
             month_ago = today - datetime.timedelta(days=30)
-            query = query.filter(Call.started_at >= month_ago)
+            query = query.filter(Conversation.started_at >= month_ago)
 
-    calls = query.order_by(desc(Call.started_at)).all()
+    calls = query.order_by(desc(Conversation.started_at)).all()
 
     # Prepare export data
     export_data = []
     for call in calls:
         recording_count = (
-            db.query(Recording).filter(Recording.call_id == call.id).count()
+            db.query(Recording).filter(Recording.conversation_id == call.id).count()
         )
         transcript_count = (
-            db.query(Transcript).filter(Transcript.call_id == call.id).count()
+            db.query(Transcript).filter(Transcript.conversation_id == call.id).count()
         )
 
         # Calculate call quality from transcripts
         avg_confidence = (
             db.query(func.avg(Transcript.confidence))
-            .filter(Transcript.call_id == call.id, Transcript.confidence.isnot(None))
+            .filter(Transcript.conversation_id == call.id, Transcript.confidence.isnot(None))
             .scalar()
         )
         quality = int(avg_confidence * 100) if avg_confidence else None
 
         export_data.append(
             {
-                "call_sid": call.call_sid,
+                "channel_sid": call.channel_sid,
                 "assistant_name": call.assistant.name if call.assistant else "Unknown",
                 "customer_phone": call.customer_phone_number,
                 "to_phone": call.to_phone_number,
@@ -785,7 +790,7 @@ async def export_calls(
         writer = csv.DictWriter(
             output,
             fieldnames=[
-                "call_sid",
+                "channel_sid",
                 "assistant_name",
                 "customer_phone",
                 "to_phone",
@@ -824,14 +829,16 @@ async def bulk_action_calls(
             return {"success": False, "message": "No calls selected"}
 
         # Get calls
-        calls = db.query(Call).filter(Call.id.in_(ids)).all()
+        calls = db.query(Conversation).filter(Conversation.id.in_(ids)).all()
+        # filter by conversation_type == "call"
+        calls = [call for call in calls if call.conversation_type == "call"]
 
         if action == "delete":
             # Delete related records first
             for call in calls:
                 # Delete recordings (S3 files will be cleaned up separately if needed)
                 recordings = (
-                    db.query(Recording).filter(Recording.call_id == call.id).all()
+                    db.query(Recording).filter(Recording.conversation_id == call.id).all()
                 )
                 for recording in recordings:
                     # For S3 recordings, optionally delete from S3
@@ -849,7 +856,7 @@ async def bulk_action_calls(
 
                 # Delete transcripts
                 transcripts = (
-                    db.query(Transcript).filter(Transcript.call_id == call.id).all()
+                    db.query(Transcript).filter(Transcript.conversation_id == call.id).all()
                 )
                 for transcript in transcripts:
                     db.delete(transcript)
@@ -867,7 +874,7 @@ async def bulk_action_calls(
             
             for call in calls:
                 recordings = (
-                    db.query(Recording).filter(Recording.call_id == call.id).all()
+                    db.query(Recording).filter(Recording.conversation_id == call.id).all()
                 )
                 for recording in recordings:
                     if recording.recording_source == "s3" and recording.s3_key:
@@ -883,11 +890,11 @@ async def bulk_action_calls(
                             
                             if presigned_url:
                                 recording_urls.append({
-                                    "call_sid": call.call_sid,
+                                    "channel_sid": call.channel_sid,
                                     "recording_type": recording.recording_type,
                                     "format": recording.format,
                                     "url": presigned_url,
-                                    "filename": f"{call.call_sid}_{recording.recording_type}.{recording.format}"
+                                    "filename": f"{call.channel_sid}_{recording.recording_type}.{recording.format}"
                                 })
                         except Exception as e:
                             logger.warning(f"Could not generate presigned URL for recording {recording.id}: {e}")

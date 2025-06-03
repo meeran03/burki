@@ -125,6 +125,106 @@ class TwilioService:
             return False
     
     @staticmethod
+    def update_sms_webhook(
+        phone_number: str,
+        sms_webhook_url: str,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> bool:
+        """
+        Update the 'A Message Comes In' webhook URL for a phone number.
+        
+        Args:
+            phone_number: The phone number to update (E.164 format)
+            sms_webhook_url: The SMS webhook URL to set
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            return False
+        
+        try:
+            # List incoming phone numbers to find the one we want to update
+            numbers = client.incoming_phone_numbers.list(phone_number=phone_number)
+            
+            if not numbers:
+                logger.error(f"No phone number found matching {phone_number}")
+                return False
+            
+            # Update the first matching phone number
+            incoming_phone_number = numbers[0]
+            incoming_phone_number.update(
+                sms_url=sms_webhook_url,
+                sms_method='POST'
+            )
+            
+            logger.info(f"Updated SMS webhook for {phone_number} to {sms_webhook_url}")
+            return True
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error updating SMS webhook: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error updating SMS webhook: {e}")
+            return False
+    
+    @staticmethod
+    def update_all_webhooks(
+        phone_number: str,
+        voice_webhook_url: str,
+        sms_webhook_url: str,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> bool:
+        """
+        Update both voice and SMS webhook URLs for a phone number.
+        
+        Args:
+            phone_number: The phone number to update (E.164 format)
+            voice_webhook_url: The voice webhook URL to set
+            sms_webhook_url: The SMS webhook URL to set
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            return False
+        
+        try:
+            # List incoming phone numbers to find the one we want to update
+            numbers = client.incoming_phone_numbers.list(phone_number=phone_number)
+            
+            if not numbers:
+                logger.error(f"No phone number found matching {phone_number}")
+                return False
+            
+            # Update the first matching phone number
+            incoming_phone_number = numbers[0]
+            incoming_phone_number.update(
+                voice_url=voice_webhook_url,
+                voice_method='POST',
+                sms_url=sms_webhook_url,
+                sms_method='POST'
+            )
+            
+            logger.info(f"Updated voice and SMS webhooks for {phone_number}")
+            return True
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error updating webhooks: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error updating webhooks: {e}")
+            return False
+    
+    @staticmethod
     def get_phone_number_info(
         phone_number: str,
         account_sid: Optional[str] = None,
@@ -470,4 +570,106 @@ class TwilioService:
         if not phone_number:
             return False
             
-        return bool(re.match(pattern, phone_number)) 
+        return bool(re.match(pattern, phone_number))
+
+    @staticmethod
+    def send_sms(
+        to_phone_number: str,
+        from_phone_number: str,
+        message_body: str,
+        callback_url: Optional[str] = None,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Send an SMS message through Twilio.
+        
+        Args:
+            to_phone_number: The phone number to send to (E.164 format)
+            from_phone_number: The phone number to send from (must be a Twilio number)
+            message_body: The SMS message content
+            callback_url: Optional webhook URL for status callbacks
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            Optional[str]: Message SID if successful, None otherwise
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            logger.error("Could not get Twilio client to send SMS")
+            return None
+        
+        try:
+            # Create the message
+            message_params = {
+                "body": message_body,
+                "from_": from_phone_number,
+                "to": to_phone_number,
+            }
+            
+            # Add callback URL if provided
+            if callback_url:
+                message_params["status_callback"] = callback_url
+            
+            message = client.messages.create(**message_params)
+            
+            logger.info(f"Successfully sent SMS to {to_phone_number}, message SID: {message.sid}")
+            return message.sid
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error sending SMS: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error sending SMS: {e}")
+            return None
+
+    @staticmethod
+    def get_message_info(
+        message_sid: str,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get information about a message.
+        
+        Args:
+            message_sid: The Message SID
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            Optional[Dict[str, Any]]: Message information or None if not found
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            logger.error("Could not get Twilio client to fetch message info")
+            return None
+        
+        try:
+            message = client.messages(message_sid).fetch()
+            
+            return {
+                "sid": message.sid,
+                "from": message.from_,
+                "to": message.to,
+                "body": message.body,
+                "status": message.status,
+                "date_created": message.date_created,
+                "date_sent": message.date_sent,
+                "date_updated": message.date_updated,
+                "direction": message.direction,
+                "error_code": message.error_code,
+                "error_message": message.error_message,
+                "price": message.price,
+                "price_unit": message.price_unit,
+                "num_segments": message.num_segments,
+                "num_media": message.num_media,
+            }
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error fetching message info: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching message info: {e}")
+            return None 

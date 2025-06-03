@@ -396,6 +396,28 @@ class Assistant(Base):
         },
     )
 
+    # SMS conversation settings as JSON
+    sms_settings = Column(
+        JSON,
+        nullable=True,
+        default=lambda: {
+            "enabled": True,  # Whether SMS is enabled for this assistant
+            "conversation_ttl_hours": 24,  # How long to keep SMS conversations in memory/Redis
+            "max_conversation_length": 50,  # Maximum number of messages in a conversation
+            "auto_end_after_hours": 72,  # Auto-end conversation after this many hours of inactivity
+            "welcome_message": None,  # Optional custom welcome for SMS (if different from voice)
+            "rate_limit": {
+                "enabled": True,
+                "max_messages_per_hour": 60,  # Max messages per phone number per hour
+                "max_messages_per_day": 100,  # Max messages per phone number per day
+            },
+            "redis_persistence": {
+                "enabled": True,  # Use Redis for conversation persistence
+                "ttl_hours": 24,  # Redis TTL (should match conversation_ttl_hours)
+            },
+        },
+    )
+
     # Additional settings
     custom_settings = Column(JSON, nullable=True)
     is_active = Column(Boolean, nullable=True, default=True)
@@ -412,67 +434,120 @@ class Assistant(Base):
     # Relationships
     organization = relationship("Organization", back_populates="assistants")
     user = relationship("User", back_populates="assistants")
-    calls = relationship(
-        "Call", back_populates="assistant", cascade="all, delete-orphan"
-    )
+    conversations = relationship(
+        "Conversation", back_populates="assistant", cascade="all, delete-orphan"
+    )  # Renamed from calls
     documents = relationship("Document", back_populates="assistant", cascade="all, delete-orphan")
+    
+    # Legacy relationship alias
+    @property
+    def calls(self):
+        """Backward compatibility property for calls relationship."""
+        return [conv for conv in self.conversations if conv.conversation_type == "call"]
 
     def __repr__(self):
         return f"<Assistant(id={self.id}, name='{self.name}', phone_number='{self.phone_number}')>"
 
 
-class Call(Base):
+class Conversation(Base):
     """
-    Call model represents a phone call with a specific assistant.
+    Conversation model represents any type of conversation (phone call, SMS, WhatsApp, etc.)
+    with a specific assistant.
     """
 
-    __tablename__ = "calls"
+    __tablename__ = "conversations"
 
     id = Column(Integer, primary_key=True)
-    call_sid = Column(String(100), unique=True, nullable=False)
+    
+    # Generic conversation identifiers
+    channel_sid = Column(String(100), unique=True, nullable=False, index=True)  # Generic SID (call_sid, message_sid, etc.)
+    conversation_type = Column(String(20), nullable=False, index=True)  # call, sms, whatsapp, telegram
+    
+    # Assistant relationship
     assistant_id = Column(
         Integer, ForeignKey("assistants.id"), nullable=False, index=True
     )
-    to_phone_number = Column(String(20), nullable=False)
+    
+    # Participant information
+    to_phone_number = Column(String(20), nullable=True)  # Nullable for some channels
     customer_phone_number = Column(String(20), nullable=False)
+    
+    # Conversation status
     status = Column(
         String(20), nullable=False, index=True
-    )  # ongoing, completed, failed
-    duration = Column(Integer, nullable=True)  # Duration in seconds
+    )  # ongoing, completed, failed, queued, delivered, read
+    
+    # Call-specific fields (nullable for non-call conversations)
+    duration = Column(Integer, nullable=True)  # Duration in seconds (for calls)
+    
+    # Timing information
     started_at = Column(DateTime, nullable=True, default=datetime.datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
-    call_meta = Column(JSON, nullable=True)  # Changed from 'metadata' to 'call_meta'
+    
+    # Metadata for any conversation type
+    conversation_metadata = Column(JSON, nullable=True)  # Renamed from call_meta
 
     # Relationships
-    assistant = relationship("Assistant", back_populates="calls")
+    assistant = relationship("Assistant", back_populates="conversations")
     recordings = relationship(
-        "Recording", back_populates="call", cascade="all, delete-orphan"
+        "Recording", back_populates="conversation", cascade="all, delete-orphan"
     )
     transcripts = relationship(
-        "Transcript", back_populates="call", cascade="all, delete-orphan"
+        "Transcript", back_populates="conversation", cascade="all, delete-orphan"
     )
     chat_messages = relationship(
-        "ChatMessage", back_populates="call", cascade="all, delete-orphan"
+        "ChatMessage", back_populates="conversation", cascade="all, delete-orphan"
     )
     webhook_logs = relationship(
-        "WebhookLog", back_populates="call", cascade="all, delete-orphan"
+        "WebhookLog", back_populates="conversation", cascade="all, delete-orphan"
     )
 
     def __repr__(self):
         return (
-            f"<Call(id={self.id}, call_sid='{self.call_sid}', status='{self.status}')>"
+            f"<Conversation(id={self.id}, channel_sid='{self.channel_sid}', "
+            f"type='{self.conversation_type}', status='{self.status}')>"
         )
+
+    @property
+    def call_sid(self):
+        """Backward compatibility property for call_sid."""
+        if self.conversation_type == "call":
+            return self.channel_sid
+        return None
+
+    @call_sid.setter
+    def call_sid(self, value):
+        """Backward compatibility setter for call_sid."""
+        if self.conversation_type == "call":
+            self.channel_sid = value
+
+
+# Legacy alias for backward compatibility
+Call = Conversation
 
 
 class Recording(Base):
     """
-    Recording model represents an audio recording of a call.
+    Recording model represents an audio recording of a conversation.
+    Note: This is primarily used for calls, not SMS/text conversations.
     """
 
     __tablename__ = "recordings"
 
     id = Column(Integer, primary_key=True)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)  # Renamed from call_id
+    
+    # Legacy support
+    @property
+    def call_id(self):
+        """Backward compatibility property."""
+        return self.conversation_id
+    
+    @call_id.setter 
+    def call_id(self, value):
+        """Backward compatibility setter."""
+        self.conversation_id = value
+    
     recording_sid = Column(String(100), nullable=True)  # Twilio Recording SID (deprecated)
     
     # S3 Storage fields
@@ -500,11 +575,17 @@ class Recording(Base):
     recording_metadata = Column(JSON, nullable=True, default=lambda: {})
 
     # Relationships
-    call = relationship("Call", back_populates="recordings")
+    conversation = relationship("Conversation", back_populates="recordings")
+    
+    # Legacy relationship alias
+    @property
+    def call(self):
+        """Backward compatibility property."""
+        return self.conversation
 
     def __repr__(self):
         return (
-            f"<Recording(id={self.id}, call_id={self.call_id}, s3_key='{self.s3_key}', type='{self.recording_type}')>"
+            f"<Recording(id={self.id}, conversation_id={self.conversation_id}, s3_key='{self.s3_key}', type='{self.recording_type}')>"
         )
 
     def get_download_url(self) -> Optional[str]:
@@ -543,12 +624,25 @@ class Recording(Base):
 class Transcript(Base):
     """
     Transcript model represents a speech transcript segment.
+    For SMS/text conversations, this could store individual messages.
     """
 
     __tablename__ = "transcripts"
 
     id = Column(Integer, primary_key=True)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)  # Renamed from call_id
+    
+    # Legacy support
+    @property
+    def call_id(self):
+        """Backward compatibility property."""
+        return self.conversation_id
+    
+    @call_id.setter
+    def call_id(self, value):
+        """Backward compatibility setter."""
+        self.conversation_id = value
+    
     content = Column(Text, nullable=False)
     is_final = Column(Boolean, nullable=True, default=True)
     segment_start = Column(Float, nullable=True)  # Start time in seconds
@@ -558,10 +652,16 @@ class Transcript(Base):
     created_at = Column(DateTime, nullable=True, default=datetime.datetime.utcnow)
 
     # Relationships
-    call = relationship("Call", back_populates="transcripts")
+    conversation = relationship("Conversation", back_populates="transcripts")
+    
+    # Legacy relationship alias
+    @property
+    def call(self):
+        """Backward compatibility property."""
+        return self.conversation
 
     def __repr__(self):
-        return f"<Transcript(id={self.id}, call_id={self.call_id}, speaker='{self.speaker}')>"
+        return f"<Transcript(id={self.id}, conversation_id={self.conversation_id}, speaker='{self.speaker}')>"
 
 
 class BillingPlan(Base):
@@ -694,11 +794,23 @@ class UsageRecord(Base):
 
     id = Column(Integer, primary_key=True)
     billing_account_id = Column(Integer, ForeignKey("billing_accounts.id"), nullable=False, index=True)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True, index=True)  # Optional link to call
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True, index=True)  # Renamed from call_id
+    
+    # Legacy support
+    @property
+    def call_id(self):
+        """Backward compatibility property."""
+        return self.conversation_id
+    
+    @call_id.setter
+    def call_id(self, value):
+        """Backward compatibility setter."""
+        self.conversation_id = value
     
     # Usage details
-    minutes_used = Column(Float, nullable=False)  # Can be fractional
-    usage_type = Column(String(20), nullable=False, default="call")  # call, topup_credit, adjustment
+    minutes_used = Column(Float, nullable=False, default=0)  # Can be fractional for calls
+    messages_used = Column(Integer, nullable=False, default=0)  # For SMS/messaging
+    usage_type = Column(String(20), nullable=False, default="call")  # call, sms, whatsapp, telegram, topup_credit, adjustment
     description = Column(Text, nullable=True)
     
     # Billing period this usage belongs to
@@ -713,10 +825,16 @@ class UsageRecord(Base):
 
     # Relationships
     billing_account = relationship("BillingAccount", back_populates="usage_records")
-    call = relationship("Call")
+    conversation = relationship("Conversation")
+    
+    # Legacy relationship alias
+    @property
+    def call(self):
+        """Backward compatibility property."""
+        return self.conversation
 
     def __repr__(self):
-        return f"<UsageRecord(id={self.id}, billing_account_id={self.billing_account_id}, minutes_used={self.minutes_used})>"
+        return f"<UsageRecord(id={self.id}, billing_account_id={self.billing_account_id}, minutes_used={self.minutes_used}, messages_used={self.messages_used})>"
 
 
 class BillingTransaction(Base):
@@ -906,7 +1024,18 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)  # Renamed from call_id
+    
+    # Legacy support
+    @property
+    def call_id(self):
+        """Backward compatibility property."""
+        return self.conversation_id
+    
+    @call_id.setter
+    def call_id(self, value):
+        """Backward compatibility setter."""
+        self.conversation_id = value
     
     # Message content and metadata
     role = Column(String(20), nullable=False, index=True)  # system, user, assistant
@@ -929,15 +1058,21 @@ class ChatMessage(Base):
     message_metadata = Column(JSON, nullable=True, default=lambda: {})
 
     # Relationships
-    call = relationship("Call", back_populates="chat_messages")
+    conversation = relationship("Conversation", back_populates="chat_messages")
+    
+    # Legacy relationship alias
+    @property
+    def call(self):
+        """Backward compatibility property."""
+        return self.conversation
 
-    # Add unique constraint for message within call
+    # Add unique constraint for message within conversation
     __table_args__ = (
-        Index('idx_call_message_index', 'call_id', 'message_index', unique=True),
+        Index('idx_conversation_message_index', 'conversation_id', 'message_index', unique=True),
     )
 
     def __repr__(self):
-        return f"<ChatMessage(id={self.id}, call_id={self.call_id}, role='{self.role}', index={self.message_index})>"
+        return f"<ChatMessage(id={self.id}, conversation_id={self.conversation_id}, role='{self.role}', index={self.message_index})>"
 
 
 class WebhookLog(Base):
@@ -948,12 +1083,24 @@ class WebhookLog(Base):
     __tablename__ = "webhook_logs"
 
     id = Column(Integer, primary_key=True)
-    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)  # Renamed from call_id
+    
+    # Legacy support
+    @property
+    def call_id(self):
+        """Backward compatibility property."""
+        return self.conversation_id
+    
+    @call_id.setter
+    def call_id(self, value):
+        """Backward compatibility setter."""
+        self.conversation_id = value
+    
     assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False, index=True)
     
     # Webhook details
     webhook_url = Column(String(1000), nullable=False)
-    webhook_type = Column(String(50), nullable=False, index=True)  # status-update, end-of-call-report
+    webhook_type = Column(String(50), nullable=False, index=True)  # status-update, end-of-call-report, sms-received, sms-sent
     
     # Request details
     request_payload = Column(JSON, nullable=False)  # The payload that was sent
@@ -977,17 +1124,23 @@ class WebhookLog(Base):
     webhook_metadata = Column(JSON, nullable=True, default=lambda: {})
 
     # Relationships
-    call = relationship("Call", back_populates="webhook_logs")
+    conversation = relationship("Conversation", back_populates="webhook_logs")
     assistant = relationship("Assistant")
+    
+    # Legacy relationship alias
+    @property
+    def call(self):
+        """Backward compatibility property."""
+        return self.conversation
 
     def __repr__(self):
-        return f"<WebhookLog(id={self.id}, call_id={self.call_id}, type='{self.webhook_type}', success={self.success})>"
+        return f"<WebhookLog(id={self.id}, conversation_id={self.conversation_id}, type='{self.webhook_type}', success={self.success})>"
 
     def get_summary(self) -> Dict[str, Any]:
         """Get a summary of the webhook attempt."""
         return {
             "id": self.id,
-            "call_id": self.call_id,
+            "conversation_id": self.conversation_id,
             "assistant_id": self.assistant_id,
             "webhook_url": self.webhook_url,
             "webhook_type": self.webhook_type,

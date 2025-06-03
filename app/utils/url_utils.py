@@ -52,4 +52,14 @@ def get_twiml_webhook_url() -> str:
         str: Full URL for the TwiML webhook endpoint
     """
     base_url = get_server_base_url()
-    return f"{base_url}/twiml" 
+    return f"{base_url}/twiml"
+
+def get_sms_webhook_url() -> str:
+    """
+    Get the full SMS webhook URL.
+    
+    Returns:
+        str: Full URL for the SMS webhook endpoint
+    """
+    base_url = get_server_base_url()
+    return f"{base_url}/sms/webhook" 

@@ -1,0 +1,12 @@
+# SMS Implementation Requirements
+# Add these to your existing requirements.txt
+
+# Redis support for SMS conversation persistence
+redis>=5.0.0
+redis[hiredis]>=5.0.0  # Optional: C parser for better performance
+
+# Existing requirements that should already be present:
+# twilio>=8.0.0
+# fastapi
+# sqlalchemy
+# httpx 
