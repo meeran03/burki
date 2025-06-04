@@ -307,6 +307,92 @@ class ConversationService:
             return None
 
     @staticmethod
+    async def update_recording(
+        recording_id: int,
+        recording_sid: Optional[str] = None,
+        s3_key: Optional[str] = None,
+        s3_url: Optional[str] = None,
+        duration: Optional[float] = None,
+        file_size: Optional[int] = None,
+        status: Optional[str] = None,
+        format: Optional[str] = None,
+        sample_rate: Optional[int] = None,
+        channels: Optional[int] = None,
+        recording_type: Optional[str] = None,
+        recording_source: Optional[str] = None,
+        recording_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Recording]:
+        """
+        Update a recording record with new information.
+
+        Args:
+            recording_id: Recording ID to update
+            recording_sid: Twilio Recording SID
+            s3_key: S3 object key
+            s3_url: S3 public URL
+            duration: Recording duration in seconds
+            file_size: File size in bytes
+            status: Recording status
+            format: Audio format
+            sample_rate: Sample rate in Hz
+            channels: Number of audio channels
+            recording_type: Recording type
+            recording_source: Recording source
+            recording_metadata: Additional metadata
+
+        Returns:
+            Optional[Recording]: Updated recording or None
+        """
+        try:
+            async with await get_async_db_session() as db:
+                query = select(Recording).where(Recording.id == recording_id)
+                result = await db.execute(query)
+                recording = result.scalar_one_or_none()
+
+                if not recording:
+                    logger.error(f"Recording not found for ID: {recording_id}")
+                    return None
+
+                # Update fields only if provided
+                if recording_sid is not None:
+                    recording.recording_sid = recording_sid
+                if s3_key is not None:
+                    recording.s3_key = s3_key
+                if s3_url is not None:
+                    recording.s3_url = s3_url
+                if duration is not None:
+                    recording.duration = duration
+                if file_size is not None:
+                    recording.file_size = file_size
+                if status is not None:
+                    recording.status = status
+                if format is not None:
+                    recording.format = format
+                if sample_rate is not None:
+                    recording.sample_rate = sample_rate
+                if channels is not None:
+                    recording.channels = channels
+                if recording_type is not None:
+                    recording.recording_type = recording_type
+                if recording_source is not None:
+                    recording.recording_source = recording_source
+                if recording_metadata is not None:
+                    recording.recording_metadata = recording_metadata
+                
+                # Set uploaded timestamp if status is completed
+                if status == "completed":
+                    recording.uploaded_at = datetime.datetime.utcnow()
+
+                await db.commit()
+                await db.refresh(recording)
+                logger.info(f"Updated recording {recording_id} with new information")
+
+                return recording
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating recording: {e}")
+            return None
+
+    @staticmethod
     async def create_transcript(
         channel_sid: str,
         content: str,
