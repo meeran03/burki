@@ -589,13 +589,20 @@ function updateTTSProviderOptions() {
     // Show/hide provider-specific settings
     const elevenlabsSettings = document.getElementById('elevenlabs-settings');
     const deepgramSettings = document.getElementById('deepgram-settings');
+    const resembleSettings = document.getElementById('resemble-settings');
     
     if (provider === 'elevenlabs') {
         elevenlabsSettings.classList.remove('hidden');
         deepgramSettings.classList.add('hidden');
+        resembleSettings.classList.add('hidden');
     } else if (provider === 'deepgram') {
         elevenlabsSettings.classList.add('hidden');
         deepgramSettings.classList.remove('hidden');
+        resembleSettings.classList.add('hidden');
+    } else if (provider === 'resemble') {
+        elevenlabsSettings.classList.add('hidden');
+        deepgramSettings.classList.add('hidden');
+        resembleSettings.classList.remove('hidden');
     }
     
     // Clear existing options
@@ -651,6 +658,20 @@ function updateTTSProviderOptions() {
             ],
             recommendation: '<p class="text-xs text-green-200"><strong>🚀 Ultra-Fast TTS:</strong> Deepgram Aura is 3x faster than ElevenLabs, perfect for real-time AI conversations. Aura-2 offers the best quality.</p>',
             customVoiceHelp: 'Enter your custom Deepgram Aura voice model ID'
+        },
+        resemble: {
+            models: [
+                { value: 'default', label: '🎯 Default (WebSocket Streaming)' }
+            ],
+            voices: [
+                { value: 'custom', label: '🔧 Enter Voice UUID' }
+            ],
+            modelHelp: [
+                '<div><strong>Default:</strong> Resemble AI uses a single high-quality model optimized for WebSocket streaming</div>'
+            ],
+            recommendation: '<p class="text-xs text-purple-200"><strong>🎯 Voice Configuration:</strong> Resemble AI requires your custom voice UUID from your dashboard. Each voice is unique to your account.</p>',
+            customVoiceHelp: 'Enter your Resemble AI voice UUID from your dashboard (required)',
+            alwaysCustom: true
         }
     };
     
@@ -689,8 +710,30 @@ function updateTTSProviderOptions() {
                 customInput.value = ASSISTANT_DATA.ttsVoice;
                 customInput.name = 'tts_voice_id';
                 voiceSelect.name = '_tts_voice_id_dropdown';
+            } else if (provider === 'resemble') {
+                // Custom voice UUID also supported by Resemble AI
+                voiceSelect.value = 'custom';
+                const customContainer = document.getElementById('custom_voice_container');
+                const customInput = document.getElementById('custom_voice_id');
+                customContainer.classList.remove('hidden');
+                customInput.value = ASSISTANT_DATA.ttsVoice;
+                customInput.name = 'tts_voice_id';
+                voiceSelect.name = '_tts_voice_id_dropdown';
             }
         }
+    }
+
+    // Handle providers that always require custom input (like Resemble)
+    if (config.alwaysCustom) {
+        voiceSelect.value = 'custom';
+        const customContainer = document.getElementById('custom_voice_container');
+        const customInput = document.getElementById('custom_voice_id');
+        customContainer.classList.remove('hidden');
+        if (ASSISTANT_DATA.ttsProvider === provider && ASSISTANT_DATA.ttsVoice) {
+            customInput.value = ASSISTANT_DATA.ttsVoice;
+        }
+        customInput.name = 'tts_voice_id';
+        voiceSelect.name = '_tts_voice_id_dropdown';
     }
 
     // Ensure custom voice container is hidden for Deepgram (they don't support custom voices)
@@ -712,7 +755,7 @@ function updateTTSProviderOptions() {
         const customContainer = document.getElementById('custom_voice_container');
         const customInput = document.getElementById('custom_voice_id');
         
-        if (this.value === 'custom' && provider === 'elevenlabs') {
+        if (this.value === 'custom' && (provider === 'elevenlabs' || provider === 'resemble')) {
             customContainer.classList.remove('hidden');
             customInput.name = 'tts_voice_id';
             this.name = '_tts_voice_id_dropdown';

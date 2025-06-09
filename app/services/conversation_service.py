@@ -183,8 +183,6 @@ class ConversationService:
                 recording_data = {
                     "conversation_id": call.id,
                     "recording_sid": recording_sid,
-                    "file_path": file_path,
-                    "recording_url": recording_url,
                     "format": format,
                     "recording_type": recording_type,
                     "recording_source": recording_source,
@@ -291,11 +289,9 @@ class ConversationService:
                 # Update recording
                 recording.status = status
                 if recording_url:
-                    recording.recording_url = recording_url
+                    recording.s3_url = recording_url
                 if duration:
                     recording.duration = duration
-                if local_file_path:
-                    recording.file_path = local_file_path
 
                 await db.commit()
                 await db.refresh(recording)
@@ -499,21 +495,31 @@ class ConversationService:
         try:
             call = await ConversationService.get_conversation_by_sid(channel_sid)
             if not call:
+                logger.warning(f"No conversation found for channel_sid: {channel_sid}")
                 return []
+
+            logger.info(f"Found conversation ID {call.id} for channel_sid {channel_sid}")
 
             async with await get_async_db_session() as db:
                 query = select(Recording).where(Recording.conversation_id == call.id)
 
                 if recording_type:
                     query = query.filter(Recording.recording_type == recording_type)
+                    logger.info(f"Filtering recordings by type: {recording_type}")
 
                 # Order by creation time
                 query = query.order_by(Recording.created_at)
 
                 result = await db.execute(query)
-                return list(result.scalars().all())
+                recordings = list(result.scalars().all())
+                
+                logger.info(f"Found {len(recordings)} total recordings for conversation {call.id}")
+                for recording in recordings:
+                    logger.info(f"Recording: ID={recording.id}, type={recording.recording_type}, s3_key={recording.s3_key}, status={recording.status}")
+                
+                return recordings
         except SQLAlchemyError as e:
-            logger.error(f"Error getting call recordings: {e}")
+            logger.error(f"Error getting call recordings: {e}", exc_info=True)
             return []
 
     @staticmethod
@@ -713,6 +719,19 @@ class ConversationService:
         """
         try:
             async with await get_async_db_session() as db:
+                # Check if conversation already exists with this channel_sid
+                existing_query = select(Conversation).where(
+                    Conversation.channel_sid == channel_sid
+                )
+                existing_result = await db.execute(existing_query)
+                existing_conversation = existing_result.scalar_one_or_none()
+                
+                if existing_conversation:
+                    logger.info(
+                        f"Conversation already exists for channel_sid {channel_sid}, returning existing record"
+                    )
+                    return existing_conversation
+
                 conversation_data = {
                     "channel_sid": channel_sid,
                     "conversation_type": conversation_type,

@@ -89,6 +89,11 @@ class CallState:
     # LLM request tracking for proper cancellation
     pending_llm_task: Optional[asyncio.Task] = None  # Track pending LLM request task
 
+    # New attribute for spoken content tracking
+    current_response_spoken_content: set = field(
+        default_factory=set
+    )  # Set to track spoken content
+
 
 class CallHandler:
     """
@@ -408,10 +413,16 @@ class CallHandler:
                 ):
                     """Callback when recordings are saved to S3."""
                     logger.info(
-                        f"Recordings saved to S3 for call {call_sid}: {list(saved_files.keys())}"
+                        f"Recording saved callback triggered for call {call_sid}"
                     )
+                    logger.info(f"Saved files: {saved_files}")
+                    logger.info(f"Number of saved files: {len(saved_files)}")
+                    
+                    # Log details about each saved file
+                    for recording_type, file_info in saved_files.items():
+                        logger.info(f"Saved recording type: {recording_type}")
+                        logger.info(f"File info: {file_info}")
 
-                    # Create database records for each saved recording
                     # Use a separate async task to avoid event loop issues
                     async def create_database_records():
                         try:
@@ -429,35 +440,44 @@ class CallHandler:
                                     f"Creating database record for {recording_type} recording with S3 key: {file_info['s3_key']}"
                                 )
 
-                                recording = (
-                                    await ConversationService.create_s3_recording(
-                                        channel_sid=call_sid,
-                                        s3_key=file_info["s3_key"],
-                                        s3_url=file_info["s3_url"],
-                                        duration=file_info["duration"],
-                                        file_size=file_info["file_size"],
-                                        format=file_info["format"],
-                                        sample_rate=file_info["sample_rate"],
-                                        channels=file_info["channels"],
-                                        recording_type=recording_type,
-                                        metadata=file_info,
+                                try:
+                                    recording = (
+                                        await ConversationService.create_s3_recording(
+                                            channel_sid=call_sid,
+                                            s3_key=file_info["s3_key"],
+                                            s3_url=file_info["s3_url"],
+                                            duration=file_info["duration"],
+                                            file_size=file_info["file_size"],
+                                            format=file_info["format"],
+                                            sample_rate=file_info["sample_rate"],
+                                            channels=file_info["channels"],
+                                            recording_type=recording_type,
+                                            metadata=file_info,
+                                        )
                                     )
-                                )
-                                logger.info(
-                                    f"Created database record for {recording_type} recording: {file_info['s3_key']} (ID: {recording.id if recording else None})"
-                                )
+                                    if recording:
+                                        logger.info(
+                                            f"✅ Successfully created database record for {recording_type} recording: {file_info['s3_key']} (ID: {recording.id})"
+                                        )
+                                    else:
+                                        logger.error(
+                                            f"❌ Failed to create database record for {recording_type} recording: {file_info['s3_key']} - ConversationService.create_s3_recording returned None"
+                                        )
+                                except Exception as record_error:
+                                    logger.error(
+                                        f"❌ Error creating database record for {recording_type} recording: {record_error}",
+                                        exc_info=True
+                                    )
 
                             logger.info(
-                                f"Successfully created all {len(saved_files)} database records for call {call_sid}"
+                                f"Completed database record creation process for call {call_sid}"
                             )
 
                         except Exception as db_error:
                             logger.error(
-                                f"Error creating database records for recordings: {db_error}"
+                                f"Error creating database records for recordings: {db_error}",
+                                exc_info=True
                             )
-                            import traceback
-
-                            logger.error(f"Full traceback: {traceback.format_exc()}")
 
                     # Schedule the database operations as a separate task to avoid event loop conflicts
                     asyncio.create_task(create_database_records())
@@ -674,9 +694,15 @@ class CallHandler:
                 # Record assistant audio if recording service is enabled
                 recording_service = self.active_calls[call_sid].recording_service
                 if recording_service and recording_service.enabled:
+                    logger.debug(f"🎤 Recording assistant audio for call {call_sid}: {len(audio_data)} bytes")
                     asyncio.create_task(
                         recording_service.record_assistant_audio(audio_data)
                     )
+                else:
+                    if not recording_service:
+                        logger.debug(f"❌ No recording service available for call {call_sid}")
+                    elif not recording_service.enabled:
+                        logger.debug(f"❌ Recording service disabled for call {call_sid}")
 
         except Exception as e:
             logger.error(
@@ -775,6 +801,10 @@ class CallHandler:
             if call_sid not in self.active_calls:
                 return
 
+            # Initialize spoken content tracking if not exists
+            if not hasattr(self.active_calls[call_sid], 'current_response_spoken_content'):
+                self.active_calls[call_sid].current_response_spoken_content = set()
+
             # Check if this is a message that should be spoken before an action
             if metadata.get("speak_before_action"):
                 if content:
@@ -785,6 +815,8 @@ class CallHandler:
                         text=content,
                         force_flush=True,  # Force flush to ensure message is spoken
                     )
+                    # Track that this content was already spoken
+                    self.active_calls[call_sid].current_response_spoken_content.add(content.strip())
                     # Wait a bit for the message to be spoken before continuing
                     await asyncio.sleep(1.5)
                 return
@@ -827,20 +859,42 @@ class CallHandler:
                     current_time - call_start_time
                 ).total_seconds()
 
-            # Process text through TTS service
+            # Check if we should skip TTS processing
+            should_skip_tts = False
+            
             if content:
-                await self.active_calls[call_sid].tts_service.process_text(
-                    text=content,
-                    force_flush=is_final,  # Force flush when it's the final response
-                )
-                # Only reset idle timer when AI responds with actual content
-                if content.strip():
-                    self._reset_idle_timer(call_sid)
+                content_stripped = content.strip()
+                
+                # Skip if this is the final full response (already processed in chunks)
+                if is_final and metadata.get("full_response") and content == metadata.get("full_response"):
+                    should_skip_tts = True
+                    logger.debug(f"Skipping TTS for final full response in call {call_sid} - already processed in chunks")
+                
+                # Skip if this content was already spoken (e.g., via speak_before_action)
+                elif content_stripped in self.active_calls[call_sid].current_response_spoken_content:
+                    should_skip_tts = True
+                    logger.debug(f"Skipping TTS for already spoken content in call {call_sid}: {content_stripped[:50]}...")
+                
+                # Process text through TTS service if not skipping
+                if not should_skip_tts:
+                    await self.active_calls[call_sid].tts_service.process_text(
+                        text=content,
+                        force_flush=is_final,  # Force flush when it's the final response
+                    )
+                    # Track that this content was spoken
+                    self.active_calls[call_sid].current_response_spoken_content.add(content_stripped)
+                    # Only reset idle timer when AI responds with actual content
+                    if content_stripped:
+                        self._reset_idle_timer(call_sid)
 
             # Log the response and store final responses as transcripts
             if is_final:
                 response = metadata.get("full_response", "")
                 logger.info(f"Final LLM response for {call_sid}: {response}")
+
+                # Clear the spoken content tracking for next response
+                if hasattr(self.active_calls[call_sid], 'current_response_spoken_content'):
+                    self.active_calls[call_sid].current_response_spoken_content.clear()
 
                 # Clear the pending LLM task as it's complete
                 if call_sid in self.active_calls:
@@ -1400,38 +1454,38 @@ class CallHandler:
             return
 
         try:
+            # Store call state locally to prevent race conditions
+            call_state = self.active_calls[call_sid]
+            
             # Mark call as inactive first to prevent new processing
-            self.active_calls[call_sid].is_active = False
+            call_state.is_active = False
 
             # Cancel idle timeout task if it exists
             if (
-                call_sid in self.active_calls
-                and self.active_calls[call_sid].idle_timeout_task
-                and not self.active_calls[call_sid].idle_timeout_task.done()
+                call_state.idle_timeout_task
+                and not call_state.idle_timeout_task.done()
             ):
-                self.active_calls[call_sid].idle_timeout_task.cancel()
+                call_state.idle_timeout_task.cancel()
                 logger.info(f"Cancelled idle timeout task for call {call_sid}")
 
             # Cancel utterance timeout task if it exists
             if (
-                call_sid in self.active_calls
-                and self.active_calls[call_sid].utterance_timeout_task
-                and not self.active_calls[call_sid].utterance_timeout_task.done()
+                call_state.utterance_timeout_task
+                and not call_state.utterance_timeout_task.done()
             ):
-                self.active_calls[call_sid].utterance_timeout_task.cancel()
+                call_state.utterance_timeout_task.cancel()
                 logger.info(f"Cancelled utterance timeout task for call {call_sid}")
 
             # Cancel any pending LLM task
             if (
-                call_sid in self.active_calls
-                and self.active_calls[call_sid].pending_llm_task
-                and not self.active_calls[call_sid].pending_llm_task.done()
+                call_state.pending_llm_task
+                and not call_state.pending_llm_task.done()
             ):
-                self.active_calls[call_sid].pending_llm_task.cancel()
+                call_state.pending_llm_task.cancel()
                 logger.info(f"Cancelled pending LLM task for call {call_sid}")
                 try:
                     await asyncio.wait_for(
-                        self.active_calls[call_sid].pending_llm_task, timeout=0.5
+                        call_state.pending_llm_task, timeout=0.5
                     )
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass  # Expected when task is cancelled
@@ -1448,18 +1502,20 @@ class CallHandler:
                 # Don't return early - continue with cleanup to save recordings
 
             # Stop transcription first
-            await self.active_calls[call_sid].deepgram_service.stop_transcription()
+            if call_state.deepgram_service:
+                await call_state.deepgram_service.stop_transcription()
 
             # End TTS session
-            await self.active_calls[call_sid].tts_service.end_session()
+            if call_state.tts_service:
+                await call_state.tts_service.end_session()
 
             # Clean up audio denoising service
-            if self.active_calls[call_sid].audio_denoising_service:
-                await self.active_calls[call_sid].audio_denoising_service.cleanup()
+            if call_state.audio_denoising_service:
+                await call_state.audio_denoising_service.cleanup()
 
             # Stop and save recording service BEFORE cleanup
-            if self.active_calls[call_sid].recording_service:
-                recording_service = self.active_calls[call_sid].recording_service
+            if call_state.recording_service:
+                recording_service = call_state.recording_service
                 if recording_service.enabled and recording_service.is_recording:
                     logger.info(f"Stopping recording service for call {call_sid}")
                     await recording_service.stop_recording()
@@ -1468,7 +1524,7 @@ class CallHandler:
 
             # Update call status in database
             try:
-                start_time = self.active_calls[call_sid].start_time
+                start_time = call_state.start_time
                 duration = int((datetime.now() - start_time).total_seconds())
                 # Run database operation as background task
                 asyncio.create_task(
@@ -1489,7 +1545,7 @@ class CallHandler:
 
             # Send end-of-call webhook if assistant and webhook URL are configured
             # Always send webhook with a fallback to ensure it's delivered
-            assistant = self.active_calls[call_sid].assistant
+            assistant = call_state.assistant
             if assistant and assistant.webhook_url:
                 try:
                     # Schedule immediate webhook (will be sent if no recordings, or as fallback)
@@ -1514,70 +1570,56 @@ class CallHandler:
 
                             # Check if recordings were created and send enhanced webhook
                             try:
-                                from app.db.database import get_db
-                                from app.db.models import Recording
-
-                                # Check if any recordings were created for this call
-                                db = next(get_db())
-                                call_obj = (
-                                    await ConversationService.get_conversation_by_sid(
-                                        call_sid
+                                logger.info(f"Checking for recordings for call {call_sid} after 30 second delay")
+                                
+                                # Use the existing ConversationService method to get recordings
+                                recordings = await ConversationService.get_call_recordings(call_sid)
+                                
+                                logger.info(f"Found {len(recordings)} recordings in database for call {call_sid}")
+                                
+                                if recordings:
+                                    logger.info(
+                                        f"Found {len(recordings)} recordings for call {call_sid}, sending enhanced webhook"
                                     )
-                                )
-                                if call_obj:
-                                    recordings = (
-                                        db.query(Recording)
-                                        .filter(Recording.call_id == call_obj.id)
-                                        .all()
-                                    )
-                                    if recordings:
-                                        logger.info(
-                                            f"Found {len(recordings)} recordings for call {call_sid}, sending enhanced webhook"
-                                        )
-                                        # Create a saved_files dict for the enhanced webhook
-                                        saved_files = {}
-                                        for recording in recordings:
-                                            saved_files[recording.recording_type] = {
-                                                "s3_key": recording.s3_key,
-                                                "s3_url": recording.s3_url,
-                                                "duration": recording.duration,
-                                                "file_size": recording.file_size,
-                                                "format": recording.format,
-                                                "sample_rate": recording.sample_rate,
-                                                "channels": recording.channels,
-                                            }
+                                    # Create a saved_files dict for the enhanced webhook
+                                    saved_files = {}
+                                    for recording in recordings:
+                                        logger.info(f"Recording: {recording.recording_type} - {recording.s3_key}")
+                                        saved_files[recording.recording_type] = {
+                                            "s3_key": recording.s3_key,
+                                            "s3_url": recording.s3_url,
+                                            "duration": recording.duration,
+                                            "file_size": recording.file_size,
+                                            "format": recording.format,
+                                            "sample_rate": recording.sample_rate,
+                                            "channels": recording.channels,
+                                        }
 
-                                        # Send end-of-call webhook with recording information
-                                        await WebhookService.send_end_of_call_webhook_with_recordings(
-                                            call_sid=call_sid,
-                                            saved_files=saved_files,
-                                        )
-                                        logger.info(
-                                            f"Sent enhanced webhook with {len(recordings)} recordings for call {call_sid}"
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"No recordings found for call {call_sid} after 30 seconds"
-                                        )
-                                db.close()
+                                    # Send end-of-call webhook with recording information
+                                    await WebhookService.send_end_of_call_webhook_with_recordings(
+                                        call_sid=call_sid,
+                                        saved_files=saved_files,
+                                    )
+                                    logger.info(
+                                        f"Sent enhanced webhook with {len(recordings)} recordings for call {call_sid}"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"No recordings found for call {call_sid} after 30 seconds"
+                                    )
+                                    
                             except Exception as e:
                                 logger.error(
-                                    f"Error in delayed webhook with recordings for call {call_sid}: {e}"
+                                    f"Error in delayed webhook with recordings for call {call_sid}: {e}",
+                                    exc_info=True
                                 )
-
-                        asyncio.create_task(delayed_webhook_with_recordings())
-                        logger.info(
-                            f"Scheduled delayed webhook check for recordings for call {call_sid}"
-                        )
 
                 except Exception as e:
                     logger.error(
                         f"Error scheduling end-of-call webhook for call {call_sid}: {e}"
                     )
 
-            # Clean up call state - save a reference for logging before deletion
-            call_state = self.active_calls.get(call_sid)
-
+            # Clean up call state - remove from active calls dictionary
             # Only try to delete if the key still exists (may have been removed by another concurrent process)
             if call_sid in self.active_calls:
                 del self.active_calls[call_sid]

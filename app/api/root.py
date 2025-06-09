@@ -219,18 +219,6 @@ async def get_twiml(request: Request):
         protocol = "ws"
         web_protocol = "http"
 
-    # Build the recording status callback URL
-    recording_status_callback_url = f"{web_protocol}://{host}/recording/status"
-
-    # Start Twilio recording with callback
-    response.record(
-        recording_channels="dual",  # Record both sides of conversation
-        recording_status_callback=recording_status_callback_url,
-        recording_status_callback_event=["completed", "failed"],
-        max_length=3600,  # Max 1 hour recording
-        play_beep=False,  # Don't play beep when recording starts
-    )
-
     # Create a <Connect> verb with the WebSocket stream
     connect = Connect()
 
@@ -258,6 +246,16 @@ async def get_twiml(request: Request):
 
     # Add the <Connect> verb to the response
     response.append(connect)
+
+    # Build the recording status callback URL
+    recording_status_callback_url = f"{web_protocol}://{host}/recording/status"
+
+    # # Start Twilio recording with callback
+    response.record(
+        recording_status_callback=recording_status_callback_url,
+        max_length=3600,  # Max 1 hour recording
+        play_beep=False,  # Don't play beep when recording starts
+    )
 
     # Log the full TwiML response
     twiml_response = str(response)

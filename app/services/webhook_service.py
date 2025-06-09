@@ -779,11 +779,24 @@ Call Summary: {summary}"""
         Returns:
             Optional[str]: Recording URL or None
         """
-        if recording.s3_url:
-            return recording.s3_url
-        elif recording.recording_sid:
-            # Fallback to Twilio URL construction (deprecated)
-            return f"https://api.twilio.com/2010-04-01/Accounts/{os.getenv('TWILIO_ACCOUNT_SID')}/Recordings/{recording.recording_sid}.mp3"
+        try:
+            # Get the base server URL
+            base_url = get_server_base_url()
+            
+            # Construct web application URL format: /calls/{call_id}/recording/{recording_id}
+            # This goes through the web application's authentication and access control
+            recording_url = f"{base_url}/calls/{recording.conversation_id}/recording/{recording.id}"
+            
+            return recording_url
+            
+        except Exception as e:
+            logger.error(f"Error constructing recording URL for recording {recording.id}: {e}")
+            # Fallback to S3 URL if available
+            if recording.s3_url:
+                return recording.s3_url
+            elif recording.recording_sid:
+                # Fallback to Twilio URL construction (deprecated)
+                return f"https://api.twilio.com/2010-04-01/Accounts/{os.getenv('TWILIO_ACCOUNT_SID')}/Recordings/{recording.recording_sid}.mp3"
             return None
 
     @staticmethod

@@ -306,55 +306,57 @@ class RecordingService:
             logger.error(f"S3 service not available for saving recordings for call {self.call_sid}")
             return {}
 
-        logger.info(f"Attempting to save recordings for call {self.call_sid}")
+        logger.info(f"📼 Attempting to save recordings for call {self.call_sid}")
         logger.info(f"Audio segments available: user={len(self.user_audio_segments)}, assistant={len(self.assistant_audio_segments)}, mixed={len(self.mixed_audio_segments)}")
+        logger.info(f"Recording enabled flags: user={self.should_record_user_audio}, assistant={self.should_record_assistant_audio}, mixed={self.should_record_mixed_audio}")
 
         saved_files = {}
 
         try:
             # Save user audio
             if self.user_audio_segments and self.should_record_user_audio:
-                logger.info(f"Saving {len(self.user_audio_segments)} user audio segments for call {self.call_sid}")
+                logger.info(f"💾 Saving {len(self.user_audio_segments)} user audio segments for call {self.call_sid}")
                 file_info = await self._save_audio_segments(
                     self.user_audio_segments, "user"
                 )
                 if file_info:
                     saved_files["user"] = file_info
-                    logger.info(f"Successfully saved user recording for call {self.call_sid}")
+                    logger.info(f"✅ Successfully saved user recording for call {self.call_sid}: {file_info['s3_key']}")
                 else:
-                    logger.warning(f"Failed to save user recording for call {self.call_sid}")
+                    logger.warning(f"❌ Failed to save user recording for call {self.call_sid}")
             else:
-                logger.info(f"Skipping user audio save for call {self.call_sid}: segments={len(self.user_audio_segments)}, enabled={self.should_record_user_audio}")
+                logger.info(f"⏭️ Skipping user audio save for call {self.call_sid}: segments={len(self.user_audio_segments)}, enabled={self.should_record_user_audio}")
 
             # Save assistant audio
             if self.assistant_audio_segments and self.should_record_assistant_audio:
-                logger.info(f"Saving {len(self.assistant_audio_segments)} assistant audio segments for call {self.call_sid}")
+                logger.info(f"💾 Saving {len(self.assistant_audio_segments)} assistant audio segments for call {self.call_sid}")
                 file_info = await self._save_audio_segments(
                     self.assistant_audio_segments, "assistant"
                 )
                 if file_info:
                     saved_files["assistant"] = file_info
-                    logger.info(f"Successfully saved assistant recording for call {self.call_sid}")
+                    logger.info(f"✅ Successfully saved assistant recording for call {self.call_sid}: {file_info['s3_key']}")
                 else:
-                    logger.warning(f"Failed to save assistant recording for call {self.call_sid}")
+                    logger.warning(f"❌ Failed to save assistant recording for call {self.call_sid}")
             else:
-                logger.info(f"Skipping assistant audio save for call {self.call_sid}: segments={len(self.assistant_audio_segments)}, enabled={self.should_record_assistant_audio}")
+                logger.warning(f"⏭️ Skipping assistant audio save for call {self.call_sid}: segments={len(self.assistant_audio_segments)}, enabled={self.should_record_assistant_audio}")
 
             # Save mixed audio
             if self.mixed_audio_segments and self.should_record_mixed_audio:
-                logger.info(f"Saving {len(self.mixed_audio_segments)} mixed audio segments for call {self.call_sid}")
+                logger.info(f"💾 Saving {len(self.mixed_audio_segments)} mixed audio segments for call {self.call_sid}")
                 file_info = await self._save_audio_segments(
                     self.mixed_audio_segments, "mixed"
                 )
                 if file_info:
                     saved_files["mixed"] = file_info
-                    logger.info(f"Successfully saved mixed recording for call {self.call_sid}")
+                    logger.info(f"✅ Successfully saved mixed recording for call {self.call_sid}: {file_info['s3_key']}")
                 else:
-                    logger.warning(f"Failed to save mixed recording for call {self.call_sid}")
+                    logger.warning(f"❌ Failed to save mixed recording for call {self.call_sid}")
             else:
-                logger.info(f"Skipping mixed audio save for call {self.call_sid}: segments={len(self.mixed_audio_segments)}, enabled={self.should_record_mixed_audio}")
+                logger.warning(f"⏭️ Skipping mixed audio save for call {self.call_sid}: segments={len(self.mixed_audio_segments)}, enabled={self.should_record_mixed_audio}")
 
-            logger.info(f"Saved {len(saved_files)} recordings to S3 for call {self.call_sid}")
+            logger.info(f"📊 Recording save summary for call {self.call_sid}: Saved {len(saved_files)} out of 3 possible recordings")
+            logger.info(f"📋 Saved recording types: {list(saved_files.keys())}")
 
             # Call callback if set
             if self.recording_saved_callback and saved_files:

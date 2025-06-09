@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 from .tts_base import BaseTTSService, TTSProvider, TTSOptions
 from .tts_elevenlabs import ElevenLabsTTSService
 from .tts_deepgram import DeepgramTTSService
+from .tts_resemble import ResembleTTSService
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class TTSFactory:
     _providers = {
         TTSProvider.ELEVENLABS: ElevenLabsTTSService,
         TTSProvider.DEEPGRAM: DeepgramTTSService,
+        TTSProvider.RESEMBLE: ResembleTTSService,
         # Future providers can be added here:
         # TTSProvider.OPENAI: OpenAITTSService,
         # TTSProvider.AZURE: AzureTTSService,
@@ -103,6 +105,9 @@ class TTSFactory:
                 if provider_setting == "deepgram":
                     provider = TTSProvider.DEEPGRAM
                     api_key = assistant.deepgram_api_key or os.getenv("DEEPGRAM_API_KEY")
+                elif provider_setting == "resemble":
+                    provider = TTSProvider.RESEMBLE
+                    api_key = assistant.resemble_api_key or os.getenv("RESEMBLE_API_KEY")
                 else:
                     provider = TTSProvider.ELEVENLABS
                     api_key = assistant.elevenlabs_api_key or os.getenv("ELEVENLABS_API_KEY")
@@ -110,10 +115,14 @@ class TTSFactory:
                 # If no provider specified but Deepgram API key is available, prefer Deepgram
                 provider = TTSProvider.DEEPGRAM
                 api_key = assistant.deepgram_api_key
+            elif hasattr(assistant, 'resemble_api_key') and assistant.resemble_api_key:
+                # If no provider specified but Resemble API key is available, prefer Resemble
+                provider = TTSProvider.RESEMBLE
+                api_key = assistant.resemble_api_key
             else:
                 # Default to ElevenLabs
                 provider = TTSProvider.ELEVENLABS
-                api_key = assistant.elevenlabs_api_key
+                api_key = assistant.elevenlabs_api_key or os.getenv("ELEVENLABS_API_KEY")
 
             # Extract TTS settings based on provider
             if assistant.tts_settings:
@@ -129,6 +138,17 @@ class TTSFactory:
                         ),
                         "encoding": settings.get("encoding", "mulaw"),
                         "sample_rate": settings.get("sample_rate", 8000),
+                    })
+                elif provider == TTSProvider.RESEMBLE:
+                    # Audio format is fixed for Twilio compatibility (MULAW, 8kHz, raw)
+                    tts_config.update({
+                        "voice_id": cls._get_voice_id_for_provider(
+                            provider, settings.get("voice_id", "")
+                        ),
+                        "model_id": cls._get_model_id_for_provider(
+                            provider, settings.get("model_id", "default")
+                        ),
+                        "project_uuid": settings.get("project_uuid") or os.getenv("RESEMBLE_PROJECT_UUID"),
                     })
                 else:  # ElevenLabs
                     tts_config.update({
@@ -195,6 +215,16 @@ class TTSFactory:
                     # Unknown voice name, use default
                     logger.warning(f"Unknown voice name '{voice_name}' for {provider.value}, using default 'asteria'")
                     return service_class.get_voice_id("asteria")
+        elif provider == TTSProvider.RESEMBLE and resolved_voice_id == voice_name:
+            # For Resemble, users always provide their own voice UUIDs from their account
+            # We accept any non-empty string as a valid voice UUID
+            if voice_name and len(voice_name.strip()) > 0:
+                logger.info(f"Using Resemble voice UUID: {voice_name}")
+                return voice_name
+            else:
+                # No voice UUID provided - this will likely cause an error at runtime
+                logger.error(f"No voice UUID provided for Resemble - voice UUID is required")
+                return voice_name
         
         return resolved_voice_id
 
