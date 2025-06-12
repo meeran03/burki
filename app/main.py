@@ -11,11 +11,13 @@ import sys
 # Add current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
+from fastapi.openapi.utils import get_openapi
 
 from app.core.call_manager import CallManager
 from app.core.assistant_manager import assistant_manager
@@ -29,6 +31,14 @@ from app.api.web.billing import router as web_billing_router
 from app.api.web.docs import router as web_docs_router
 from app.api.root import router as root_router
 from app.services.billing_service import BillingService
+
+# Optional prettier reference docs
+from app.api.documents import router as documents_router
+# Import new reference router that we'll create
+try:
+    from app.api.docs_reference import router as reference_router
+except ImportError:
+    reference_router = None
 
 load_dotenv()
 
@@ -59,9 +69,10 @@ def run_migrations():
 
 
 app = FastAPI(
-    title="Burqi",
-    description="A system that uses AI to answer customer Calls.",
+    title="Buraaq Voice-AI API",
+    description="REST API for managing assistants, calls, documents and billing in the Buraaq Voice-AI platform.\n\nAuthenticate with an API key by setting the `Authorization` header to `Bearer &lt;your_key&gt;`. The **Reference** tab in the navigation provides an interactive explorer.",
     version="0.1.0",
+    swagger_ui_parameters={"persistAuthorization": True, "defaultModelsExpandDepth": -1},
 )
 
 # Add CORS middleware
@@ -88,12 +99,20 @@ async def health_check():
 
 # Include routers
 app.include_router(root_router)
-app.include_router(web_router)
-app.include_router(web_auth_router)
-app.include_router(web_assistant_router)
-app.include_router(web_call_router)
-app.include_router(web_billing_router)
-app.include_router(web_docs_router)
+app.include_router(web_router, include_in_schema=False)
+app.include_router(web_auth_router, include_in_schema=False)
+app.include_router(web_assistant_router, include_in_schema=False)
+app.include_router(web_call_router, include_in_schema=False)
+app.include_router(web_billing_router, include_in_schema=False)
+app.include_router(web_docs_router, include_in_schema=False)
+
+# Include static/docs routers
+app.include_router(web_docs_router, include_in_schema=False)
+if reference_router:
+    app.include_router(reference_router, include_in_schema=False)
+
+# New API sub-routers
+app.include_router(documents_router)
 
 # API routers - no additional prefix needed since they include full path
 app.include_router(assistants_router)
@@ -121,3 +140,30 @@ async def startup_event():
         logger.error("Error initializing billing service: %s", e, exc_info=True)
 
     logger.info("Application startup complete")
+
+# --- Custom OpenAPI with ApiKeyAuth security -----------------
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    # Add ApiKeyAuth if not present
+    components = openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    if "ApiKeyAuth" not in components:
+        components["ApiKeyAuth"] = {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+        }
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi

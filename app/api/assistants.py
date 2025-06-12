@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, HTTPException, status, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user_flexible, require_api_key
@@ -60,6 +60,10 @@ async def get_assistants(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of items to return"),
     active_only: bool = Query(False, description="Only return active assistants"),
     my_assistants_only: bool = Query(False, description="Only return assistants created by me"),
+    search: Optional[str] = Query(None, description="Search by name/phone/description"),
+    llm_provider: Optional[str] = Query(None, description="Filter by LLM provider"),
+    sort_by: str = Query("created", regex="^(name|phone|created)$", description="Sort by field"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
     current_user: User = Depends(get_current_user_flexible)
 ):
     """
@@ -75,7 +79,11 @@ async def get_assistants(
         skip=skip, 
         limit=limit, 
         active_only=active_only,
-        user_id=user_id
+        user_id=user_id,
+        llm_provider=llm_provider,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order
     )
     return assistants
 
@@ -83,6 +91,8 @@ async def get_assistants(
 @router.get("/count", response_model=dict)
 async def get_assistants_count(
     active_only: bool = Query(False, description="Only count active assistants"),
+    llm_provider: Optional[str] = Query(None, description="Filter by LLM provider"),
+    search: Optional[str] = Query(None, description="Search term to match"),
     current_user: User = Depends(get_current_user_flexible)
 ):
     """
@@ -90,7 +100,9 @@ async def get_assistants_count(
     """
     count = await AssistantService.count_assistants(
         organization_id=current_user.organization_id,
-        active_only=active_only
+        active_only=active_only,
+        llm_provider=llm_provider,
+        search=search
     )
     return {"count": count}
 
@@ -325,3 +337,56 @@ async def get_supported_llm_providers():
             }
         }
     }
+
+
+@router.get("/export", response_class=Response)
+async def export_assistants_api(
+    format: str = Query("csv", regex="^(csv|json)$", description="Export format"),
+    search: Optional[str] = Query(None, description="Search term"),
+    llm_provider: Optional[str] = Query(None, description="Filter by LLM provider"),
+    active_only: bool = Query(False, description="Only include active assistants"),
+    current_user: User = Depends(get_current_user_flexible),
+    db: Session = Depends(get_db),
+):
+    """Export assistants similar to web route."""
+    # Reuse service to fetch all (no pagination)
+    assistants = await AssistantService.get_assistants(
+        organization_id=current_user.organization_id,
+        skip=0,
+        limit=10000,
+        active_only=active_only,
+        llm_provider=llm_provider,
+        search=search,
+        sort_by="name",
+        sort_order="asc",
+    )
+
+    if format == "json":
+        import json as _json
+        content = _json.dumps([{
+            "id": a.id,
+            "name": a.name,
+            "phone_number": a.phone_number,
+            "description": a.description,
+            "is_active": a.is_active,
+            "llm_provider": a.llm_provider,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        } for a in assistants], indent=2)
+        return Response(content=content, media_type="application/json", headers={"Content-Disposition": "attachment; filename=assistants.json"})
+
+    # CSV
+    import csv, io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "name", "phone_number", "description", "status", "llm_provider", "created_at"])
+    for a in assistants:
+        writer.writerow([
+            a.id,
+            a.name,
+            a.phone_number,
+            a.description or "",
+            "active" if a.is_active else "inactive",
+            a.llm_provider,
+            a.created_at.isoformat() if a.created_at else "",
+        ])
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=assistants.csv"})

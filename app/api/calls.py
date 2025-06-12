@@ -21,8 +21,12 @@ async def get_calls(
     status: Optional[str] = Query(None, description="Filter by call status"),
     assistant_id: Optional[int] = Query(None, description="Filter by assistant ID"),
     customer_phone: Optional[str] = Query(None, description="Filter by customer phone number"),
+    conversation_type: Optional[str] = Query(None, description="Filter by conversation type (call or sms)"),
     date_from: Optional[datetime] = Query(None, description="Filter calls from this date (ISO format)"),
     date_to: Optional[datetime] = Query(None, description="Filter calls to this date (ISO format)"),
+    date_range: Optional[str] = Query(None, regex="^(today|yesterday|week|month)$", description="Shortcut date range filter"),
+    sort_by: str = Query("started_at", regex="^(started_at|duration|customer_phone|status|assistant)$", description="Sort column"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
     min_duration: Optional[int] = Query(None, description="Minimum call duration in seconds"),
     max_duration: Optional[int] = Query(None, description="Maximum call duration in seconds"),
     current_user: User = Depends(get_current_user_flexible),
@@ -44,6 +48,9 @@ async def get_calls(
     # Apply filters
     if status:
         query = query.filter(Call.status == status)
+
+    if conversation_type:
+        query = query.filter(Call.conversation_type == conversation_type)
 
     if assistant_id:
         # Verify the assistant belongs to the user's organization
@@ -73,8 +80,35 @@ async def get_calls(
     if max_duration is not None:
         query = query.filter(Call.duration <= max_duration)
 
-    # Order by start time, newest first
-    query = query.order_by(Call.started_at.desc())
+    # Date range convenience
+    if date_range:
+        today = datetime.utcnow().date()
+        if date_range == "today":
+            query = query.filter(func.date(Call.started_at) == today)
+        elif date_range == "yesterday":
+            yesterday = today - timedelta(days=1)
+            query = query.filter(func.date(Call.started_at) == yesterday)
+        elif date_range == "week":
+            week_ago = today - timedelta(days=7)
+            query = query.filter(Call.started_at >= week_ago)
+        elif date_range == "month":
+            month_ago = today - timedelta(days=30)
+            query = query.filter(Call.started_at >= month_ago)
+
+    # Sorting
+    if sort_by == "duration":
+        order_col = Call.duration
+    elif sort_by == "customer_phone":
+        order_col = Call.customer_phone_number
+    elif sort_by == "status":
+        order_col = Call.status
+    elif sort_by == "assistant":
+        order_col = Assistant.name
+        query = query.join(Assistant)
+    else:
+        order_col = Call.started_at
+
+    query = query.order_by(order_col.asc() if sort_order == "asc" else order_col.desc())
 
     calls = query.offset(skip).limit(limit).all()
     return calls
@@ -85,6 +119,7 @@ async def export_calls(
     format: str = Query("csv", regex="^(csv|json)$", description="Export format: csv or json"),
     status: Optional[str] = Query(None, description="Filter by call status"),
     assistant_id: Optional[int] = Query(None, description="Filter by assistant ID"),
+    conversation_type: Optional[str] = Query(None, description="Filter by conversation type (call or sms)"),
     date_from: Optional[datetime] = Query(None, description="Filter calls from this date"),
     date_to: Optional[datetime] = Query(None, description="Filter calls to this date"),
     current_user: User = Depends(get_current_user_flexible),
@@ -105,6 +140,8 @@ async def export_calls(
     # Apply filters
     if status:
         query = query.filter(Call.status == status)
+    if conversation_type:
+        query = query.filter(Call.conversation_type == conversation_type)
     if assistant_id:
         query = query.filter(Call.assistant_id == assistant_id)
     if date_from:
@@ -123,7 +160,7 @@ async def export_calls(
         # Write header
         writer.writerow([
             "Call ID", "Call SID", "Assistant Name", "Customer Phone", 
-            "Status", "Duration (seconds)", "Started At", "Ended At"
+            "Conversation Type", "Status", "Duration (seconds)", "Started At", "Ended At"
         ])
         
         # Write data
@@ -133,6 +170,7 @@ async def export_calls(
                 call.call_sid,
                 assistant_name,
                 call.customer_phone_number,
+                call.conversation_type,
                 call.status,
                 call.duration or 0,
                 call.started_at.isoformat() if call.started_at else "",
@@ -156,6 +194,7 @@ async def export_calls(
                 "call_sid": call.call_sid,
                 "assistant_name": assistant_name,
                 "customer_phone_number": call.customer_phone_number,
+                "conversation_type": call.conversation_type,
                 "status": call.status,
                 "duration": call.duration,
                 "started_at": call.started_at.isoformat() if call.started_at else None,
@@ -269,6 +308,7 @@ async def get_call_analytics(
 async def get_calls_count(
     status: Optional[str] = Query(None, description="Filter by call status"),
     assistant_id: Optional[int] = Query(None, description="Filter by assistant ID"),
+    conversation_type: Optional[str] = Query(None, description="Filter by conversation type (call or sms)"),
     date_from: Optional[datetime] = Query(None, description="Filter calls from this date"),
     date_to: Optional[datetime] = Query(None, description="Filter calls to this date"),
     current_user: User = Depends(get_current_user_flexible),
@@ -287,6 +327,8 @@ async def get_calls_count(
     # Apply filters
     if status:
         query = query.filter(Call.status == status)
+    if conversation_type:
+        query = query.filter(Call.conversation_type == conversation_type)
 
     if assistant_id:
         # Verify the assistant belongs to the user's organization
@@ -408,10 +450,10 @@ async def update_call_metadata(
         )
     
     # Update metadata
-    if call.call_meta is None:
-        call.call_meta = {}
+    if call.conversation_metadata is None:
+        call.conversation_metadata = {}
     
-    call.call_meta.update(metadata)
+    call.conversation_metadata.update(metadata)
     db.commit()
     db.refresh(call)
     
@@ -752,6 +794,7 @@ async def get_call_stats(
 async def search_calls(
     q: str = Query(..., min_length=3, description="Search query (minimum 3 characters)"),
     limit: int = Query(50, ge=1, le=200, description="Maximum number of results"),
+    conversation_type: Optional[str] = Query(None, description="Filter by conversation type (call or sms)"),
     current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
@@ -776,7 +819,99 @@ async def search_calls(
         )
         .order_by(Call.started_at.desc())
         .limit(limit)
-        .all()
     )
     
-    return calls
+    if conversation_type:
+        calls = calls.filter(Call.conversation_type == conversation_type)
+    
+    return calls.all()
+
+
+@router.get("/{call_id}/recordings/{recording_id}")
+async def download_recording(
+    call_id: int,
+    recording_id: int,
+    play: bool = Query(False, description="If true, stream inline instead of attachment"),
+    current_user: User = Depends(get_current_user_flexible),
+    db: Session = Depends(get_db),
+):
+    """Download or stream a specific recording file (S3-backed)."""
+    # Verify call ownership
+    call = (
+        db.query(Call).join(Assistant).filter(Call.id == call_id, Assistant.organization_id == current_user.organization_id).first()
+    )
+    if not call:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Call not found in your organization")
+
+    recording = db.query(Recording).filter(Recording.id == recording_id, Recording.conversation_id == call_id).first()
+    if not recording:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recording not found")
+
+    if recording.recording_source != "s3" or not recording.s3_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recording file not available")
+
+    try:
+        from app.services.s3_service import S3Service
+        s3_service = S3Service.create_default_instance()
+        audio_bytes = await s3_service.download_audio_file(recording.s3_key)
+        if not audio_bytes:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recording file missing in storage")
+
+        content_type = "audio/mpeg" if recording.format == "mp3" else "audio/wav"
+        disposition = "inline" if play else "attachment"
+        filename = f"recording_{recording.recording_type}_{recording.id}.{recording.format}"
+        return Response(content=audio_bytes, media_type=content_type, headers={
+            "Content-Disposition": f"{disposition}; filename={filename}",
+            "Content-Length": str(len(audio_bytes)),
+            "Accept-Ranges": "bytes",
+        })
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching recording: {e}")
+
+
+@router.post("/bulk-action")
+async def bulk_action_calls_api(
+    action: str = Query(..., description="delete or download_recordings"),
+    call_ids: List[int] = Query(..., description="List of call IDs"),
+    current_user: User = Depends(get_current_user_flexible),
+    db: Session = Depends(get_db),
+):
+    """Perform bulk delete or generate presigned recording URLs similar to web route."""
+    calls = (
+        db.query(Call)
+        .join(Assistant)
+        .filter(Call.id.in_(call_ids), Assistant.organization_id == current_user.organization_id)
+        .all()
+    )
+    if not calls:
+        return {"success": False, "message": "No matching calls"}
+
+    if action == "delete":
+        for call in calls:
+            # delete recordings and transcripts
+            db.query(Recording).filter(Recording.conversation_id == call.id).delete()
+            db.query(Transcript).filter(Transcript.conversation_id == call.id).delete()
+            db.delete(call)
+        db.commit()
+        return {"success": True, "message": f"Deleted {len(calls)} calls"}
+
+    elif action == "download_recordings":
+        from app.services.s3_service import S3Service
+        s3_service = S3Service.create_default_instance()
+        urls = []
+        for call in calls:
+            recs = db.query(Recording).filter(Recording.conversation_id == call.id).all()
+            for rec in recs:
+                if rec.recording_source == "s3" and rec.s3_key:
+                    presigned = await s3_service.generate_presigned_url(rec.s3_key, expiration=3600)
+                    if presigned:
+                        urls.append({
+                            "call_id": call.id,
+                            "recording_id": rec.id,
+                            "url": presigned,
+                            "expires_in": 3600,
+                        })
+        return {"success": True, "recording_urls": urls, "count": len(urls)}
+
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action")

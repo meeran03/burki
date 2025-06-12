@@ -96,6 +96,13 @@ class AssistantBase(BaseModel):
     custom_settings: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = True
 
+    # New Settings Blocks
+    llm_fallback_providers: Optional[Dict[str, Any]] = None
+    recording_settings: Optional[Dict[str, Any]] = None
+    tools_settings: Optional[Dict[str, Any]] = None
+    rag_settings: Optional[Dict[str, Any]] = None
+    sms_settings: Optional[Dict[str, Any]] = None
+
 
 class AssistantCreate(AssistantBase):
     """Schema for creating a new assistant."""
@@ -149,6 +156,13 @@ class AssistantUpdate(BaseModel):
     custom_settings: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
 
+    # New Settings Blocks
+    llm_fallback_providers: Optional[Dict[str, Any]] = None
+    recording_settings: Optional[Dict[str, Any]] = None
+    tools_settings: Optional[Dict[str, Any]] = None
+    rag_settings: Optional[Dict[str, Any]] = None
+    sms_settings: Optional[Dict[str, Any]] = None
+
 
 class AssistantResponse(AssistantBase):
     """Schema for assistant response."""
@@ -168,7 +182,8 @@ class CallBase(BaseModel):
     call_sid: str
     to_phone_number: str
     customer_phone_number: str
-    call_meta: Optional[Dict[str, Any]] = None  # Changed from 'metadata' to match model
+    conversation_metadata: Optional[Dict[str, Any]] = None
+    conversation_type: Optional[str] = None
 
 
 class CallCreate(CallBase):

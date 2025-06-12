@@ -98,7 +98,11 @@ class AssistantService:
         skip: int = 0, 
         limit: int = 100, 
         active_only: bool = False,
-        user_id: int = None
+        user_id: int = None,
+        llm_provider: str = None,
+        search: str = None,
+        sort_by: str = "created",
+        sort_order: str = "desc"
     ) -> List[Assistant]:
         """
         Get a list of assistants for an organization.
@@ -109,6 +113,10 @@ class AssistantService:
             limit: Maximum number of assistants to return
             active_only: Only return active assistants
             user_id: Filter by user ID (optional)
+            llm_provider: Filter by LLM provider (optional)
+            search: Search term for filtering (optional)
+            sort_by: Sort by column (name, phone, created)
+            sort_order: Sort order (asc, desc)
 
         Returns:
             List[Assistant]: List of assistants
@@ -122,7 +130,34 @@ class AssistantService:
             if user_id:
                 query = query.filter(Assistant.user_id == user_id)
 
-            query = query.offset(skip).limit(limit).order_by(Assistant.created_at.desc())
+            if llm_provider:
+                query = query.filter(Assistant.llm_provider == llm_provider)
+
+            # Search filter
+            if search:
+                search_term = f"%{search}%"
+                query = query.filter(
+                    Assistant.name.ilike(search_term) |
+                    Assistant.phone_number.ilike(search_term) |
+                    Assistant.description.ilike(search_term)
+                )
+
+            # Sorting
+            if sort_by == "name":
+                order_col = Assistant.name
+            elif sort_by == "phone":
+                order_col = Assistant.phone_number
+            elif sort_by == "created":
+                order_col = Assistant.created_at
+            else:
+                order_col = Assistant.created_at
+
+            if sort_order == "asc":
+                query = query.order_by(order_col.asc())
+            else:
+                query = query.order_by(order_col.desc())
+
+            query = query.offset(skip).limit(limit)
             result = await db.execute(query)
             return result.scalars().all()
 
@@ -236,13 +271,14 @@ class AssistantService:
             return result.scalars().all()
 
     @staticmethod
-    async def count_assistants(organization_id: int, active_only: bool = False) -> int:
+    async def count_assistants(organization_id: int, active_only: bool = False, llm_provider: str = None) -> int:
         """
         Count assistants for an organization.
 
         Args:
             organization_id: Organization ID
             active_only: Only count active assistants
+            llm_provider: Filter by LLM provider (optional)
 
         Returns:
             int: Number of assistants
@@ -252,6 +288,8 @@ class AssistantService:
             
             if active_only:
                 query = query.filter(Assistant.is_active == True)
+            if llm_provider:
+                query = query.filter(Assistant.llm_provider == llm_provider)
             
             result = await db.execute(query)
             assistants = result.scalars().all()
