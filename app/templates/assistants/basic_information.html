@@ -1,0 +1,84 @@
+<!-- Section 1: Basic Information -->
+<div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+    <div class="px-6 py-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-b border-gray-700/50">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white">Basic Information</h3>
+                <p class="text-gray-400 text-sm">Core details about your assistant</p>
+            </div>
+        </div>
+    </div>
+    <div class="p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Assistant Name -->
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-300 mb-2">Assistant Name</label>
+                <input type="text" name="name" id="name" required
+                    value="{{ assistant.name if assistant else '' }}"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="My Voice Assistant">
+            </div>
+
+            <!-- Phone Number -->
+            <div>
+                <label for="phone_number" class="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
+                {% if phone_numbers %}
+                <select name="phone_number" id="phone_number" required
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    <option value="">-- Select a phone number --</option>
+                    {% for phone in phone_numbers %}
+                    <option value="{{ phone.phone_number }}" {% if assistant and assistant.phone_number == phone.phone_number %}selected{% endif %}>
+                        {{ phone.friendly_name }} ({{ phone.phone_number }})
+                    </option>
+                    {% endfor %}
+                    <option value="custom">Custom phone number</option>
+                </select>
+                <div id="custom_phone_container" class="mt-3 hidden">
+                    <input type="text" id="custom_phone_number" placeholder="+1234567890"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    <p class="mt-2 text-xs text-gray-400">Enter in E.164 format (e.g., +1234567890)</p>
+                </div>
+                {% else %}
+                <input type="text" name="phone_number" id="phone_number" required
+                    value="{{ assistant.phone_number if assistant else '' }}"
+                    placeholder="+1234567890"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                <p class="mt-2 text-xs text-gray-400">
+                    No Twilio phone numbers found. Enter in E.164 format.
+                    {% if not assistant %}
+                    <a href="https://www.twilio.com/console/phone-numbers/search" target="_blank" class="text-blue-400 hover:text-blue-300 underline">
+                        Purchase a number from Twilio
+                    </a>
+                    {% endif %}
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- Description -->
+            <div class="lg:col-span-2">
+                <label for="description" class="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                <textarea id="description" name="description" rows="3"
+                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="Describe your assistant's purpose and capabilities">{{ assistant.description if assistant else '' }}</textarea>
+            </div>
+
+            <!-- Active Status -->
+            <div class="lg:col-span-2">
+                <div class="flex items-center space-x-3">
+                    <input id="is_active" name="is_active" type="checkbox" 
+                        {% if not assistant or assistant.is_active %}checked{% endif %}
+                        class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                    <div>
+                        <label for="is_active" class="text-sm font-medium text-white">Active Assistant</label>
+                        <p class="text-xs text-gray-400">When active, the assistant can receive and handle calls</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

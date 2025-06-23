@@ -25,6 +25,8 @@ from app.db.models import (
     Recording,
     Transcript,
     Assistant,
+    ChatMessage,
+    WebhookLog,
 )
 from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
@@ -81,6 +83,22 @@ async def download_recording(
         f"Recording {recording_id}: s3_key={recording.s3_key}, recording_source={recording.recording_source}, status={recording.status}"
     )
 
+    # Check if recording is still processing
+    if recording.status == "processing":
+        # Return a 202 Accepted status with helpful message
+        return Response(
+            content='{"status": "processing", "message": "Recording is still being processed. Please try again in a moment."}',
+            status_code=202,
+            media_type="application/json",
+            headers={
+                "Retry-After": "10"  # Suggest retry after 10 seconds
+            }
+        )
+    
+    # Check if recording failed
+    if recording.status == "failed":
+        raise HTTPException(status_code=404, detail="Recording processing failed")
+    
     # Check if this is an S3 recording
     if recording.recording_source == "s3" and recording.s3_key:
         try:
@@ -115,9 +133,9 @@ async def download_recording(
             logger.error(f"Error downloading recording from S3 {recording_id}: {e}")
             raise HTTPException(status_code=500, detail="Error downloading recording file")
     else:
-        # Legacy support for non-S3 recordings
+        # Legacy support for non-S3 recordings or missing S3 key
         logger.error(
-            f"Recording not available: s3_key={recording.s3_key}, recording_source={recording.recording_source}"
+            f"Recording not available: s3_key={recording.s3_key}, recording_source={recording.recording_source}, status={recording.status}"
         )
         raise HTTPException(status_code=404, detail="Recording file not available")
 
@@ -440,7 +458,7 @@ async def list_calls(
 
 @router.get("/calls/{call_id}", response_class=HTMLResponse)
 async def view_call(request: Request, call_id: int, db: Session = Depends(get_db)):
-    """View a call with recordings and transcripts."""
+    """View a call with recordings, transcripts, chat messages, and webhook logs."""
     call = db.query(Call).filter(Call.id == call_id).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
@@ -453,6 +471,22 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
         db.query(Transcript)
         .filter(Transcript.call_id == call_id)
         .order_by(Transcript.created_at)
+        .all()
+    )
+
+    # Get chat messages for this call, ordered by message index
+    chat_messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.call_id == call_id)
+        .order_by(ChatMessage.message_index)
+        .all()
+    )
+
+    # Get webhook logs for this call, ordered by attempt time
+    webhook_logs = (
+        db.query(WebhookLog)
+        .filter(WebhookLog.call_id == call_id)
+        .order_by(WebhookLog.attempted_at)
         .all()
     )
 
@@ -479,6 +513,28 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
     if current_messages:
         conversation.append({"speaker": current_speaker, "messages": current_messages})
 
+    # Calculate chat message statistics
+    chat_stats = {
+        "total_messages": len(chat_messages),
+        "system_messages": len([msg for msg in chat_messages if msg.role == "system"]),
+        "user_messages": len([msg for msg in chat_messages if msg.role == "user"]),
+        "assistant_messages": len([msg for msg in chat_messages if msg.role == "assistant"]),
+        "total_tokens": sum(msg.total_tokens for msg in chat_messages if msg.total_tokens),
+        "total_cost": 0,  # Can be calculated based on token usage and model pricing
+    }
+
+    # Calculate webhook statistics
+    webhook_stats = {
+        "total_attempts": len(webhook_logs),
+        "successful_attempts": len([log for log in webhook_logs if log.success]),
+        "failed_attempts": len([log for log in webhook_logs if not log.success]),
+        "avg_response_time": (
+            sum(log.response_time_ms for log in webhook_logs if log.response_time_ms) / 
+            len([log for log in webhook_logs if log.response_time_ms])
+        ) if webhook_logs and any(log.response_time_ms for log in webhook_logs) else 0,
+        "webhook_types": list(set(log.webhook_type for log in webhook_logs)),
+    }
+
     return templates.TemplateResponse(
         "calls/view.html",
         get_template_context(
@@ -486,8 +542,12 @@ async def view_call(request: Request, call_id: int, db: Session = Depends(get_db
             call=call,
             recordings=recordings,
             transcripts=transcripts,
+            chat_messages=chat_messages,
+            webhook_logs=webhook_logs,
             conversation=conversation,
             metrics=metrics,
+            chat_stats=chat_stats,
+            webhook_stats=webhook_stats,
         ),
     )
 

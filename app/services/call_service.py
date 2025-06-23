@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Call, Recording, Transcript
+from app.db.models import Call, Recording, Transcript, ChatMessage
 from app.db.database import get_async_db_session
 
 logger = logging.getLogger(__name__)
@@ -210,7 +210,6 @@ class CallService:
         recording_type: str = "mixed",
         recording_source: str = "s3",
         recording_sid: str = None,
-        recording_url: str = None,
         status: str = "recording",
         file_path: str = None,
         s3_key: str = None,
@@ -230,7 +229,6 @@ class CallService:
             recording_type: Recording type (full, segment)
             recording_source: Recording source (twilio, local)
             recording_sid: Twilio Recording SID (for Twilio recordings)
-            recording_url: Twilio Recording URL (for Twilio recordings)
             status: Recording status (recording, completed, failed)
             file_path: Direct file path (for existing files)
             s3_key: S3 object key
@@ -272,8 +270,6 @@ class CallService:
                 recording_data = {
                     "call_id": call.id,
                     "recording_sid": recording_sid,
-                    "file_path": file_path,
-                    "recording_url": recording_url,
                     "format": format,
                     "recording_type": recording_type,
                     "recording_source": recording_source,
@@ -294,7 +290,7 @@ class CallService:
                     f"Created {recording_source} recording with ID: {recording.id} for call SID: {call_sid}"
                 )
 
-                return recording, file_path or recording_url
+                return recording, file_path or s3_url
         except SQLAlchemyError as e:
             logger.error(f"Error creating recording: {e}")
             raise
@@ -346,7 +342,7 @@ class CallService:
     async def update_recording_status(
         recording_sid: str,
         status: str,
-        recording_url: str = None,
+        s3_url: str = None,
         duration: float = None,
         local_file_path: str = None,
     ) -> Optional[Recording]:
@@ -356,7 +352,7 @@ class CallService:
         Args:
             recording_sid: Twilio Recording SID
             status: New status (completed, failed)
-            recording_url: Recording URL from Twilio
+            s3_url: S3 URL for the recording
             duration: Recording duration in seconds
             local_file_path: Local file path if recording was downloaded
 
@@ -375,12 +371,13 @@ class CallService:
 
                 # Update recording
                 recording.status = status
-                if recording_url:
-                    recording.recording_url = recording_url
+                if s3_url:
+                    recording.s3_url = s3_url
                 if duration:
                     recording.duration = duration
                 if local_file_path:
-                    recording.file_path = local_file_path
+                    # Note: Recording model doesn't have file_path field, using s3_key instead for local paths
+                    recording.s3_key = local_file_path
 
                 await db.commit()
                 await db.refresh(recording)
@@ -514,3 +511,155 @@ class CallService:
         except SQLAlchemyError as e:
             logger.error(f"Error getting call recordings: {e}")
             return []
+
+    @staticmethod
+    async def create_chat_message(
+        call_sid: str,
+        role: str,
+        content: str,
+        message_index: int,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        prompt_tokens: Optional[int] = None,
+        completion_tokens: Optional[int] = None,
+        total_tokens: Optional[int] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Optional[ChatMessage]:
+        """
+        Create a chat message for a call.
+
+        Args:
+            call_sid: Call SID
+            role: Message role (system, user, assistant)
+            content: Message content
+            message_index: Index in the conversation
+            llm_provider: LLM provider name (for assistant messages)
+            llm_model: LLM model used (for assistant messages)
+            prompt_tokens: Number of prompt tokens used
+            completion_tokens: Number of completion tokens used
+            total_tokens: Total tokens used
+            metadata: Additional metadata
+
+        Returns:
+            Optional[ChatMessage]: Created chat message or None
+        """
+        try:
+            call = await CallService.get_call_by_sid(call_sid)
+            if not call:
+                logger.error(f"Call not found for SID: {call_sid}")
+                return None
+
+            async with await get_async_db_session() as db:
+                # Create chat message record
+                message_data = {
+                    "call_id": call.id,
+                    "role": role,
+                    "content": content,
+                    "message_index": message_index,
+                    "llm_provider": llm_provider,
+                    "llm_model": llm_model,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "message_metadata": metadata or {},
+                }
+
+                chat_message = ChatMessage(**message_data)
+                db.add(chat_message)
+                await db.commit()
+                await db.refresh(chat_message)
+                logger.debug(
+                    f"Created chat message with ID: {chat_message.id} for call SID: {call_sid}, role: {role}"
+                )
+
+                return chat_message
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating chat message: {e}")
+            raise
+
+    @staticmethod
+    async def get_call_chat_messages(
+        call_sid: str, role: Optional[str] = None
+    ) -> List[ChatMessage]:
+        """
+        Get all chat messages for a call.
+
+        Args:
+            call_sid: Call SID
+            role: Filter by role (system, user, assistant)
+
+        Returns:
+            List[ChatMessage]: List of chat messages ordered by message_index
+        """
+        try:
+            call = await CallService.get_call_by_sid(call_sid)
+            if not call:
+                return []
+
+            async with await get_async_db_session() as db:
+                query = select(ChatMessage).where(ChatMessage.call_id == call.id)
+
+                if role:
+                    query = query.filter(ChatMessage.role == role)
+
+                # Order by message index to maintain conversation order
+                query = query.order_by(ChatMessage.message_index)
+
+                result = await db.execute(query)
+                return list(result.scalars().all())
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting call chat messages: {e}")
+            return []
+
+    @staticmethod
+    async def store_conversation_history(
+        call_sid: str,
+        conversation_history: List[Dict[str, str]],
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+    ) -> bool:
+        """
+        Store entire conversation history to database.
+        This method will check for existing messages and only store new ones.
+
+        Args:
+            call_sid: Call SID
+            conversation_history: List of conversation messages
+            llm_provider: LLM provider name
+            llm_model: LLM model used
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Get existing messages to avoid duplicates
+            existing_messages = await CallService.get_call_chat_messages(call_sid)
+            existing_count = len(existing_messages)
+
+            # Only store new messages beyond what we already have
+            new_messages = conversation_history[existing_count:]
+            
+            for i, message in enumerate(new_messages):
+                message_index = existing_count + i
+                role = message.get("role", "")
+                content = message.get("content", "")
+                
+                if not role or not content:
+                    continue
+                
+                await CallService.create_chat_message(
+                    call_sid=call_sid,
+                    role=role,
+                    content=content,
+                    message_index=message_index,
+                    llm_provider=llm_provider if role == "assistant" else None,
+                    llm_model=llm_model if role == "assistant" else None,
+                )
+            
+            if new_messages:
+                logger.info(f"Stored {len(new_messages)} new chat messages for call {call_sid}")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error storing conversation history for call {call_sid}: {e}")
+            return False

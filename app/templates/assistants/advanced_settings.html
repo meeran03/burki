@@ -1,0 +1,327 @@
+<div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+    <div class="px-6 py-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-b border-gray-700/50">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Advanced Settings</h3>
+                    <p class="text-gray-400 text-sm">Structured data extraction and custom configurations</p>
+                </div>
+            </div>
+            <button type="button" onclick="toggleAdvanced()" class="text-purple-400 hover:text-purple-300 text-sm font-medium transition-colors">
+                <span id="advanced-toggle-text">Configure</span>
+            </button>
+        </div>
+    </div>
+    <div id="advanced-settings" class="hidden p-6">
+        <div class="space-y-6">
+            <!-- Structured Data Extraction Builder -->
+            <div>
+                <div class="flex items-center space-x-3 mb-6">
+                    <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <div>
+                        <h4 class="text-base font-semibold text-white">Smart Data Extraction Builder</h4>
+                        <p class="text-sm text-gray-400">Tell us what information you want to extract from calls, and we'll handle the technical setup</p>
+                    </div>
+                </div>
+
+                <!-- Simple Field Builder -->
+                <div class="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6 mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h5 class="text-sm font-medium text-white">What information do you want to capture from calls?</h5>
+                        <button type="button" onclick="addDataField()" class="inline-flex items-center px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Add Field
+                        </button>
+                    </div>
+
+                    <!-- Dynamic Fields Container -->
+                    <div id="data-fields-container" class="space-y-4">
+                        <!-- Default fields will be added here by JavaScript -->
+                    </div>
+
+                    <!-- Popular Templates -->
+                    <div class="mt-6 pt-6 border-t border-gray-600/50">
+                        <h6 class="text-sm font-medium text-gray-300 mb-3">Quick Templates:</h6>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" onclick="loadTemplate('sales')" class="px-3 py-1 text-xs text-blue-300 bg-blue-500/20 hover:bg-blue-500/30 rounded-full border border-blue-500/30 transition-colors">
+                                🛒 Sales Call
+                            </button>
+                            <button type="button" onclick="loadTemplate('support')" class="px-3 py-1 text-xs text-green-300 bg-green-500/20 hover:bg-green-500/30 rounded-full border border-green-500/30 transition-colors">
+                                🛠️ Customer Support
+                            </button>
+                            <button type="button" onclick="loadTemplate('booking')" class="px-3 py-1 text-xs text-purple-300 bg-purple-500/20 hover:bg-purple-500/30 rounded-full border border-purple-500/30 transition-colors">
+                                📅 Appointment Booking
+                            </button>
+                            <button type="button" onclick="loadTemplate('feedback')" class="px-3 py-1 text-xs text-orange-300 bg-orange-500/20 hover:bg-orange-500/30 rounded-full border border-orange-500/30 transition-colors">
+                                💬 Feedback Collection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Extraction Prompt -->
+                <div class="bg-gray-700/30 border border-gray-600/50 rounded-lg p-6">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        <h5 class="text-sm font-medium text-white">Custom Instructions</h5>
+                        <span class="text-xs text-gray-500 italic">Optional</span>
+                        <div class="group relative">
+                            <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                <div class="font-semibold mb-2">Additional Context for AI 🤖</div>
+                                <div class="text-xs">
+                                    Provide extra guidance for the AI about your business context, specific terminology, or special instructions for data extraction.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="structured_data_prompt" name="structured_data_prompt" rows="4"
+                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="Add any specific instructions for your business context...">{{ assistant.custom_settings.structured_data_prompt if assistant and assistant.custom_settings and assistant.custom_settings.get('structured_data_prompt') else '' }}</textarea>
+                    <div class="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                        <div class="text-xs text-yellow-200">
+                            <strong>💡 Example:</strong> "Focus on identifying customer urgency levels and any specific product mentions. Our main products are X, Y, and Z."
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden JSON Schema (auto-generated) -->
+                <input type="hidden" id="structured_data_schema" name="structured_data_schema" value="">
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Example functions
+function useExamplePrompt() {
+    const textarea = document.getElementById('structured_data_prompt');
+    const examplePrompt = "You are an expert sales assistant analyzing customer calls. Extract key information from the conversation.\n\nFocus on:\n- Customer intent and needs\n- Products mentioned\n- Any commitments made\n- Follow-up actions required\n\nCall Summary: {summary}";
+    textarea.value = examplePrompt;
+}
+
+function useExampleSchema() {
+    const textarea = document.getElementById('structured_data_schema');
+    const exampleSchema = {
+        "type": "object",
+        "properties": {
+            "chat_topic": {
+                "type": "string",
+                "description": "The main topic of the conversation"
+            },
+            "followup_sms": {
+                "type": "string", 
+                "description": "A follow-up SMS message to send to the customer"
+            },
+            "order_created": {
+                "type": "boolean",
+                "description": "Whether an order was successfully created"
+            }
+        },
+        "required": ["chat_topic"]
+    };
+    textarea.value = JSON.stringify(exampleSchema, null, 2);
+}
+
+// Data Field Builder Functions
+let fieldCounter = 0;
+
+function addDataField(fieldData = null) {
+    fieldCounter++;
+    const container = document.getElementById('data-fields-container');
+    const fieldId = fieldData ? fieldData.name.replace(/\s+/g, '_').toLowerCase() : `field_${fieldCounter}`;
+    
+    const fieldHtml = `
+        <div class="data-field bg-gray-600/30 border border-gray-500/50 rounded-lg p-4" data-field-id="${fieldId}">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Field Name</label>
+                    <input type="text" class="field-name block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                           placeholder="e.g., Customer Name" value="${fieldData ? fieldData.name : ''}" onchange="updateSchema()">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Data Type</label>
+                    <select class="field-type block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500" onchange="toggleEnumOptions(this); updateSchema()">
+                        <option value="string" ${fieldData && fieldData.type === 'string' ? 'selected' : ''}>📝 Text</option>
+                        <option value="number" ${fieldData && fieldData.type === 'number' ? 'selected' : ''}>🔢 Number</option>
+                        <option value="boolean" ${fieldData && fieldData.type === 'boolean' ? 'selected' : ''}>✅ Yes/No</option>
+                        <option value="array" ${fieldData && fieldData.type === 'array' ? 'selected' : ''}>📋 List</option>
+                        <option value="enum" ${fieldData && fieldData.type === 'enum' ? 'selected' : ''}>📋 Multiple Choice</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button type="button" onclick="removeDataField('${fieldId}')" class="w-full px-3 py-2 text-xs text-red-300 hover:text-red-200 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded transition-colors">
+                        🗑️ Remove
+                    </button>
+                </div>
+            </div>
+            <div class="mt-3">
+                <label class="block text-xs font-medium text-gray-300 mb-1">Description (helps AI understand what to look for)</label>
+                <input type="text" class="field-description block w-full px-3 py-2 text-sm bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                       placeholder="e.g., The customer's full name as mentioned in the call" value="${fieldData ? fieldData.description : ''}" onchange="updateSchema()">
+            </div>
+            
+            <!-- Enum Options Container -->
+            <div class="enum-options mt-3 ${fieldData && fieldData.type === 'enum' ? '' : 'hidden'}">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-xs font-medium text-gray-300">Available Options</label>
+                    <button type="button" onclick="addEnumOption('${fieldId}')" class="px-2 py-1 text-xs text-blue-300 bg-blue-500/20 hover:bg-blue-500/30 rounded border border-blue-500/30 transition-colors">
+                        + Add Option
+                    </button>
+                </div>
+                <div class="enum-values space-y-2">
+                    ${fieldData && fieldData.enum ? fieldData.enum.map((option, index) => `
+                        <div class="flex items-center space-x-2">
+                            <input type="text" class="enum-value flex-1 px-2 py-1 text-xs bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                                   value="${option}" placeholder="Option value" onchange="updateSchema()">
+                            <button type="button" onclick="removeEnumOption(this)" class="px-2 py-1 text-xs text-red-300 hover:text-red-200 bg-red-500/20 hover:bg-red-500/30 rounded">✕</button>
+                        </div>
+                    `).join('') : `
+                        <div class="flex items-center space-x-2">
+                            <input type="text" class="enum-value flex-1 px-2 py-1 text-xs bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                                   placeholder="Option 1" onchange="updateSchema()">
+                            <button type="button" onclick="removeEnumOption(this)" class="px-2 py-1 text-xs text-red-300 hover:text-red-200 bg-red-500/20 hover:bg-red-500/30 rounded">✕</button>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="text" class="enum-value flex-1 px-2 py-1 text-xs bg-gray-700/50 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                                   placeholder="Option 2" onchange="updateSchema()">
+                            <button type="button" onclick="removeEnumOption(this)" class="px-2 py-1 text-xs text-red-300 hover:text-red-200 bg-red-500/20 hover:bg-red-500/30 rounded">✕</button>
+                        </div>
+                    `}
+                </div>
+                <p class="text-xs text-gray-400 mt-2">AI will choose one of these exact options</p>
+            </div>
+            
+            <div class="mt-2 flex items-center">
+                <input type="checkbox" class="field-required w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500" 
+                       ${fieldData && fieldData.required ? 'checked' : ''} onchange="updateSchema()">
+                <label class="ml-2 text-xs text-gray-300">Required field</label>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', fieldHtml);
+    updateSchema();
+}
+
+function removeDataField(fieldId) {
+    const field = document.querySelector(`[data-field-id="${fieldId}"]`);
+    if (field) {
+        field.remove();
+        updateSchema();
+    }
+}
+
+function updateSchema() {
+    const fields = document.querySelectorAll('.data-field');
+    const schema = {
+        type: "object",
+        properties: {},
+        required: []
+    };
+    
+    fields.forEach(field => {
+        const name = field.querySelector('.field-name').value.trim();
+        const type = field.querySelector('.field-type').value;
+        const description = field.querySelector('.field-description').value.trim();
+        const required = field.querySelector('.field-required').checked;
+        
+        if (name) {
+            const fieldKey = name.replace(/\s+/g, '_').toLowerCase();
+            
+            if (type === 'enum') {
+                // Handle enum type
+                const enumValues = Array.from(field.querySelectorAll('.enum-value'))
+                    .map(input => input.value.trim())
+                    .filter(value => value.length > 0);
+                
+                if (enumValues.length > 0) {
+                    schema.properties[fieldKey] = {
+                        type: "string",
+                        enum: enumValues,
+                        description: description || `The ${name.toLowerCase()} from the conversation (one of: ${enumValues.join(', ')})`
+                    };
+                }
+            } else {
+                // Handle other types
+                schema.properties[fieldKey] = {
+                    type: type,
+                    description: description || `The ${name.toLowerCase()} from the conversation`
+                };
+                
+                // Special handling for array type
+                if (type === 'array') {
+                    schema.properties[fieldKey].items = {
+                        type: "string"
+                    };
+                }
+            }
+            
+            if (required && schema.properties[fieldKey]) {
+                schema.required.push(fieldKey);
+            }
+        }
+    });
+    
+    document.getElementById('structured_data_schema').value = JSON.stringify(schema, null, 2);
+}
+
+function loadTemplate(templateType) {
+    // Clear existing fields
+    document.getElementById('data-fields-container').innerHTML = '';
+    fieldCounter = 0;
+    
+    const templates = {
+        sales: [
+            { name: "Customer Name", type: "string", description: "The customer's full name", required: true },
+            { name: "Product Interest", type: "string", description: "Which product or service the customer is interested in", required: true },
+            { name: "Budget Range", type: "enum", description: "The customer's mentioned budget range", required: false, enum: ["Under $1,000", "$1,000-$5,000", "$5,000-$10,000", "$10,000+", "Budget not discussed"] },
+            { name: "Purchase Intent", type: "enum", description: "How likely the customer is to purchase", required: false, enum: ["High", "Medium", "Low", "Not specified"] },
+            { name: "Follow-up Required", type: "boolean", description: "Whether a follow-up call or action is needed", required: false },
+            { name: "Contact Method", type: "enum", description: "Preferred way to contact the customer", required: false, enum: ["Phone", "Email", "Text message", "In-person", "Not specified"] }
+        ],
+        support: [
+            { name: "Issue Type", type: "enum", description: "The main category of the customer's problem", required: true, enum: ["Technical", "Billing", "Account", "Product", "Service", "Other"] },
+            { name: "Issue Description", type: "string", description: "Detailed description of the problem", required: true },
+            { name: "Customer Urgency", type: "enum", description: "How urgent the issue is", required: false, enum: ["Critical", "High", "Medium", "Low"] },
+            { name: "Resolution Status", type: "enum", description: "Was the issue resolved during the call", required: false, enum: ["Resolved", "Partially resolved", "Escalated", "Unresolved"] },
+            { name: "Escalation Needed", type: "boolean", description: "Does this need to be escalated to a specialist", required: false },
+            { name: "Customer Satisfaction", type: "enum", description: "How satisfied the customer seemed", required: false, enum: ["Very satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very dissatisfied"] }
+        ],
+        booking: [
+            { name: "Service Type", type: "string", description: "What service or appointment they want to book", required: true },
+            { name: "Preferred Date", type: "string", description: "Customer's preferred appointment date", required: false },
+            { name: "Preferred Time", type: "enum", description: "Customer's preferred time slot", required: false, enum: ["Morning (9AM-12PM)", "Afternoon (12PM-5PM)", "Evening (5PM-8PM)", "Flexible", "Not specified"] },
+            { name: "Duration Needed", type: "enum", description: "How long the appointment should be", required: false, enum: ["30 minutes", "1 hour", "2 hours", "Half day", "Full day", "Multiple days"] },
+            { name: "Special Requirements", type: "string", description: "Any special needs or requests", required: false },
+            { name: "Booking Confirmed", type: "boolean", description: "Was the appointment successfully booked", required: false }
+        ],
+        feedback: [
+            { name: "Overall Rating", type: "enum", description: "Customer's overall rating or satisfaction score", required: false, enum: ["1 - Very Poor", "2 - Poor", "3 - Average", "4 - Good", "5 - Excellent"] },
+            { name: "Positive Feedback", type: "string", description: "What the customer liked or appreciated", required: false },
+            { name: "Areas for Improvement", type: "string", description: "What could be improved according to the customer", required: false },
+            { name: "Specific Complaints", type: "string", description: "Any specific issues or complaints mentioned", required: false },
+            { name: "Recommendation Likelihood", type: "enum", description: "How likely customer is to recommend us", required: false, enum: ["Very likely", "Likely", "Neutral", "Unlikely", "Very unlikely"] },
+            { name: "Follow-up Requested", type: "boolean", description: "Did customer request someone to follow up", required: false }
+        ]
+    };
+    
+    if (templates[templateType]) {
+        templates[templateType].forEach(field => {
+            addDataField(field);
+        });
+    }
+}
+</script>

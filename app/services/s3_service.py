@@ -79,17 +79,17 @@ class S3Service:
         Upload audio file to S3.
 
         Args:
-            audio_data: Audio data as bytes
+            audio_data: Raw audio data
             call_sid: Call SID for organizing files
             recording_type: Type of recording (user, assistant, mixed)
             format: Audio format (mp3, wav)
-            metadata: Additional metadata to store with the file
+            metadata: Optional metadata dictionary
 
         Returns:
             Tuple[str, str]: S3 key and public URL
         """
         try:
-            # Generate S3 key with organized structure
+            # Generate unique filename
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             s3_key = f"recordings/{call_sid}/{recording_type}_{timestamp}.{format}"
 
@@ -107,15 +107,16 @@ class S3Service:
             # Determine content type
             content_type = "audio/mpeg" if format == "mp3" else "audio/wav"
 
-            # Upload to S3 in a thread to avoid blocking
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                self._upload_file_sync,
-                audio_data,
-                s3_key,
-                content_type,
-                upload_metadata,
+            # Upload directly to S3 without run_in_executor
+            logger.info(f"Uploading audio file to S3: {s3_key} ({len(audio_data)} bytes)")
+            
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=audio_data,
+                ContentType=content_type,
+                Metadata=upload_metadata,
+                ServerSideEncryption='AES256',  # Enable server-side encryption
             )
 
             # Generate public URL
@@ -127,25 +128,6 @@ class S3Service:
         except Exception as e:
             logger.error(f"Error uploading audio file to S3: {e}")
             raise
-
-    def _upload_file_sync(
-        self,
-        audio_data: bytes,
-        s3_key: str,
-        content_type: str,
-        metadata: Dict[str, str],
-    ) -> None:
-        """
-        Synchronous upload method to be run in executor.
-        """
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=s3_key,
-            Body=audio_data,
-            ContentType=content_type,
-            Metadata=metadata,
-            ServerSideEncryption='AES256',  # Enable server-side encryption
-        )
 
     async def download_audio_file(self, s3_key: str) -> Optional[bytes]:
         """
@@ -379,4 +361,255 @@ class S3Service:
         Returns:
             S3Service: Configured S3Service instance
         """
-        return cls() 
+        return cls()
+
+    async def upload_document(
+        self,
+        document_data: bytes,
+        assistant_id: int,
+        original_filename: str,
+        content_type: str,
+        metadata: Optional[Dict[str, str]] = None,
+    ) -> Tuple[str, str]:
+        """
+        Upload document file to S3 for RAG functionality.
+
+        Args:
+            document_data: Document data as bytes
+            assistant_id: Assistant ID for organizing documents
+            original_filename: Original filename of the document
+            content_type: MIME type of the document
+            metadata: Additional metadata to store with the document
+
+        Returns:
+            Tuple[str, str]: S3 key and public URL
+        """
+        try:
+            # Generate S3 key with organized structure
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            
+            # Clean filename for S3
+            safe_filename = self._sanitize_filename(original_filename)
+            s3_key = f"documents/assistant_{assistant_id}/{timestamp}_{safe_filename}"
+
+            # Prepare metadata
+            upload_metadata = {
+                "assistant_id": str(assistant_id),
+                "original_filename": original_filename,
+                "uploaded_at": datetime.utcnow().isoformat(),
+                "content_type": content_type,
+                "document_type": "knowledge_base",
+            }
+            if metadata:
+                upload_metadata.update(metadata)
+
+            # Upload to S3 in a thread to avoid blocking
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                self._upload_file_sync,
+                document_data,
+                s3_key,
+                content_type,
+                upload_metadata,
+            )
+
+            # Generate public URL
+            s3_url = f"https://{self.bucket_name}.s3.{self.aws_region}.amazonaws.com/{s3_key}"
+
+            logger.info(f"Successfully uploaded document to S3: {s3_key}")
+            return s3_key, s3_url
+
+        except Exception as e:
+            logger.error(f"Error uploading document to S3: {e}")
+            raise
+
+    async def download_document(self, s3_key: str) -> Optional[bytes]:
+        """
+        Download document from S3.
+
+        Args:
+            s3_key: S3 key of the document to download
+
+        Returns:
+            Optional[bytes]: Document data or None if not found
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                self._download_file_sync,
+                s3_key,
+            )
+            
+            if response:
+                logger.info(f"Successfully downloaded document from S3: {s3_key}")
+                return response['Body'].read()
+            return None
+
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                logger.warning(f"Document not found in S3: {s3_key}")
+                return None
+            else:
+                logger.error(f"Error downloading document from S3: {e}")
+                raise
+        except Exception as e:
+            logger.error(f"Error downloading document from S3: {e}")
+            raise
+
+    async def delete_document(self, s3_key: str) -> bool:
+        """
+        Delete document from S3.
+
+        Args:
+            s3_key: S3 key of the document to delete
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                self._delete_file_sync,
+                s3_key,
+            )
+            
+            logger.info(f"Successfully deleted document from S3: {s3_key}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error deleting document from S3: {e}")
+            return False
+
+    async def list_assistant_documents(self, assistant_id: int) -> list:
+        """
+        List all documents for a specific assistant.
+
+        Args:
+            assistant_id: Assistant ID to filter documents
+
+        Returns:
+            list: List of S3 objects for the assistant's documents
+        """
+        try:
+            prefix = f"documents/assistant_{assistant_id}/"
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                self._list_objects_sync,
+                prefix,
+            )
+            
+            objects = response.get('Contents', [])
+            logger.info(f"Found {len(objects)} documents for assistant {assistant_id}")
+            return objects
+
+        except Exception as e:
+            logger.error(f"Error listing documents for assistant {assistant_id}: {e}")
+            return []
+
+    def _sanitize_filename(self, filename: str) -> str:
+        """
+        Sanitize filename for S3 storage.
+
+        Args:
+            filename: Original filename
+
+        Returns:
+            str: Sanitized filename safe for S3
+        """
+        import re
+        # Remove unsafe characters and replace with underscores
+        safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
+        # Remove multiple consecutive underscores
+        safe_filename = re.sub(r'_+', '_', safe_filename)
+        # Ensure filename is not too long
+        if len(safe_filename) > 100:
+            name, ext = os.path.splitext(safe_filename)
+            safe_filename = name[:90] + ext
+        return safe_filename
+
+    async def copy_document(self, source_s3_key: str, destination_s3_key: str) -> bool:
+        """
+        Copy a document within S3.
+
+        Args:
+            source_s3_key: Source S3 key
+            destination_s3_key: Destination S3 key
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                self._copy_file_sync,
+                source_s3_key,
+                destination_s3_key,
+            )
+            
+            logger.info(f"Successfully copied document from {source_s3_key} to {destination_s3_key}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error copying document from {source_s3_key} to {destination_s3_key}: {e}")
+            return False
+
+    def _copy_file_sync(self, source_s3_key: str, destination_s3_key: str) -> None:
+        """
+        Synchronous copy method to be run in executor.
+        """
+        copy_source = {'Bucket': self.bucket_name, 'Key': source_s3_key}
+        self.s3_client.copy_object(
+            CopySource=copy_source,
+            Bucket=self.bucket_name,
+            Key=destination_s3_key,
+            ServerSideEncryption='AES256'
+        )
+
+    async def get_document_content_type(self, s3_key: str) -> Optional[str]:
+        """
+        Get the content type of a document in S3.
+
+        Args:
+            s3_key: S3 key of the document
+
+        Returns:
+            Optional[str]: Content type or None if not found
+        """
+        metadata = await self.get_file_metadata(s3_key)
+        if metadata:
+            return metadata.get('content_type')
+        return None
+
+    async def check_document_exists(self, s3_key: str) -> bool:
+        """
+        Check if a document exists in S3.
+
+        Args:
+            s3_key: S3 key of the document
+
+        Returns:
+            bool: True if document exists, False otherwise
+        """
+        try:
+            metadata = await self.get_file_metadata(s3_key)
+            return metadata is not None
+        except Exception:
+            return False
+
+    def _upload_file_sync(self, file_data: bytes, s3_key: str, content_type: str, metadata: Dict[str, str]) -> None:
+        """
+        Synchronous file upload method to be run in executor.
+        """
+        self.s3_client.put_object(
+            Bucket=self.bucket_name,
+            Key=s3_key,
+            Body=file_data,
+            ContentType=content_type,
+            Metadata=metadata,
+            ServerSideEncryption='AES256',
+        ) 
