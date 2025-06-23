@@ -210,7 +210,6 @@ class CallService:
         recording_type: str = "mixed",
         recording_source: str = "s3",
         recording_sid: str = None,
-        recording_url: str = None,
         status: str = "recording",
         file_path: str = None,
         s3_key: str = None,
@@ -230,7 +229,6 @@ class CallService:
             recording_type: Recording type (full, segment)
             recording_source: Recording source (twilio, local)
             recording_sid: Twilio Recording SID (for Twilio recordings)
-            recording_url: Twilio Recording URL (for Twilio recordings)
             status: Recording status (recording, completed, failed)
             file_path: Direct file path (for existing files)
             s3_key: S3 object key
@@ -272,8 +270,6 @@ class CallService:
                 recording_data = {
                     "call_id": call.id,
                     "recording_sid": recording_sid,
-                    "file_path": file_path,
-                    "recording_url": recording_url,
                     "format": format,
                     "recording_type": recording_type,
                     "recording_source": recording_source,
@@ -294,7 +290,7 @@ class CallService:
                     f"Created {recording_source} recording with ID: {recording.id} for call SID: {call_sid}"
                 )
 
-                return recording, file_path or recording_url
+                return recording, file_path or s3_url
         except SQLAlchemyError as e:
             logger.error(f"Error creating recording: {e}")
             raise
@@ -346,7 +342,7 @@ class CallService:
     async def update_recording_status(
         recording_sid: str,
         status: str,
-        recording_url: str = None,
+        s3_url: str = None,
         duration: float = None,
         local_file_path: str = None,
     ) -> Optional[Recording]:
@@ -356,7 +352,7 @@ class CallService:
         Args:
             recording_sid: Twilio Recording SID
             status: New status (completed, failed)
-            recording_url: Recording URL from Twilio
+            s3_url: S3 URL for the recording
             duration: Recording duration in seconds
             local_file_path: Local file path if recording was downloaded
 
@@ -375,12 +371,13 @@ class CallService:
 
                 # Update recording
                 recording.status = status
-                if recording_url:
-                    recording.recording_url = recording_url
+                if s3_url:
+                    recording.s3_url = s3_url
                 if duration:
                     recording.duration = duration
                 if local_file_path:
-                    recording.file_path = local_file_path
+                    # Note: Recording model doesn't have file_path field, using s3_key instead for local paths
+                    recording.s3_key = local_file_path
 
                 await db.commit()
                 await db.refresh(recording)

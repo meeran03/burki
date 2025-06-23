@@ -83,6 +83,22 @@ async def download_recording(
         f"Recording {recording_id}: s3_key={recording.s3_key}, recording_source={recording.recording_source}, status={recording.status}"
     )
 
+    # Check if recording is still processing
+    if recording.status == "processing":
+        # Return a 202 Accepted status with helpful message
+        return Response(
+            content='{"status": "processing", "message": "Recording is still being processed. Please try again in a moment."}',
+            status_code=202,
+            media_type="application/json",
+            headers={
+                "Retry-After": "10"  # Suggest retry after 10 seconds
+            }
+        )
+    
+    # Check if recording failed
+    if recording.status == "failed":
+        raise HTTPException(status_code=404, detail="Recording processing failed")
+    
     # Check if this is an S3 recording
     if recording.recording_source == "s3" and recording.s3_key:
         try:
@@ -117,9 +133,9 @@ async def download_recording(
             logger.error(f"Error downloading recording from S3 {recording_id}: {e}")
             raise HTTPException(status_code=500, detail="Error downloading recording file")
     else:
-        # Legacy support for non-S3 recordings
+        # Legacy support for non-S3 recordings or missing S3 key
         logger.error(
-            f"Recording not available: s3_key={recording.s3_key}, recording_source={recording.recording_source}"
+            f"Recording not available: s3_key={recording.s3_key}, recording_source={recording.recording_source}, status={recording.status}"
         )
         raise HTTPException(status_code=404, detail="Recording file not available")
 

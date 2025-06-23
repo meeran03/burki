@@ -630,7 +630,7 @@ Call Summary: {summary}"""
     @staticmethod
     async def send_end_of_call_webhook_immediate(call_sid: str) -> bool:
         """
-        Send end-of-call webhook immediately without waiting for recordings.
+        Send end-of-call webhook immediately with recording URL (processing status).
 
         Args:
             call_sid: The call SID
@@ -647,12 +647,27 @@ Call Summary: {summary}"""
             
             assistant = call.assistant
             
-            # Send the webhook without recording URL
+            # Get the recording URL for the processing recording
+            recording_url = None
+            try:
+                recordings = await CallService.get_call_recordings(call_sid)
+                if recordings:
+                    # Use the first (should be only one) recording
+                    recording = recordings[0]
+                    # Construct URL to our download endpoint
+                    from app.utils.url_utils import get_server_base_url
+                    base_url = get_server_base_url()
+                    recording_url = f"{base_url}/calls/{recording.call_id}/recording/{recording.id}"
+                    logger.info(f"Including recording URL in webhook: {recording_url}")
+            except Exception as recording_error:
+                logger.warning(f"Could not get recording URL for call {call_sid}: {recording_error}")
+            
+            # Send the webhook with recording URL (processing status)
             return await WebhookService.send_end_of_call_webhook(
                 assistant=assistant,
                 call=call,
                 ended_reason="customer-ended-call",
-                recording_url=None
+                recording_url=recording_url
             )
             
         except Exception as e:
