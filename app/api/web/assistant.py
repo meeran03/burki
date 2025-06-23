@@ -413,8 +413,6 @@ async def create_assistant(
     rag_search_limit: Optional[int] = Form(None),
     rag_similarity_threshold: Optional[float] = Form(None),
     rag_chunk_size: Optional[int] = Form(None),
-    # Recording settings
-    recording_enabled: bool = Form(False),
     # Tools configuration
     end_call_enabled: bool = Form(False),
     end_call_scenarios: Optional[str] = Form(None),
@@ -598,19 +596,6 @@ async def create_assistant(
         "idle_timeout": idle_timeout,
         # Webhook settings
         "webhook_url": empty_to_none(webhook_url),
-        # Recording settings
-        "recording_settings": {
-            "enabled": recording_enabled,
-            "format": "mp3",  # Always MP3 format
-            "sample_rate": 8000,
-            "channels": 1,
-            "record_user_audio": True,
-            "record_assistant_audio": True,
-            "record_mixed_audio": True,
-            "auto_save": True,
-            "recordings_dir": "recordings",
-            "create_database_records": True,
-        } if recording_enabled else None,
         # Tools configuration
         "tools_settings": {
             "enabled_tools": [],  # Will be populated below
@@ -993,8 +978,6 @@ async def update_assistant(
     rag_search_limit: Optional[int] = Form(None),
     rag_similarity_threshold: Optional[float] = Form(None),
     rag_chunk_size: Optional[int] = Form(None),
-    # Recording settings
-    recording_enabled: bool = Form(False),
     # Tools configuration
     end_call_enabled: bool = Form(False),
     end_call_scenarios: Optional[str] = Form(None),
@@ -1180,19 +1163,6 @@ async def update_assistant(
         "idle_timeout": idle_timeout,
         # Webhook settings
         "webhook_url": empty_to_none(webhook_url),
-        # Recording settings
-        "recording_settings": {
-            "enabled": recording_enabled,
-            "format": "mp3",  # Always MP3 format
-            "sample_rate": 8000,
-            "channels": 1,
-            "record_user_audio": True,
-            "record_assistant_audio": True,
-            "record_mixed_audio": True,
-            "auto_save": True,
-            "recordings_dir": "recordings",
-            "create_database_records": True,
-        } if recording_enabled else None,
         # Tools configuration
         "tools_settings": {
             "enabled_tools": [],  # Will be populated below
