@@ -384,4 +384,90 @@ class TwilioService:
             return None
         except Exception as e:
             logger.error(f"Unexpected error downloading recording content: {e}")
-            return None 
+            return None
+
+    @staticmethod
+    def initiate_outbound_call(
+        to_phone_number: str,
+        from_phone_number: str,
+        webhook_url: str,
+        call_metadata: Optional[Dict[str, Any]] = None,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Initiate an outbound call through Twilio.
+        
+        Args:
+            to_phone_number: The phone number to call (E.164 format)
+            from_phone_number: The phone number to call from (must be a Twilio number)
+            webhook_url: The webhook URL for handling the call
+            call_metadata: Optional metadata to include in the webhook URL
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            Optional[str]: Call SID if successful, None otherwise
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        if not client:
+            logger.error("Could not get Twilio client to initiate outbound call")
+            return None
+        
+        try:
+            # Build webhook URL with metadata if provided
+            full_webhook_url = webhook_url
+            if call_metadata:
+                # Add metadata as URL parameters
+                import urllib.parse
+                
+                # Convert metadata to URL parameters
+                params = {}
+                for key, value in call_metadata.items():
+                    if value is not None:
+                        params[key] = str(value)
+                
+                if params:
+                    query_string = urllib.parse.urlencode(params)
+                    separator = "&" if "?" in webhook_url else "?"
+                    full_webhook_url = f"{webhook_url}{separator}{query_string}"
+            
+            # Initiate the outbound call
+            call = client.calls.create(
+                to=to_phone_number,
+                from_=from_phone_number,
+                url=full_webhook_url,
+                method='POST'
+            )
+            
+            logger.info(f"Successfully initiated outbound call to {to_phone_number}, call SID: {call.sid}")
+            return call.sid
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error initiating outbound call: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error initiating outbound call: {e}")
+            return None
+
+    @staticmethod
+    def validate_phone_number(phone_number: str) -> bool:
+        """
+        Validate if a phone number is in E.164 format.
+        
+        Args:
+            phone_number: The phone number to validate
+            
+        Returns:
+            bool: True if valid, False otherwise
+        """
+        import re
+        
+        # E.164 format: +[country code][subscriber number]
+        # Length should be between 7 and 15 digits (excluding the +)
+        pattern = r'^\+[1-9]\d{1,14}$'
+        
+        if not phone_number:
+            return False
+            
+        return bool(re.match(pattern, phone_number)) 

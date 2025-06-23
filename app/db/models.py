@@ -17,6 +17,17 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from typing import Optional, Dict, Any
 
+# pgvector imports
+try:
+    from pgvector.sqlalchemy import Vector
+    PGVECTOR_AVAILABLE = True
+except ImportError:
+    PGVECTOR_AVAILABLE = False
+    # Fallback for when pgvector is not available
+    class Vector:
+        def __init__(self, dim):
+            pass
+
 Base = declarative_base()
 
 
@@ -55,6 +66,7 @@ class Organization(Base):
     users = relationship("User", back_populates="organization", cascade="all, delete-orphan")
     assistants = relationship("Assistant", back_populates="organization", cascade="all, delete-orphan")
     billing_account = relationship("BillingAccount", back_populates="organization", uselist=False, cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="organization", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Organization(id={self.id}, name='{self.name}', slug='{self.slug}')>"
@@ -242,6 +254,12 @@ class Assistant(Base):
         "custom_config": {}
     })
 
+    # LLM Fallback Providers Configuration
+    llm_fallback_providers = Column(JSON, nullable=True, default=lambda: {
+        "enabled": False,
+        "fallbacks": []
+    })
+
     # Legacy API Keys (for backward compatibility - will be deprecated)
     openai_api_key = Column(String(255), nullable=True)
     custom_llm_url = Column(String(255), nullable=True)
@@ -339,6 +357,45 @@ class Assistant(Base):
     max_idle_messages = Column(Integer, nullable=True)
     idle_timeout = Column(Integer, nullable=True)
 
+    # Tools configuration as JSON
+    tools_settings = Column(
+        JSON,
+        nullable=True,
+        default=lambda: {
+            "enabled_tools": [],  # List of enabled tool names: ["endCall", "transferCall"]
+            "end_call": {
+                "enabled": False,
+                "scenarios": [],  # List of scenarios when to end call
+                "custom_message": None,  # Custom end call message
+            },
+            "transfer_call": {
+                "enabled": False,
+                "scenarios": [],  # List of scenarios when to transfer
+                "transfer_numbers": [],  # List of phone numbers to transfer to
+                "custom_message": None,  # Custom transfer message
+            },
+            "custom_tools": [],  # List of custom tool definitions
+        },
+    )
+
+    # RAG (Retrieval Augmented Generation) settings as JSON
+    rag_settings = Column(
+        JSON,
+        nullable=True,
+        default=lambda: {
+            "enabled": True,  # Whether RAG is enabled for this assistant
+            "search_limit": 3,  # Number of document chunks to retrieve
+            "similarity_threshold": 0.7,  # Minimum similarity score for relevance
+            "embedding_model": "text-embedding-3-small",  # Embedding model to use
+            "chunking_strategy": "recursive",  # Default chunking strategy for new documents
+            "chunk_size": 1000,  # Default chunk size for new documents
+            "chunk_overlap": 200,  # Default chunk overlap for new documents
+            "auto_process": True,  # Whether to auto-process uploaded documents
+            "include_metadata": True,  # Whether to include document metadata in responses
+            "context_window_tokens": 4000,  # Max tokens to use for document context
+        },
+    )
+
     # Additional settings
     custom_settings = Column(JSON, nullable=True)
     is_active = Column(Boolean, nullable=True, default=True)
@@ -358,6 +415,7 @@ class Assistant(Base):
     calls = relationship(
         "Call", back_populates="assistant", cascade="all, delete-orphan"
     )
+    documents = relationship("Document", back_populates="assistant", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Assistant(id={self.id}, name='{self.name}', phone_number='{self.phone_number}')>"
@@ -392,6 +450,12 @@ class Call(Base):
     )
     transcripts = relationship(
         "Transcript", back_populates="call", cascade="all, delete-orphan"
+    )
+    chat_messages = relationship(
+        "ChatMessage", back_populates="call", cascade="all, delete-orphan"
+    )
+    webhook_logs = relationship(
+        "WebhookLog", back_populates="call", cascade="all, delete-orphan"
     )
 
     def __repr__(self):
@@ -703,3 +767,252 @@ class BillingTransaction(Base):
 
     def __repr__(self):
         return f"<BillingTransaction(id={self.id}, type='{self.transaction_type}', amount_cents={self.amount_cents}, status='{self.status}')>"
+
+
+class Document(Base):
+    """
+    Document model represents uploaded documents for RAG functionality.
+    """
+
+    __tablename__ = "documents"
+
+    id = Column(Integer, primary_key=True)
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    
+    # Document metadata
+    name = Column(String(255), nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=False)
+    file_size = Column(Integer, nullable=False)  # Size in bytes
+    file_hash = Column(String(64), nullable=False, index=True)  # SHA256 hash for deduplication
+    
+    # S3 storage information
+    s3_key = Column(String(500), nullable=False)  # S3 object key
+    s3_url = Column(String(1000), nullable=True)  # S3 public URL
+    s3_bucket = Column(String(100), nullable=True)  # S3 bucket name
+    
+    # Document processing status
+    processing_status = Column(String(20), nullable=False, default="pending")  # pending, processing, completed, failed
+    processing_error = Column(Text, nullable=True)  # Error message if processing failed
+    
+    # Document content and chunks
+    total_chunks = Column(Integer, nullable=False, default=0)
+    processed_chunks = Column(Integer, nullable=False, default=0)
+    
+    # Document type and metadata
+    document_type = Column(String(50), nullable=True)  # pdf, docx, txt, md, etc.
+    language = Column(String(10), nullable=True, default="en")  # Document language
+    
+    # Chunking configuration used
+    chunk_size = Column(Integer, nullable=True)
+    chunk_overlap = Column(Integer, nullable=True)
+    chunking_strategy = Column(String(50), nullable=True, default="recursive")  # recursive, semantic, etc.
+    
+    # Document metadata
+    document_metadata = Column(JSON, nullable=True, default=lambda: {})
+    
+    # Tags and categories for organization
+    tags = Column(JSON, nullable=True, default=lambda: [])  # List of tags
+    category = Column(String(100), nullable=True)  # Document category
+    
+    # Access control
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_public = Column(Boolean, nullable=False, default=False)  # Whether accessible to all assistants in org
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+    processed_at = Column(DateTime, nullable=True)  # When processing completed
+
+    # Relationships
+    assistant = relationship("Assistant", back_populates="documents")
+    organization = relationship("Organization", back_populates="documents")
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Document(id={self.id}, name='{self.name}', assistant_id={self.assistant_id}, status='{self.processing_status}')>"
+
+    def get_processing_progress(self) -> float:
+        """Get processing progress as a percentage."""
+        if self.total_chunks == 0:
+            return 0.0
+        return (self.processed_chunks / self.total_chunks) * 100
+
+    def is_processing_complete(self) -> bool:
+        """Check if document processing is complete."""
+        return self.processing_status == "completed" and self.processed_chunks == self.total_chunks
+
+
+class DocumentChunk(Base):
+    """
+    DocumentChunk model represents chunks of documents with embeddings for RAG.
+    """
+
+    __tablename__ = "document_chunks"
+
+    id = Column(Integer, primary_key=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    
+    # Chunk metadata
+    chunk_index = Column(Integer, nullable=False)  # Index within the document
+    content = Column(Text, nullable=False)  # The actual text content
+    # Embedding vector - using pgvector
+    if PGVECTOR_AVAILABLE:
+        embedding = Column(Vector(1536), nullable=True)  # OpenAI text-embedding-3-small dimensions
+    else:
+        embedding = Column(Text, nullable=True)  # Fallback for development without pgvector
+    
+    # Chunk metadata from the original document
+    chunk_metadata = Column(JSON, nullable=True, default=lambda: {})
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    embedded_at = Column(DateTime, nullable=True)  # When embedding was created
+
+    # Relationships
+    document = relationship("Document", back_populates="chunks")
+
+    # Add unique constraint for chunk within document
+    __table_args__ = (
+        Index('idx_document_chunk', 'document_id', 'chunk_index', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<DocumentChunk(id={self.id}, document_id={self.document_id}, chunk_index={self.chunk_index})>"
+    
+    @staticmethod
+    def get_embedding_field():
+        """Return the name of the embedding field for PostgresSearcher."""
+        return "embedding"
+    
+    @staticmethod
+    def get_text_search_field():
+        """Return the name of the text search field for PostgresSearcher."""
+        return "content"
+
+
+class ChatMessage(Base):
+    """
+    ChatMessage model represents individual messages in the conversation history.
+    This stores the actual LLM conversation flow (system, user, assistant messages)
+    separate from transcripts which are the raw speech-to-text output.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    
+    # Message content and metadata
+    role = Column(String(20), nullable=False, index=True)  # system, user, assistant
+    content = Column(Text, nullable=False)  # The message content
+    message_index = Column(Integer, nullable=False)  # Order within the conversation
+    
+    # Message timing
+    timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    
+    # LLM provider information
+    llm_provider = Column(String(50), nullable=True)  # Which LLM provider generated this (for assistant messages)
+    llm_model = Column(String(100), nullable=True)  # Which model was used (for assistant messages)
+    
+    # Token usage and costs (for assistant messages)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    
+    # Additional metadata
+    message_metadata = Column(JSON, nullable=True, default=lambda: {})
+
+    # Relationships
+    call = relationship("Call", back_populates="chat_messages")
+
+    # Add unique constraint for message within call
+    __table_args__ = (
+        Index('idx_call_message_index', 'call_id', 'message_index', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<ChatMessage(id={self.id}, call_id={self.call_id}, role='{self.role}', index={self.message_index})>"
+
+
+class WebhookLog(Base):
+    """
+    WebhookLog model represents webhook delivery attempts and their results.
+    """
+
+    __tablename__ = "webhook_logs"
+
+    id = Column(Integer, primary_key=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=False, index=True)
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False, index=True)
+    
+    # Webhook details
+    webhook_url = Column(String(1000), nullable=False)
+    webhook_type = Column(String(50), nullable=False, index=True)  # status-update, end-of-call-report
+    
+    # Request details
+    request_payload = Column(JSON, nullable=False)  # The payload that was sent
+    request_headers = Column(JSON, nullable=True)  # Headers sent with the request
+    
+    # Response details
+    response_status_code = Column(Integer, nullable=True)  # HTTP status code
+    response_body = Column(Text, nullable=True)  # Response body (truncated if too long)
+    response_headers = Column(JSON, nullable=True)  # Response headers
+    
+    # Timing and status
+    attempted_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    response_time_ms = Column(Integer, nullable=True)  # Response time in milliseconds
+    success = Column(Boolean, nullable=False, default=False)  # Whether the webhook was successful
+    
+    # Error information
+    error_message = Column(Text, nullable=True)  # Error message if the webhook failed
+    retry_count = Column(Integer, nullable=False, default=0)  # Number of retries attempted
+    
+    # Additional metadata
+    webhook_metadata = Column(JSON, nullable=True, default=lambda: {})
+
+    # Relationships
+    call = relationship("Call", back_populates="webhook_logs")
+    assistant = relationship("Assistant")
+
+    def __repr__(self):
+        return f"<WebhookLog(id={self.id}, call_id={self.call_id}, type='{self.webhook_type}', success={self.success})>"
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the webhook attempt."""
+        return {
+            "id": self.id,
+            "call_id": self.call_id,
+            "assistant_id": self.assistant_id,
+            "webhook_url": self.webhook_url,
+            "webhook_type": self.webhook_type,
+            "success": self.success,
+            "response_status_code": self.response_status_code,
+            "response_time_ms": self.response_time_ms,
+            "attempted_at": self.attempted_at.isoformat() if self.attempted_at else None,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+        }
+
+
+# Update existing models to include document relationships
+# Add to Organization class
+def add_documents_relationship_to_organization():
+    """Add documents relationship to Organization model."""
+    if not hasattr(Organization, 'documents'):
+        Organization.documents = relationship("Document", back_populates="organization", cascade="all, delete-orphan")
+
+# Add to Assistant class  
+def add_documents_relationship_to_assistant():
+    """Add documents relationship to Assistant model."""
+    if not hasattr(Assistant, 'documents'):
+        Assistant.documents = relationship("Document", back_populates="assistant", cascade="all, delete-orphan")
+
+# Call the functions to add relationships
+add_documents_relationship_to_organization()
+add_documents_relationship_to_assistant()
