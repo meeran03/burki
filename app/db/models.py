@@ -221,7 +221,7 @@ class UserAPIKey(Base):
     def generate_api_key():
         """Generate a new API key."""
         # Generate a secure random key
-        key = f"diwaar_{''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(32))}"
+        key = f"burki_{''.join(secrets.choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(32))}"
         return key
 
     @staticmethod
