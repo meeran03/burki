@@ -1,4 +1,4 @@
-# Buraaq Voice AI - Design Philosophy & Style Guide
+# Burki Voice AI - Design Philosophy & Style Guide
 
 > **Arabic Heritage Meets Modern Technology**  
 > A comprehensive design system for enterprise-grade Voice AI infrastructure
@@ -8,7 +8,7 @@
 ## 🎨 **Core Design Philosophy**
 
 ### **Vision Statement**
-Buraaq represents the intersection of Arabic heritage and cutting-edge AI technology. Our design language embodies sophistication, performance, and trust - essential qualities for enterprise Voice AI infrastructure.
+Burki represents the intersection of Arabic heritage and cutting-edge AI technology. Our design language embodies sophistication, performance, and trust - essential qualities for enterprise Voice AI infrastructure.
 
 ### **Target Audience**
 - Tech professionals and developers
@@ -37,14 +37,14 @@ Buraaq represents the intersection of Arabic heritage and cutting-edge AI techno
         <span class="text-white font-bold text-lg">ب</span>
     </div>
     <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-        Buraaq
+        Burki
     </h1>
 </div>
 ```
 
 #### **Typography Hierarchy**
 - **Primary Font**: Inter (Google Fonts)
-- **Arabic Letter**: "ب" (Ba) representing Buraaq
+- **Arabic Letter**: "ب" (Ba) representing Burki
 - **Gradient Text**: Blue-to-purple for brand names
 - **Hierarchy**: Bold for headers, Medium for sub-headers, Regular for body
 
@@ -598,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
 ```html
 {% extends "base.html" %}
 
-{% block title %}Page Title - Buraaq Voice AI{% endblock %}
+{% block title %}Page Title - Burki Voice AI{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
@@ -673,7 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 ---
 
-*This design philosophy serves as the foundation for all future development on the Buraaq Voice AI platform. Consistency in application of these principles ensures a cohesive, professional, and innovative user experience.*
+*This design philosophy serves as the foundation for all future development on the Burki Voice AI platform. Consistency in application of these principles ensures a cohesive, professional, and innovative user experience.*
 
 **Last Updated**: December 2024  
 **Version**: 1.0  

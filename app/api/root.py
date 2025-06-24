@@ -484,8 +484,16 @@ async def initiate_outbound_call(request: Request):
         if not twilio_account_sid or not twilio_auth_token:
             raise HTTPException(status_code=500, detail="Twilio credentials not configured")
         
-        # Use the assistant's phone number as the from number
-        from_phone_number = assistant.phone_number
+        # Get an assigned phone number for this assistant
+        from app.services.phone_number_service import PhoneNumberService
+        phone_numbers = await PhoneNumberService.get_organization_phone_numbers(assistant.organization_id)
+        assigned_phone_numbers = [pn for pn in phone_numbers if pn.assistant_id == assistant.id]
+        
+        if not assigned_phone_numbers:
+            raise HTTPException(status_code=400, detail="No phone number assigned to this assistant")
+        
+        # Use the first assigned phone number as the from number
+        from_phone_number = assigned_phone_numbers[0].phone_number
         
         # Initiate the outbound call through Twilio
         call_sid = TwilioService.initiate_outbound_call(
