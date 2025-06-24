@@ -12,14 +12,15 @@ import os
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response, UploadFile, File
 from fastapi.responses import (
     HTMLResponse,
-    RedirectResponse
+    RedirectResponse,
+    JSONResponse
 )
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc, asc
 
-from app.db.database import get_db
+from app.db.database import get_db, get_async_db_session
 from app.db.models import (
     Call,
     Transcript,
@@ -30,6 +31,7 @@ from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
 from app.twilio.twilio_service import TwilioService
 from app.core.assistant_manager import assistant_manager
+from app.utils.url_utils import get_twiml_webhook_url
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])
@@ -114,8 +116,9 @@ async def list_assistants(
     db: Session = Depends(get_db),
 ):
     """List assistants with pagination, filtering, and sorting."""
-    # Base query - filter by organization
-    query = db.query(Assistant).filter(
+    # Base query - filter by organization and load phone numbers
+    from sqlalchemy.orm import joinedload
+    query = db.query(Assistant).options(joinedload(Assistant.phone_numbers)).filter(
         Assistant.organization_id == current_user.organization_id
     )
 
@@ -124,7 +127,6 @@ async def list_assistants(
         search_term = f"%{search}%"
         query = query.filter(
             (Assistant.name.ilike(search_term))
-            | (Assistant.phone_number.ilike(search_term))
             | (Assistant.description.ilike(search_term))
         )
 
@@ -140,8 +142,6 @@ async def list_assistants(
     # Apply sorting
     if sort_by == "name":
         order_col = Assistant.name
-    elif sort_by == "phone":
-        order_col = Assistant.phone_number
     elif sort_by == "created":
         order_col = Assistant.created_at
     else:
@@ -311,9 +311,6 @@ async def create_assistant_form(
     request: Request, current_user: User = Depends(require_auth)
 ):
     """Show the create assistant form."""
-    # Get available phone numbers from Twilio
-    phone_numbers = TwilioService.get_available_phone_numbers()
-
     # Default schema for structured data
     default_schema = json.dumps(
         {
@@ -340,7 +337,6 @@ async def create_assistant_form(
             current_user=current_user,
             organization=current_user.organization,
             assistant=None,
-            phone_numbers=phone_numbers,
             default_schema=default_schema,
         ),
     )
@@ -351,7 +347,6 @@ async def create_assistant(
     request: Request,
     current_user: User = Depends(require_auth),
     name: str = Form(...),
-    phone_number: str = Form(...),
     description: Optional[str] = Form(None),
     is_active: bool = Form(False),
     # LLM Provider Configuration
@@ -440,40 +435,6 @@ async def create_assistant(
     fallback_2_base_url: Optional[str] = Form(None),
 ):
     """Create a new assistant."""
-    # Check if an assistant with this phone number already exists
-    existing = await AssistantService.get_assistant_by_phone(phone_number, current_user.organization_id)
-    if existing:
-        phone_numbers = TwilioService.get_available_phone_numbers()
-        default_schema = json.dumps(
-            {
-                "type": "object",
-                "properties": {
-                    "chat_topic": {
-                        "type": "string",
-                        "description": "The main topic of the conversation",
-                    },
-                    "followup_sms": {
-                        "type": "string",
-                        "description": "A follow-up SMS message to send to the customer",
-                    },
-                },
-                "required": ["chat_topic"],
-            },
-            indent=2,
-        )
-        return templates.TemplateResponse(
-            "assistants/form.html",
-            {
-                "request": request,
-                "current_user": current_user,
-                "organization": current_user.organization,
-                "assistant": None,
-                "phone_numbers": phone_numbers,
-                "default_schema": default_schema,
-                "error": f"Assistant with phone number {phone_number} already exists",
-            },
-            status_code=400,
-        )
 
     # Helper function to convert empty strings to None
     def empty_to_none(value):
@@ -508,7 +469,6 @@ async def create_assistant(
     # Create assistant data with JSON settings
     assistant_data = {
         "name": name,
-        "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
         # Note: organization_id and user_id are passed as separate parameters to create_assistant
@@ -829,7 +789,19 @@ async def view_assistant(
     request: Request, assistant_id: int, current_user: User = Depends(require_auth), db: Session = Depends(get_db)
 ):
     """View an assistant."""
-    assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
+    # Get assistant with phone numbers loaded
+    async with get_async_db_session() as async_db:
+        from sqlalchemy.orm import joinedload
+        from sqlalchemy import select
+        result = await async_db.execute(
+            select(Assistant)
+            .options(joinedload(Assistant.phone_numbers))
+            .where(
+                Assistant.id == assistant_id,
+                Assistant.organization_id == current_user.organization_id
+            )
+        )
+        assistant = result.scalar_one_or_none()
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
@@ -876,9 +848,6 @@ async def edit_assistant_form(request: Request, assistant_id: int, current_user:
         logger.warning(f"Could not load documents: {e}")
         documents = []
 
-    # Get available phone numbers from Twilio
-    phone_numbers = TwilioService.get_available_phone_numbers()
-
     # Default schema for structured data
     default_schema = json.dumps(
         {
@@ -904,7 +873,6 @@ async def edit_assistant_form(request: Request, assistant_id: int, current_user:
             request,
             assistant=assistant,
             documents=documents,  # Pass documents separately
-            phone_numbers=phone_numbers,
             default_schema=default_schema,
         ),
     )
@@ -916,7 +884,6 @@ async def update_assistant(
     assistant_id: int,
     current_user: User = Depends(require_auth),
     name: str = Form(...),
-    phone_number: str = Form(...),
     description: Optional[str] = Form(None),
     is_active: bool = Form(False),
     # LLM Provider Configuration
@@ -1009,39 +976,7 @@ async def update_assistant(
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
-    # Check if the phone number is being changed and if it already exists
-    if phone_number != assistant.phone_number:
-        existing = await AssistantService.get_assistant_by_phone(phone_number, current_user.organization_id)
-        if existing:
-            phone_numbers = TwilioService.get_available_phone_numbers()
-            default_schema = json.dumps(
-                {
-                    "type": "object",
-                    "properties": {
-                        "chat_topic": {
-                            "type": "string",
-                            "description": "The main topic of the conversation",
-                        },
-                        "followup_sms": {
-                            "type": "string",
-                            "description": "A follow-up SMS message to send to the customer",
-                        },
-                    },
-                    "required": ["chat_topic"],
-                },
-                indent=2,
-            )
-            return templates.TemplateResponse(
-                "assistants/form.html",
-                {
-                    "request": request,
-                    "assistant": assistant,
-                    "phone_numbers": phone_numbers,
-                    "default_schema": default_schema,
-                    "error": f"Assistant with phone number {phone_number} already exists",
-                },
-                status_code=400,
-            )
+    # Note: Phone number management is now handled separately through the PhoneNumber table
 
     # Helper function to convert empty strings to None
     def empty_to_none(value):
@@ -1076,7 +1011,6 @@ async def update_assistant(
     # Create update data with JSON settings
     update_data = {
         "name": name,
-        "phone_number": phone_number,
         "description": description,
         "is_active": is_active,
         # LLM Provider Configuration
@@ -1206,7 +1140,6 @@ async def update_assistant(
             schema_data = json.loads(structured_data_schema)
             custom_settings["structured_data_schema"] = schema_data
         except json.JSONDecodeError:
-            phone_numbers = TwilioService.get_available_phone_numbers()
             default_schema = json.dumps(
                 {
                     "type": "object",
@@ -1229,7 +1162,6 @@ async def update_assistant(
                 {
                     "request": request,
                     "assistant": assistant,
-                    "phone_numbers": phone_numbers,
                     "default_schema": default_schema,
                     "error": "Invalid JSON schema for structured data",
                 },
@@ -1258,13 +1190,11 @@ async def update_assistant(
                         keywords_list.append({"keyword": keyword, "intensifier": 1.0})
                 update_data["stt_settings"]["keywords"] = keywords_list
             except (ValueError, AttributeError) as e:
-                phone_numbers = TwilioService.get_available_phone_numbers()
                 return templates.TemplateResponse(
                     "assistants/form.html",
                     {
                         "request": request,
                         "assistant": assistant,
-                        "phone_numbers": phone_numbers,
                         "error": f"Invalid keywords format: {str(e)}. Use format: 'keyword1:2.0, keyword2, keyword3:1.5'",
                     },
                     status_code=400,
@@ -1278,13 +1208,11 @@ async def update_assistant(
                 ]
                 update_data["stt_settings"]["keyterms"] = keyterms_list
             except AttributeError as e:
-                phone_numbers = TwilioService.get_available_phone_numbers()
                 return templates.TemplateResponse(
                     "assistants/form.html",
                     {
                         "request": request,
                         "assistant": assistant,
-                        "phone_numbers": phone_numbers,
                         "error": f"Invalid keyterms format: {str(e)}. Use comma-separated terms.",
                     },
                     status_code=400,
@@ -1352,7 +1280,6 @@ async def update_assistant(
             url=f"/assistants/{updated_assistant.id}", status_code=302
         )
     except Exception as e:
-        phone_numbers = TwilioService.get_available_phone_numbers()
         default_schema = json.dumps(
             {
                 "type": "object",
@@ -1375,7 +1302,6 @@ async def update_assistant(
             {
                 "request": request,
                 "assistant": assistant,
-                "phone_numbers": phone_numbers,
                 "default_schema": default_schema,
                 "error": f"Error updating assistant: {str(e)}",
             },
@@ -1420,7 +1346,6 @@ async def export_assistants(
         search_term = f"%{search}%"
         query = query.filter(
             (Assistant.name.ilike(search_term))
-            | (Assistant.phone_number.ilike(search_term))
             | (Assistant.description.ilike(search_term))
         )
 
@@ -1465,7 +1390,6 @@ async def export_assistants(
             {
                 "id": assistant.id,
                 "name": assistant.name,
-                "phone_number": assistant.phone_number,
                 "description": assistant.description or "",
                 "status": "Active" if assistant.is_active else "Inactive",
                 "total_calls": total_calls,
@@ -1501,7 +1425,6 @@ async def export_assistants(
             fieldnames=[
                 "id",
                 "name",
-                "phone_number",
                 "description",
                 "status",
                 "total_calls",
@@ -1770,3 +1693,51 @@ async def get_document_status(
     except Exception as e:
         logger.error(f"Error getting document status: {e}")
         raise HTTPException(status_code=500, detail="Error getting document status")
+
+
+@router.post("/assistants/fetch-phone-numbers", response_class=JSONResponse)
+async def fetch_phone_numbers(
+    request: Request,
+    current_user: User = Depends(require_auth),
+    twilio_account_sid: str = Form(...),
+    twilio_auth_token: str = Form(...),
+):
+    """
+    Fetch available phone numbers from user's Twilio account.
+    This endpoint allows users to test their Twilio credentials and see available numbers.
+    """
+    try:
+        # Validate credentials and fetch phone numbers
+        phone_numbers = TwilioService.get_available_phone_numbers(
+            account_sid=twilio_account_sid,
+            auth_token=twilio_auth_token
+        )
+        
+        if not phone_numbers:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "No phone numbers found or invalid Twilio credentials",
+                    "phone_numbers": []
+                }
+            )
+        
+        return JSONResponse(
+            content={
+                "success": True,
+                "phone_numbers": phone_numbers,
+                "message": f"Found {len(phone_numbers)} phone numbers"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching phone numbers for user {current_user.id}: {e}")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": f"Failed to fetch phone numbers: {str(e)}",
+                "phone_numbers": []
+            }
+        )

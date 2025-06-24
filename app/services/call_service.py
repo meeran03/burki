@@ -44,9 +44,27 @@ class CallService:
         """
         try:
             async with await get_async_db_session() as db:
+                from app.db.models import PhoneNumber
+                
+                # Find the phone number record for this call
+                phone_number_id = None
+                phone_query = select(PhoneNumber).where(
+                    PhoneNumber.phone_number == to_phone_number,
+                    PhoneNumber.is_active == True
+                )
+                phone_result = await db.execute(phone_query)
+                phone_number_obj = phone_result.scalar_one_or_none()
+                
+                if phone_number_obj:
+                    phone_number_id = phone_number_obj.id
+                    logger.info(f"Linked call to phone number ID: {phone_number_id} ({to_phone_number})")
+                else:
+                    logger.warning(f"Phone number {to_phone_number} not found in database")
+
                 call_data = {
                     "call_sid": call_sid,
                     "assistant_id": assistant_id,
+                    "phone_number_id": phone_number_id,
                     "to_phone_number": to_phone_number,
                     "customer_phone_number": customer_phone_number,
                     "call_meta": metadata or {},

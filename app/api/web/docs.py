@@ -14,14 +14,14 @@ async def docs_page(request: Request):
     """
     API Documentation page - publicly accessible.
     
-    Comprehensive documentation for the Buraaq Voice AI API,
+    Comprehensive documentation for the Burki Voice AI API,
     including authentication, endpoints, examples, and code samples.
     """
     return templates.TemplateResponse(
         "docs.html",
         {
             "request": request,
-            "title": "API Documentation - Buraaq Voice AI"
+            "title": "API Documentation - Burki Voice AI"
         }
     )
 
@@ -35,7 +35,7 @@ async def api_reference_redirect(request: Request):
         "docs.html",
         {
             "request": request,
-            "title": "API Reference - Buraaq Voice AI"
+            "title": "API Reference - Burki Voice AI"
         }
     )
 
@@ -49,6 +49,6 @@ async def documentation_redirect(request: Request):
         "docs.html",
         {
             "request": request,
-            "title": "Documentation - Buraaq Voice AI"
+            "title": "Documentation - Burki Voice AI"
         }
     ) 
