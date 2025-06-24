@@ -85,7 +85,7 @@ async def require_auth(request: Request, db: Session = Depends(get_db)) -> User:
 
 @router.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
-    """Landing page showcasing Buraaq Voice AI."""
+    """Landing page showcasing Burki Voice AI."""
     return templates.TemplateResponse("landing.html", get_template_context(request))
 
 

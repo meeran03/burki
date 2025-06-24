@@ -14,7 +14,7 @@
         </div>
     </div>
     <div class="p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 gap-6">
             <!-- Assistant Name -->
             <div>
                 <label for="name" class="block text-sm font-medium text-gray-300 mb-2">Assistant Name</label>
@@ -24,43 +24,10 @@
                     placeholder="My Voice Assistant">
             </div>
 
-            <!-- Phone Number -->
-            <div>
-                <label for="phone_number" class="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
-                {% if phone_numbers %}
-                <select name="phone_number" id="phone_number" required
-                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                    <option value="">-- Select a phone number --</option>
-                    {% for phone in phone_numbers %}
-                    <option value="{{ phone.phone_number }}" {% if assistant and assistant.phone_number == phone.phone_number %}selected{% endif %}>
-                        {{ phone.friendly_name }} ({{ phone.phone_number }})
-                    </option>
-                    {% endfor %}
-                    <option value="custom">Custom phone number</option>
-                </select>
-                <div id="custom_phone_container" class="mt-3 hidden">
-                    <input type="text" id="custom_phone_number" placeholder="+1234567890"
-                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                    <p class="mt-2 text-xs text-gray-400">Enter in E.164 format (e.g., +1234567890)</p>
-                </div>
-                {% else %}
-                <input type="text" name="phone_number" id="phone_number" required
-                    value="{{ assistant.phone_number if assistant else '' }}"
-                    placeholder="+1234567890"
-                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                <p class="mt-2 text-xs text-gray-400">
-                    No Twilio phone numbers found. Enter in E.164 format.
-                    {% if not assistant %}
-                    <a href="https://www.twilio.com/console/phone-numbers/search" target="_blank" class="text-blue-400 hover:text-blue-300 underline">
-                        Purchase a number from Twilio
-                    </a>
-                    {% endif %}
-                </p>
-                {% endif %}
-            </div>
+            <!-- Phone numbers are now managed separately in Organization Settings -->
 
             <!-- Description -->
-            <div class="lg:col-span-2">
+            <div>
                 <label for="description" class="block text-sm font-medium text-gray-300 mb-2">Description</label>
                 <textarea id="description" name="description" rows="3"
                     class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
@@ -68,7 +35,7 @@
             </div>
 
             <!-- Active Status -->
-            <div class="lg:col-span-2">
+            <div>
                 <div class="flex items-center space-x-3">
                     <input id="is_active" name="is_active" type="checkbox" 
                         {% if not assistant or assistant.is_active %}checked{% endif %}

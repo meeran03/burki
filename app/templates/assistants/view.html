@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ assistant.name }} - Buraaq Voice AI{% endblock %}
+{% block title %}{{ assistant.name }} - Burki Voice AI{% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-gray-900 p-6">
@@ -67,8 +67,22 @@
                         </svg>
                     </div>
                     <div>
-                        <div class="text-2xl font-bold text-white">{{ assistant.phone_number or 'Not Set' }}</div>
-                        <div class="text-sm text-gray-400">Phone Number</div>
+                        <div class="text-2xl font-bold text-white">
+                            {% if assistant.phone_numbers %}
+                                {% for phone_number in assistant.phone_numbers %}
+                                    {{ phone_number.phone_number }}{% if not loop.last %}<br/>{% endif %}
+                                {% endfor %}
+                            {% else %}
+                                Not Assigned
+                            {% endif %}
+                        </div>
+                        <div class="text-sm text-gray-400">
+                            {% if assistant.phone_numbers and assistant.phone_numbers|length > 1 %}
+                                Phone Numbers
+                            {% else %}
+                                Phone Number
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -408,7 +422,7 @@
                     </div>
                 </div>
                 <div class="p-6">
-                    {% if assistant.phone_number %}
+                    {% if assistant.phone_numbers %}
                     <form id="outbound-call-form" class="space-y-4">
                         <!-- Phone Number Input -->
                         <div>

@@ -6,6 +6,7 @@ from app.core.auth import get_current_user_flexible, require_api_key
 from app.db.database import get_db
 from app.db.models import User, UserAPIKey
 from app.services.assistant_service import AssistantService
+from app.services.phone_number_service import PhoneNumberService
 from app.core.assistant_manager import assistant_manager
 from app.api.schemas import (
     AssistantCreate, 
@@ -29,16 +30,8 @@ async def create_assistant(
     Creates a new voice assistant with the specified configuration.
     The assistant will be associated with the authenticated user's organization.
     """
-    # Check if an assistant with this phone number already exists in the organization
-    existing = await AssistantService.get_assistant_by_phone(
-        assistant.phone_number, 
-        current_user.organization_id
-    )
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Assistant with phone number {assistant.phone_number} already exists in your organization",
-        )
+    # Note: Phone number validation is now handled separately through the PhoneNumber table
+    # This allows for multiple phone numbers per assistant and better management
 
     # Create the assistant
     assistant_data = assistant.dict(exclude_unset=True)
@@ -126,15 +119,16 @@ async def get_assistant_by_phone(
     Get a specific assistant by phone number.
     
     Returns the assistant details if it belongs to your organization.
+    Uses the new PhoneNumber table for lookups.
     """
-    assistant = await AssistantService.get_assistant_by_phone(
+    assistant = await AssistantService.get_assistant_by_phone_number(
         phone_number, 
         current_user.organization_id
     )
     if not assistant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Assistant with phone number {phone_number} not found in your organization",
+            detail=f"Assistant assigned to phone number {phone_number} not found in your organization",
         )
     return assistant
 
@@ -162,20 +156,8 @@ async def update_assistant(
             detail=f"Assistant with ID {assistant_id} not found in your organization",
         )
 
-    # If changing phone number, check if it's already in use within the organization
-    if (
-        assistant_update.phone_number
-        and assistant_update.phone_number != existing.phone_number
-    ):
-        phone_exists = await AssistantService.get_assistant_by_phone(
-            assistant_update.phone_number,
-            current_user.organization_id
-        )
-        if phone_exists:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Assistant with phone number {assistant_update.phone_number} already exists in your organization",
-            )
+    # Note: Phone number management is now handled separately through the PhoneNumber table
+    # Phone numbers are assigned to assistants through the /organization/phone-numbers interface
 
     # Update the assistant
     update_data = {k: v for k, v in assistant_update.dict().items() if v is not None}
@@ -325,3 +307,268 @@ async def get_supported_llm_providers():
             }
         }
     }
+
+
+# ========== Phone Number Management Endpoints ==========
+
+@router.get("/{assistant_id}/phone-numbers", response_model=List[dict])
+async def get_assistant_phone_numbers(
+    assistant_id: int,
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get all phone numbers assigned to a specific assistant.
+    
+    Returns a list of phone numbers currently assigned to the assistant.
+    """
+    # Verify assistant exists and belongs to organization
+    assistant = await AssistantService.get_assistant_by_id(
+        assistant_id, 
+        current_user.organization_id
+    )
+    if not assistant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assistant with ID {assistant_id} not found in your organization",
+        )
+
+    # Get phone numbers for this assistant
+    phone_numbers = await PhoneNumberService.get_organization_phone_numbers(
+        current_user.organization_id
+    )
+    
+    # Filter to only assigned phone numbers for this assistant
+    assigned_numbers = [
+        {
+            "id": pn.id,
+            "phone_number": pn.phone_number,
+            "friendly_name": pn.friendly_name,
+            "twilio_sid": pn.twilio_sid,
+            "is_active": pn.is_active,
+            "capabilities": pn.capabilities,
+            "assigned_at": pn.updated_at.isoformat() if pn.updated_at else None
+        }
+        for pn in phone_numbers 
+        if pn.assistant_id == assistant_id
+    ]
+    
+    return assigned_numbers
+
+
+@router.post("/{assistant_id}/phone-numbers/{phone_number_id}/assign", response_model=APIResponse)
+async def assign_phone_number_to_assistant(
+    assistant_id: int,
+    phone_number_id: int,
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Assign a phone number to an assistant.
+    
+    Assigns the specified phone number to the assistant.
+    The phone number must belong to your organization and not be assigned to another assistant.
+    """
+    # Verify assistant exists and belongs to organization
+    assistant = await AssistantService.get_assistant_by_id(
+        assistant_id, 
+        current_user.organization_id
+    )
+    if not assistant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assistant with ID {assistant_id} not found in your organization",
+        )
+
+    try:
+        # Assign the phone number
+        result = await PhoneNumberService.assign_phone_to_assistant(
+            phone_number_id, 
+            assistant_id, 
+            current_user.organization_id
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+
+        # Reload assistants cache to update routing
+        await assistant_manager.load_assistants()
+
+        return APIResponse(
+            success=True,
+            message=f"Phone number successfully assigned to assistant '{assistant.name}'"
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to assign phone number: {str(e)}"
+        )
+
+
+@router.post("/{assistant_id}/phone-numbers/{phone_number_id}/unassign", response_model=APIResponse)
+async def unassign_phone_number_from_assistant(
+    assistant_id: int,
+    phone_number_id: int,
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Unassign a phone number from an assistant.
+    
+    Removes the phone number assignment from the assistant.
+    The phone number will remain in your organization but won't route calls to any assistant.
+    """
+    # Verify assistant exists and belongs to organization
+    assistant = await AssistantService.get_assistant_by_id(
+        assistant_id, 
+        current_user.organization_id
+    )
+    if not assistant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assistant with ID {assistant_id} not found in your organization",
+        )
+
+    try:
+        # Unassign the phone number (assign to None)
+        result = await PhoneNumberService.assign_phone_to_assistant(
+            phone_number_id, 
+            None,  # Unassign by setting assistant_id to None
+            current_user.organization_id
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+
+        # Reload assistants cache to update routing
+        await assistant_manager.load_assistants()
+
+        return APIResponse(
+            success=True,
+            message=f"Phone number successfully unassigned from assistant '{assistant.name}'"
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to unassign phone number: {str(e)}"
+        )
+
+
+@router.get("/{assistant_id}/available-phone-numbers", response_model=List[dict])
+async def get_available_phone_numbers_for_assistant(
+    assistant_id: int,
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get all unassigned phone numbers that can be assigned to an assistant.
+    
+    Returns phone numbers in your organization that are not currently assigned to any assistant.
+    """
+    # Verify assistant exists and belongs to organization
+    assistant = await AssistantService.get_assistant_by_id(
+        assistant_id, 
+        current_user.organization_id
+    )
+    if not assistant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assistant with ID {assistant_id} not found in your organization",
+        )
+
+    # Get available phone numbers
+    available_numbers = await PhoneNumberService.get_available_phone_numbers(
+        current_user.organization_id
+    )
+    
+    return [
+        {
+            "id": pn.id,
+            "phone_number": pn.phone_number,
+            "friendly_name": pn.friendly_name,
+            "twilio_sid": pn.twilio_sid,
+            "is_active": pn.is_active,
+            "capabilities": pn.capabilities
+        }
+        for pn in available_numbers
+    ]
+
+
+# ========== Bulk Phone Number Assignment ==========
+
+@router.post("/{assistant_id}/phone-numbers/bulk-assign", response_model=APIResponse)
+async def bulk_assign_phone_numbers(
+    assistant_id: int,
+    phone_number_ids: List[int],
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Assign multiple phone numbers to an assistant at once.
+    
+    Assigns all specified phone numbers to the assistant.
+    Returns success if all assignments succeed, or details about failures.
+    """
+    # Verify assistant exists and belongs to organization
+    assistant = await AssistantService.get_assistant_by_id(
+        assistant_id, 
+        current_user.organization_id
+    )
+    if not assistant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assistant with ID {assistant_id} not found in your organization",
+        )
+
+    if not phone_number_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No phone number IDs provided"
+        )
+
+    successes = []
+    failures = []
+
+    for phone_number_id in phone_number_ids:
+        try:
+            result = await PhoneNumberService.assign_phone_to_assistant(
+                phone_number_id, 
+                assistant_id, 
+                current_user.organization_id
+            )
+            
+            if result["success"]:
+                successes.append(phone_number_id)
+            else:
+                failures.append({"phone_number_id": phone_number_id, "error": result["message"]})
+        
+        except Exception as e:
+            failures.append({"phone_number_id": phone_number_id, "error": str(e)})
+
+    # Reload assistants cache to update routing
+    await assistant_manager.load_assistants()
+
+    if failures:
+        return APIResponse(
+            success=len(successes) > 0,
+            message=f"Assigned {len(successes)} phone numbers successfully. {len(failures)} failed.",
+            data={
+                "successes": successes,
+                "failures": failures,
+                "total_requested": len(phone_number_ids),
+                "successful_count": len(successes),
+                "failed_count": len(failures)
+            }
+        )
+    else:
+        return APIResponse(
+            success=True,
+            message=f"Successfully assigned all {len(successes)} phone numbers to assistant '{assistant.name}'",
+            data={
+                "successes": successes,
+                "total_assigned": len(successes)
+            }
+        )

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Buraaq Voice AI{% endblock %}
+{% block title %}Dashboard - Burki Voice AI{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
@@ -11,7 +11,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-3xl font-bold text-white mb-2">
-                        Buraaq Command Center
+                        Burki Command Center
                     </h1>
                     <p class="text-blue-100 text-base max-w-2xl">
                         Voice AI Infrastructure Platform - Real-time Intelligence Dashboard
@@ -213,7 +213,15 @@
                     </div>
                     <div class="flex-1">
                         <div class="text-sm font-medium text-white">{{ assistant.name }}</div>
-                        <div class="text-xs text-gray-400">{{ assistant.phone_number }}</div>
+                        <div class="text-xs text-gray-400">
+                            {% if assistant.phone_numbers %}
+                                {% for phone_number in assistant.phone_numbers %}
+                                    {{ phone_number.phone_number }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                No phone numbers
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="text-right">
                         <div class="text-sm font-bold text-green-400">{{ (loop.index * 23) % 100 + 150 }}</div>

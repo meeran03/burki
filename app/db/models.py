@@ -45,12 +45,20 @@ class Organization(Base):
     domain = Column(String(100), nullable=True)  # For domain-based signup restrictions
     is_active = Column(Boolean, nullable=False, default=True)
     
+    # Twilio BYOK credentials
+    twilio_account_sid = Column(String(255), nullable=True)
+    twilio_auth_token = Column(String(255), nullable=True)
+    
     # Organization settings
     settings = Column(JSON, nullable=True, default=lambda: {
         "allow_user_registration": True,
         "require_email_verification": False,
         "max_users": 100,
         "max_assistants": 10,
+        "twilio": {
+            "webhook_url": None,
+            "auto_configure_webhooks": True,
+        }
     })
 
     # Timestamps
@@ -67,6 +75,7 @@ class Organization(Base):
     assistants = relationship("Assistant", back_populates="organization", cascade="all, delete-orphan")
     billing_account = relationship("BillingAccount", back_populates="organization", uselist=False, cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="organization", cascade="all, delete-orphan")
+    phone_numbers = relationship("PhoneNumber", back_populates="organization", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Organization(id={self.id}, name='{self.name}', slug='{self.slug}')>"
@@ -230,10 +239,67 @@ class UserAPIKey(Base):
         return self.key_hash == self.hash_key(key)
 
 
+class PhoneNumber(Base):
+    """
+    PhoneNumber model represents a phone number owned by an organization
+    that can be assigned to assistants.
+    """
+
+    __tablename__ = "phone_numbers"
+
+    id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    
+    # Phone number details
+    phone_number = Column(String(20), unique=True, nullable=False, index=True)
+    friendly_name = Column(String(100), nullable=True)
+    twilio_sid = Column(String(100), nullable=True)  # Twilio Phone Number SID
+    
+    # Current assignment
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=True, index=True)
+    
+    # Status
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    # Capabilities from Twilio
+    capabilities = Column(JSON, nullable=True, default=lambda: {
+        "voice": True,
+        "sms": False,
+        "mms": False,
+        "fax": False
+    })
+    
+    # Phone number metadata
+    phone_metadata = Column(JSON, nullable=True, default=lambda: {})
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+    
+    # Relationships
+    organization = relationship("Organization", back_populates="phone_numbers")
+    assistant = relationship("Assistant", back_populates="phone_numbers")
+    calls = relationship("Call", back_populates="phone_number")
+
+    def __repr__(self):
+        return f"<PhoneNumber(id={self.id}, phone_number='{self.phone_number}', organization_id={self.organization_id})>"
+
+    def get_display_name(self) -> str:
+        """Get display name for the phone number."""
+        if self.friendly_name:
+            return f"{self.friendly_name} ({self.phone_number})"
+        return self.phone_number
+
+
 class Assistant(Base):
     """
-    Assistant model represents a virtual assistant configuration
-    with its own phone number and settings.
+    Assistant model represents a virtual assistant configuration.
+    Phone numbers are now managed separately in the PhoneNumber model.
     """
 
     __tablename__ = "assistants"
@@ -412,6 +478,7 @@ class Assistant(Base):
     # Relationships
     organization = relationship("Organization", back_populates="assistants")
     user = relationship("User", back_populates="assistants")
+    phone_numbers = relationship("PhoneNumber", back_populates="assistant")
     calls = relationship(
         "Call", back_populates="assistant", cascade="all, delete-orphan"
     )
@@ -433,6 +500,7 @@ class Call(Base):
     assistant_id = Column(
         Integer, ForeignKey("assistants.id"), nullable=False, index=True
     )
+    phone_number_id = Column(Integer, ForeignKey("phone_numbers.id"), nullable=True, index=True)
     to_phone_number = Column(String(20), nullable=False)
     customer_phone_number = Column(String(20), nullable=False)
     status = Column(
@@ -445,6 +513,7 @@ class Call(Base):
 
     # Relationships
     assistant = relationship("Assistant", back_populates="calls")
+    phone_number = relationship("PhoneNumber", back_populates="calls")
     recordings = relationship(
         "Recording", back_populates="call", cascade="all, delete-orphan"
     )

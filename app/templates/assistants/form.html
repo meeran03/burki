@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-{% if assistant %}Edit Assistant{% else %}Create Assistant{% endif %} - Buraaq Voice AI
+{% if assistant %}Edit Assistant{% else %}Create Assistant{% endif %} - Burki Voice AI
 {% endblock %}
 
 {% block content %}
@@ -298,7 +298,155 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+    
+    // Initialize Twilio credentials monitoring for phone number loading
+    initializeTwilioPhoneNumberLoader();
 });
+
+// Twilio phone number loading functionality
+function initializeTwilioPhoneNumberLoader() {
+    const accountSidInput = document.getElementById('twilio_account_sid');
+    const authTokenInput = document.getElementById('twilio_auth_token');
+    const loadNumbersSection = document.getElementById('load_numbers_section');
+    const loadNumbersBtn = document.getElementById('load_phone_numbers_btn');
+    
+    // Show/hide load numbers section based on credentials
+    function checkTwilioCredentials() {
+        if (accountSidInput && authTokenInput && loadNumbersSection) {
+            const hasCredentials = accountSidInput.value.trim() && authTokenInput.value.trim();
+            if (hasCredentials) {
+                loadNumbersSection.classList.remove('hidden');
+            } else {
+                loadNumbersSection.classList.add('hidden');
+            }
+        }
+    }
+    
+    // Monitor credential inputs
+    if (accountSidInput && authTokenInput) {
+        accountSidInput.addEventListener('input', checkTwilioCredentials);
+        authTokenInput.addEventListener('input', checkTwilioCredentials);
+        
+        // Check initial state
+        checkTwilioCredentials();
+    }
+    
+    // Handle load phone numbers button click
+    if (loadNumbersBtn) {
+        loadNumbersBtn.addEventListener('click', loadPhoneNumbers);
+    }
+}
+
+async function loadPhoneNumbers() {
+    const accountSidInput = document.getElementById('twilio_account_sid');
+    const authTokenInput = document.getElementById('twilio_auth_token');
+    const loadingIndicator = document.getElementById('loading_indicator');
+    const loadError = document.getElementById('load_error');
+    const phoneNumberSection = document.getElementById('phone_number_section');
+    
+    if (!accountSidInput || !authTokenInput) {
+        return;
+    }
+    
+    const accountSid = accountSidInput.value.trim();
+    const authToken = authTokenInput.value.trim();
+    
+    if (!accountSid || !authToken) {
+        if (loadError) {
+            loadError.textContent = 'Please enter both Account SID and Auth Token';
+            loadError.classList.remove('hidden');
+        }
+        return;
+    }
+    
+    // Show loading, hide error
+    if (loadingIndicator) loadingIndicator.classList.remove('hidden');
+    if (loadError) loadError.classList.add('hidden');
+    
+    try {
+        const formData = new FormData();
+        formData.append('twilio_account_sid', accountSid);
+        formData.append('twilio_auth_token', authToken);
+        
+        const response = await fetch('/assistants/fetch-phone-numbers', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.phone_numbers.length > 0) {
+            // Update phone number section with loaded numbers
+            updatePhoneNumberSection(result.phone_numbers);
+            if (loadError) {
+                loadError.textContent = result.message;
+                loadError.classList.remove('hidden');
+                loadError.className = loadError.className.replace('text-red-400', 'text-green-400');
+            }
+        } else {
+            if (loadError) {
+                loadError.textContent = result.error || 'No phone numbers found';
+                loadError.className = loadError.className.replace('text-green-400', 'text-red-400');
+                loadError.classList.remove('hidden');
+            }
+        }
+    } catch (error) {
+        if (loadError) {
+            loadError.textContent = 'Failed to load phone numbers: ' + error.message;
+            loadError.className = loadError.className.replace('text-green-400', 'text-red-400');
+            loadError.classList.remove('hidden');
+        }
+    } finally {
+        if (loadingIndicator) loadingIndicator.classList.add('hidden');
+    }
+}
+
+function updatePhoneNumberSection(phoneNumbers) {
+    const phoneNumberSection = document.getElementById('phone_number_section');
+    if (!phoneNumberSection) return;
+    
+    // Create new select element with loaded phone numbers
+    const selectHTML = `
+        <select name="phone_number" id="phone_number" required
+            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+            <option value="">-- Select a phone number --</option>
+            ${phoneNumbers.map(phone => 
+                `<option value="${phone.phone_number}">${phone.friendly_name} (${phone.phone_number})</option>`
+            ).join('')}
+            <option value="custom">Custom phone number</option>
+        </select>
+        <div id="custom_phone_container" class="mt-3 hidden">
+            <input type="text" id="custom_phone_number" placeholder="+1234567890"
+                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+            <p class="mt-2 text-xs text-gray-400">Enter in E.164 format (e.g., +1234567890)</p>
+        </div>
+    `;
+    
+    phoneNumberSection.innerHTML = selectHTML;
+    
+    // Re-initialize custom phone number handling
+    const phoneSelect = document.getElementById('phone_number');
+    const customContainer = document.getElementById('custom_phone_container');
+    if (phoneSelect && customContainer) {
+        phoneSelect.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customContainer.classList.remove('hidden');
+                const customInput = customContainer.querySelector('input');
+                if (customInput) {
+                    customInput.name = 'phone_number';
+                    this.name = '_phone_number_dropdown';
+                }
+            } else {
+                customContainer.classList.add('hidden');
+                const customInput = customContainer.querySelector('input');
+                if (customInput) {
+                    customInput.name = '_custom_phone_number';
+                    this.name = 'phone_number';
+                }
+            }
+        });
+    }
+}
 
 // LLM Provider management functions
 function updateProviderOptions() {

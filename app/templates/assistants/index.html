@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}AI Assistants - Buraaq Voice AI{% endblock %}
+{% block title %}AI Assistants - Burki Voice AI{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
@@ -269,7 +269,15 @@
                             </div>
                                 </td>
                         <td class="px-6 py-4">
-                            <div class="text-sm text-gray-300">{{ assistant.phone_number }}</div>
+                            <div class="text-sm text-gray-300">
+                                {% if assistant.phone_numbers %}
+                                    {% for phone_number in assistant.phone_numbers %}
+                                        {{ phone_number.phone_number }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    No phone numbers assigned
+                                {% endif %}
+                            </div>
                             <div class="text-xs text-gray-500">
                                 {% set provider = assistant.twilio_account_sid[:8] if assistant.twilio_account_sid else 'Default' %}
                                 {{ provider }}...
@@ -417,7 +425,15 @@
                     </div>
                     <div>
                         <h3 class="text-lg font-semibold text-white">{{ assistant.name }}</h3>
-                        <p class="text-sm text-gray-400">{{ assistant.phone_number }}</p>
+                        <p class="text-sm text-gray-400">
+                            {% if assistant.phone_numbers %}
+                                {% for phone_number in assistant.phone_numbers %}
+                                    {{ phone_number.phone_number }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                No phone numbers assigned
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
                 <input type="checkbox" class="assistant-checkbox rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" value="{{ assistant.id }}">

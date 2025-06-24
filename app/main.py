@@ -27,6 +27,7 @@ from app.api.web.assistant import router as web_assistant_router
 from app.api.web.call import router as web_call_router
 from app.api.web.billing import router as web_billing_router
 from app.api.web.docs import router as web_docs_router
+from app.api.web.phone_numbers import router as web_phone_numbers_router
 from app.api.root import router as root_router
 from app.services.billing_service import BillingService
 
@@ -94,6 +95,7 @@ app.include_router(web_assistant_router)
 app.include_router(web_call_router)
 app.include_router(web_billing_router)
 app.include_router(web_docs_router)
+app.include_router(web_phone_numbers_router)
 
 # API routers - no additional prefix needed since they include full path
 app.include_router(assistants_router)

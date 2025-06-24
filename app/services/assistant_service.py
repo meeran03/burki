@@ -71,26 +71,8 @@ class AssistantService:
             result = await db.execute(query)
             return result.scalar_one_or_none()
 
-    @staticmethod
-    async def get_assistant_by_phone(phone_number: str, organization_id: int = None) -> Optional[Assistant]:
-        """
-        Get assistant by phone number.
-
-        Args:
-            phone_number: Assistant phone number
-            organization_id: Organization ID for filtering (optional)
-
-        Returns:
-            Optional[Assistant]: Found assistant or None
-        """
-        async with await get_async_db_session() as db:
-            query = select(Assistant).where(Assistant.phone_number == phone_number)
-            
-            if organization_id:
-                query = query.where(Assistant.organization_id == organization_id)
-            
-            result = await db.execute(query)
-            return result.scalar_one_or_none()
+    # This method has been replaced by get_assistant_by_phone_number() 
+    # which uses the new PhoneNumber table for lookups
 
     @staticmethod
     async def get_assistants(
@@ -156,12 +138,6 @@ class AssistantService:
                 if not assistant:
                     return None
 
-                # Check if phone number is being updated
-                phone_number_changed = (
-                    "phone_number" in update_data
-                    and update_data["phone_number"] != assistant.phone_number
-                )
-
                 # Update assistant attributes
                 for key, value in update_data.items():
                     if hasattr(assistant, key):
@@ -171,11 +147,7 @@ class AssistantService:
                 await db.refresh(assistant)
                 logger.info(f"Updated assistant with ID: {assistant.id} for organization: {organization_id}")
 
-                # If phone number changed or status changed to active, update Twilio webhook
-                if phone_number_changed or (
-                    "is_active" in update_data and update_data["is_active"]
-                ):
-                    await AssistantService._configure_twilio_webhook(assistant)
+                # Note: Webhook configuration is now handled at the phone number assignment level
 
                 return assistant
         except SQLAlchemyError as e:
@@ -257,45 +229,41 @@ class AssistantService:
             assistants = result.scalars().all()
             return len(assistants)
 
-    @staticmethod
-    async def _configure_twilio_webhook(assistant: Assistant) -> bool:
-        """
-        Configure Twilio webhook for an assistant's phone number.
+    # Note: Webhook configuration is now handled at the phone number assignment level
+    # in the PhoneNumberService when assigning phone numbers to assistants
 
+    async def get_assistant_by_phone_number(self, phone_number: str, organization_id: int = None) -> Optional[Assistant]:
+        """
+        Get assistant assigned to a specific phone number.
+        Uses the new PhoneNumber table to find the assigned assistant.
+        
         Args:
-            assistant: Assistant model
-
+            phone_number: Phone number to look up
+            organization_id: Organization ID for filtering (optional)
+            
         Returns:
-            bool: True if successful, False otherwise
+            Optional[Assistant]: Assistant assigned to the phone number or None
         """
-        if not assistant or not assistant.phone_number or not assistant.is_active:
-            return False
-
-        # Get the webhook URL
-        webhook_url = get_twiml_webhook_url()
-        logger.info(
-            f"Configuring Twilio webhook for {assistant.phone_number} to {webhook_url}"
-        )
-
-        # Use assistant-specific Twilio credentials if available
-        account_sid = assistant.twilio_account_sid
-        auth_token = assistant.twilio_auth_token
-
-        # Update the webhook
-        success = TwilioService.update_phone_webhook(
-            phone_number=assistant.phone_number,
-            webhook_url=webhook_url,
-            account_sid=account_sid,
-            auth_token=auth_token,
-        )
-
-        if success:
-            logger.info(
-                f"Successfully configured Twilio webhook for {assistant.phone_number}"
+        async with get_async_db_session() as db:
+            from sqlalchemy.orm import selectinload
+            from app.db.models import PhoneNumber
+            
+            # Query phone number with assistant relationship
+            query = select(PhoneNumber).options(
+                selectinload(PhoneNumber.assistant)
+            ).where(
+                PhoneNumber.phone_number == phone_number,
+                PhoneNumber.is_active == True,
+                PhoneNumber.assistant_id.is_not(None)  # Must be assigned to an assistant
             )
-        else:
-            logger.warning(
-                f"Failed to configure Twilio webhook for {assistant.phone_number}"
-            )
-
-        return success
+            
+            if organization_id:
+                query = query.where(PhoneNumber.organization_id == organization_id)
+            
+            result = await db.execute(query)
+            phone_number_obj = result.scalar_one_or_none()
+            
+            if phone_number_obj and phone_number_obj.assistant:
+                return phone_number_obj.assistant
+            
+            return None
