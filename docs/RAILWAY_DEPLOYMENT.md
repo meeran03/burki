@@ -1,6 +1,6 @@
 # Railway Deployment Guide
 
-This guide covers deploying Burqi to Railway with audio denoising support.
+This guide covers deploying Burki to Railway with audio denoising support.
 
 ## Overview
 

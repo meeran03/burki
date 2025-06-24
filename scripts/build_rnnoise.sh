@@ -3,7 +3,6 @@
 # Build RNNoise as WebAssembly module for real-time audio denoising
 # This script compiles RNNoise to WASM for use in the audio denoising service
 #
-# NOTE: For Railway deployment, RNNoise is automatically built in the Dockerfile.
 # This script is only needed for local development or manual installation.
 
 set -e
