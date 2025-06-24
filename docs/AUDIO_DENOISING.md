@@ -1,6 +1,6 @@
-# Audio Denoising in Burqi
+# Audio Denoising in Burki
 
-This document explains the real-time audio denoising feature in Burqi, which can significantly improve call quality by removing background noise without affecting latency.
+This document explains the real-time audio denoising feature in Burki, which can significantly improve call quality by removing background noise without affecting latency.
 
 ## Overview
 
@@ -87,7 +87,7 @@ cd emsdk
 source ./emsdk_env.sh
 
 # Build RNNoise
-cd /path/to/diwaar
+cd /path/to/burki
 chmod +x scripts/build_rnnoise.sh
 ./scripts/build_rnnoise.sh
 ```

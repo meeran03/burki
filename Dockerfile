@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Default environment variables (Railway will override these)
+# Default environment variables
 ENV PORT=8000
 ENV HOST=0.0.0.0
 ENV DEBUG=false
@@ -73,16 +73,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/recordings /app/logs
-
 # Make scripts executable
 RUN chmod +x /app/scripts/*.sh
 
 # Verify RNNoise installation
 RUN /app/scripts/verify_rnnoise.sh
 
-# Expose port (Railway will set this dynamically)
 EXPOSE $PORT
 
 # Start the application with gunicorn
