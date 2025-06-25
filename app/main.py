@@ -83,7 +83,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 @app.get("/health")
 async def health_check():
     """Health check endpoint for load balancers and monitoring."""
-    return {"status": "healthy", "service": "buraaq-voice-ai"}
+    return {"status": "healthy", "service": "burki-voice-ai"}
 
 # Include routers
 app.include_router(root_router)

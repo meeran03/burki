@@ -229,7 +229,8 @@ class AssistantService:
     # Note: Webhook configuration is now handled at the phone number assignment level
     # in the PhoneNumberService when assigning phone numbers to assistants
 
-    async def get_assistant_by_phone_number(self, phone_number: str, organization_id: int = None) -> Optional[Assistant]:
+    @staticmethod
+    async def get_assistant_by_phone_number(phone_number: str, organization_id: int = None) -> Optional[Assistant]:
         """
         Get assistant assigned to a specific phone number.
         Uses the new PhoneNumber table to find the assigned assistant.
