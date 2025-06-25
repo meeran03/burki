@@ -6,7 +6,6 @@ This file contains the CallHandler class for managing call state and conversatio
 import logging
 import base64
 import asyncio
-import json
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -20,6 +19,7 @@ from app.services.webhook_service import WebhookService
 from app.services.audio_denoising_service import AudioDenoisingService
 
 from app.twilio.twilio_service import TwilioService
+from app.utils.url_utils import get_server_base_url
 
 # Configure logging
 logging.basicConfig(
@@ -350,11 +350,8 @@ class CallHandler:
 
             # Build recording status callback URL
             # Get host from WebSocket headers
-            host = websocket.headers.get("host", "localhost:8000")
-            
-            # Determine protocol based on host
-            protocol = "https" if "ngrok" in host or "herokuapp" in host else "http"
-            recording_callback_url = f"{protocol}://{host}/recording-status"
+            host = get_server_base_url()
+            recording_callback_url = f"{host}/recording-status"
 
             # Start recording via Twilio API
             recording_sid = TwilioService.start_call_recording(
