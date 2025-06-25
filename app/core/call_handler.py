@@ -669,10 +669,21 @@ class CallHandler:
                 ).total_seconds()
 
             # Process text through TTS service
-            if content:
+            # For streaming responses, only process chunks (is_final=False)
+            # The final response (is_final=True) is just for metadata and logging
+            if content and not is_final:
                 await self.active_calls[call_sid].tts_service.process_text(
                     text=content,
-                    force_flush=is_final,  # Force flush when it's the final response
+                    force_flush=False,  # Don't force flush on chunks
+                )
+                # Only reset idle timer when AI responds with actual content
+                if content.strip():
+                    self._reset_idle_timer(call_sid)
+            elif content and is_final and not metadata.get("full_response"):
+                # This is a non-streaming final response (e.g., from tool calls)
+                await self.active_calls[call_sid].tts_service.process_text(
+                    text=content,
+                    force_flush=True,  # Force flush for non-streaming responses
                 )
                 # Only reset idle timer when AI responds with actual content
                 if content.strip():
