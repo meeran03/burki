@@ -42,9 +42,6 @@ class AssistantService:
                 await db.refresh(assistant)
                 logger.info(f"Created assistant with ID: {assistant.id} for organization: {organization_id}")
 
-            # Configure Twilio webhook for the phone number
-            await AssistantService._configure_twilio_webhook(assistant)
-
             return assistant
         except SQLAlchemyError as e:
             logger.error(f"Error creating assistant: {e}")
