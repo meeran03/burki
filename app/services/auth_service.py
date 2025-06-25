@@ -9,7 +9,6 @@ from datetime import datetime
 
 from app.db.database import get_db
 from app.db.models import Organization, User, UserAPIKey
-from app.services.billing_service import BillingService
 
 logger = logging.getLogger(__name__)
 

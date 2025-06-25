@@ -20,7 +20,6 @@ from app.core.assistant_manager import AssistantManager
 from app.services.call_service import CallService
 from app.services.webhook_service import WebhookService
 from app.twilio.twilio_service import TwilioService
-from app.services.billing_service import BillingService
 from app.utils.url_utils import get_twiml_webhook_url
 from app.db.database import get_async_db_session
 
@@ -78,7 +77,6 @@ async def get_twiml(request: Request):
     
     logger.info("Request headers: %s", request.headers)
 
-    # Get assistant to check billing limits
     assistant = None
     
     if is_outbound and outbound_assistant_id:
@@ -90,39 +88,6 @@ async def get_twiml(request: Request):
     elif to_phone_number:
         # For inbound calls, lookup assistant by phone number
         assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
-    
-    if assistant:
-        # Check billing limits for the organization - make this faster
-        try:
-            usage_check = await BillingService.check_usage_limits(assistant.organization_id)
-            
-            if not usage_check.get("allowed", False):
-                # Create a TwiML response to reject the call or play a message
-                response = VoiceResponse()
-                
-                if usage_check.get("needs_upgrade", False):
-                    response.say(
-                        "Your call cannot be completed at this time. "
-                        "Your organization has exceeded its monthly usage limit. "
-                        "Please contact your administrator to upgrade your plan or add top-up credits.",
-                        voice="alice"
-                    )
-                else:
-                    response.say(
-                        "Your call cannot be completed at this time. "
-                        "Please try again later.",
-                        voice="alice"
-                    )
-                
-                response.hangup()
-                
-                logger.warning(
-                    f"Call rejected due to billing limits for organization {assistant.organization_id}: {usage_check}"
-                )
-                return Response(content=str(response), media_type="application/xml")
-        except Exception as billing_error:
-            # Don't block calls if billing check fails
-            logger.error(f"Billing check failed for {assistant.organization_id}, allowing call: {billing_error}")
 
     # Create call record in database and send initial webhook as soon as call comes in
     if assistant and call_sid:
@@ -447,24 +412,7 @@ async def initiate_outbound_call(request: Request):
         assistant = await assistant_manager.get_assistant_by_id(assistant_id)
         if not assistant:
             raise HTTPException(status_code=404, detail="Assistant not found")
-        
-        # Check billing limits for the organization
-        try:
-            usage_check = await BillingService.check_usage_limits(assistant.organization_id)
-            
-            if not usage_check.get("allowed", False):
-                error_detail = "Usage limit exceeded"
-                if usage_check.get("needs_upgrade", False):
-                    error_detail = "Monthly usage limit exceeded. Please upgrade your plan or add top-up credits."
-                
-                raise HTTPException(status_code=429, detail=error_detail)
-                
-        except HTTPException:
-            raise
-        except Exception as billing_error:
-            # Don't block calls if billing check fails
-            logger.error(f"Billing check failed for organization {assistant.organization_id}, allowing call: {billing_error}")
-        
+
         # Use the get_twiml_webhook_url function to determine the webhook URL
         webhook_url = get_twiml_webhook_url()
         

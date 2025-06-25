@@ -1,6 +1,6 @@
 # Burki
 
-A comprehensive AI-powered voice assistant system that handles customer calls with advanced features including multi-tenant support, billing management, and real-time audio processing.
+A comprehensive AI-powered voice assistant system that handles customer calls with advanced features including multi-tenant support, and real-time audio processing.
 
 ## 🚀 Features
 
@@ -31,13 +31,6 @@ A comprehensive AI-powered voice assistant system that handles customer calls wi
 - **API Key Management**: Generate and manage API keys for programmatic access
 - **Session Management**: Secure session handling with JWT tokens
 - **Role-based Access Control**: User roles and permissions system
-
-### Billing & Subscription Management
-- **Stripe Integration**: Complete billing system with Stripe payment processing
-- **Usage Tracking**: Automatic tracking of call minutes and usage metrics
-- **Subscription Plans**: Starter (500 free minutes) and Pro ($30/month for 1000 minutes) plans
-- **Auto Top-up**: Automatic balance top-up when minutes run low
-- **Usage Analytics**: Detailed billing reports and usage summaries
 
 ### Advanced Audio Processing
 - **Real-time Noise Reduction**: RNNoise integration for superior audio quality
