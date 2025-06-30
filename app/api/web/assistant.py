@@ -358,6 +358,7 @@ async def create_assistant(
     deepgram_api_key: Optional[str] = Form(None),
     elevenlabs_api_key: Optional[str] = Form(None),
     inworld_bearer_token: Optional[str] = Form(None),
+    resemble_api_key: Optional[str] = Form(None),
     twilio_account_sid: Optional[str] = Form(None),
     twilio_auth_token: Optional[str] = Form(None),
     # LLM Settings
@@ -377,6 +378,8 @@ async def create_assistant(
     # Deepgram TTS Settings
     tts_encoding: Optional[str] = Form("mulaw"),
     tts_sample_rate: Optional[int] = Form(8000),
+    # Resemble AI TTS Settings
+    tts_project_uuid: Optional[str] = Form(None),
     # STT Settings
     stt_model: Optional[str] = Form(None),
     stt_language: Optional[str] = Form(None),
@@ -466,6 +469,11 @@ async def create_assistant(
             "encoding": tts_encoding or "mulaw",
             "sample_rate": int(tts_sample_rate) if tts_sample_rate else 8000
         }
+    elif tts_provider == "resemble":
+        # Get additional Resemble-specific fields
+        tts_settings["provider_config"] = {
+            "project_uuid": tts_project_uuid or os.getenv("RESEMBLE_PROJECT_UUID"),
+        }
     elif tts_provider == "inworld":
         # Inworld TTS specific configuration
         tts_settings["provider_config"] = {
@@ -495,6 +503,7 @@ async def create_assistant(
         "deepgram_api_key": empty_to_none(deepgram_api_key),
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
         "inworld_bearer_token": empty_to_none(inworld_bearer_token),
+        "resemble_api_key": empty_to_none(resemble_api_key),
         "twilio_account_sid": empty_to_none(twilio_account_sid),
         "twilio_auth_token": empty_to_none(twilio_auth_token),
         # JSON Settings
@@ -906,6 +915,7 @@ async def update_assistant(
     deepgram_api_key: Optional[str] = Form(None),
     elevenlabs_api_key: Optional[str] = Form(None),
     inworld_bearer_token: Optional[str] = Form(None),
+    resemble_api_key: Optional[str] = Form(None),
     twilio_account_sid: Optional[str] = Form(None),
     twilio_auth_token: Optional[str] = Form(None),
     # LLM Settings
@@ -925,6 +935,8 @@ async def update_assistant(
     # Deepgram TTS Settings
     tts_encoding: Optional[str] = Form("mulaw"),
     tts_sample_rate: Optional[int] = Form(8000),
+    # Resemble AI TTS Settings
+    tts_project_uuid: Optional[str] = Form(None),
     # STT Settings
     stt_model: Optional[str] = Form(None),
     stt_language: Optional[str] = Form(None),
@@ -1019,6 +1031,11 @@ async def update_assistant(
             "encoding": tts_encoding or "mulaw",
             "sample_rate": int(tts_sample_rate) if tts_sample_rate else 8000
         }
+    elif tts_provider == "resemble":
+        # Get additional Resemble-specific fields
+        tts_settings["provider_config"] = {
+            "project_uuid": tts_project_uuid or os.getenv("RESEMBLE_PROJECT_UUID"),
+        }
     elif tts_provider == "inworld":
         # Inworld TTS specific configuration
         tts_settings["provider_config"] = {
@@ -1046,6 +1063,7 @@ async def update_assistant(
         # Service API Keys
         "deepgram_api_key": empty_to_none(deepgram_api_key),
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
+        "resemble_api_key": empty_to_none(resemble_api_key),
         "inworld_bearer_token": empty_to_none(inworld_bearer_token),
         "twilio_account_sid": empty_to_none(twilio_account_sid),
         "twilio_auth_token": empty_to_none(twilio_auth_token),

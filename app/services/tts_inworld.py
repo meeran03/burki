@@ -457,21 +457,14 @@ class InworldTTSService(BaseTTSService):
             if "<flush/>" in text:
                 # Split text at flush tag
                 parts = text.split("<flush/>")
-                
-                # Process each part except the last one immediately
-                for i, part in enumerate(parts[:-1]):
-                    if part.strip():  # Only process non-empty parts
-                        self.buffer += part
-                        await self._convert_to_speech()
-                
+                # Add all parts except the last one to buffer
+                self.buffer += "".join(parts[:-1])
+                # Convert buffered text to speech
+                await self._convert_to_speech()
                 # Add the last part to buffer
-                last_part = parts[-1]
-                if last_part.strip():  # Only add if not empty
-                    self.buffer += last_part
-                
-                # Always convert the last part if we have anything in buffer
-                # This ensures text without punctuation gets processed
-                if self.buffer.strip() and (force_flush or self._should_convert(self.buffer) or len(parts) > 1):
+                self.buffer += parts[-1]
+                # Check if we need to convert the last part too
+                if force_flush or self._should_convert(self.buffer):
                     await self._convert_to_speech()
             else:
                 # Add text to buffer
@@ -536,6 +529,7 @@ class InworldTTSService(BaseTTSService):
 
         try:
             # Prepare the request payload
+            print(f"<><><>Converting text to speech: {self.buffer.strip()}")
             payload = {
                 "text": self.buffer.strip(),
                 "voiceId": self.voice_id,

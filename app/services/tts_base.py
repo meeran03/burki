@@ -18,6 +18,7 @@ class TTSProvider(Enum):
     AZURE = "azure"
     AWS_POLLY = "aws_polly"
     GOOGLE = "google"
+    RESEMBLE = "resemble"
 
 
 @dataclass

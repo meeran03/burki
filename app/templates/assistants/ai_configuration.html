@@ -490,6 +490,7 @@
                                     <div><strong>ElevenLabs:</strong> Premium voice quality, extensive customization options</div>
                                     <div><strong>Deepgram Aura:</strong> Ultra-low latency (3x faster), optimized for real-time AI</div>
                                     <div><strong>Inworld.ai:</strong> Advanced AI-powered voices, natural emotion expression</div>
+                                    <div><strong>Resemble AI:</strong> WebSocket streaming for real-time responses</div>
                                 </div>
                             </div>
                         </div>
@@ -500,6 +501,7 @@
                         <option value="elevenlabs" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider', 'elevenlabs') == 'elevenlabs' %}selected{% endif %}>🎭 ElevenLabs (Premium Quality)</option>
                         <option value="deepgram" {% if assistant and assistant.tts_settings and assistant.tts_settings.provider == 'deepgram' %}selected{% endif %}>⚡ Deepgram Aura (Ultra Fast)</option>
                         <option value="inworld" {% if assistant and assistant.tts_settings and assistant.tts_settings.provider == 'inworld' %}selected{% endif %}>🎪 Inworld.ai (AI-Powered)</option>
+                        <option value="resemble" {% if assistant and assistant.tts_settings and assistant.tts_settings.provider == 'resemble' %}selected{% endif %}>🎯 Resemble AI (WebSocket Streaming)</option>
                     </select>
                 </div>
 
@@ -790,6 +792,61 @@
                                     </span>
                                 </div>
                                 <p class="text-xs text-green-200">Deepgram Aura provides ultra-low latency TTS optimized for real-time AI conversations. Perfect for voice bots and interactive applications.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Resemble AI-specific settings -->
+                <div id="resemble-settings" class="lg:col-span-2 provider-settings hidden">
+                    <h5 class="text-sm font-medium text-white mb-4 flex items-center">
+                        <svg class="w-4 h-4 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                        </svg>
+                        Resemble AI WebSocket Controls
+                    </h5>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                </svg>
+                                <label for="tts_project_uuid" class="block text-sm font-medium text-gray-300">Project UUID</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Resemble AI Project UUID 🔑</div>
+                                        <div class="text-xs">
+                                            Your Resemble AI project UUID is required for WebSocket streaming. Find this in your Resemble AI dashboard under project settings. WebSocket streaming requires a Business plan or higher.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="text" name="tts_project_uuid" id="tts_project_uuid"
+                                value="{{ assistant.tts_settings.provider_config.project_uuid if assistant and assistant.tts_settings and assistant.tts_settings.provider_config else '' }}"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                placeholder="Enter your Resemble project UUID">
+                            <div class="mt-1 text-xs text-gray-400">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-yellow-500/20 text-yellow-400">
+                                    🔑 Required for WebSocket streaming
+                                </span>
+                            </div>
+                        </div>
+
+
+                        <div class="md:col-span-2">
+                            <div class="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-white">WebSocket Streaming</span>
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-500/20 text-purple-400">
+                                        🎯 Real-time
+                                    </span>
+                                </div>
+                                <p class="text-xs text-purple-200">Resemble AI WebSocket streaming provides real-time voice synthesis perfect for conversational AI. Requires Business plan or higher.</p>
                             </div>
                         </div>
                     </div>

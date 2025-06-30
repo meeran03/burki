@@ -11,6 +11,7 @@ from .tts_base import BaseTTSService, TTSProvider, TTSOptions
 from .tts_elevenlabs import ElevenLabsTTSService
 from .tts_deepgram import DeepgramTTSService
 from .tts_inworld import InworldTTSService
+from .tts_resemble import ResembleTTSService
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class TTSFactory:
         TTSProvider.ELEVENLABS: ElevenLabsTTSService,
         TTSProvider.DEEPGRAM: DeepgramTTSService,
         TTSProvider.INWORLD: InworldTTSService,
+        TTSProvider.RESEMBLE: ResembleTTSService,
         # Future providers can be added here:
         # TTSProvider.OPENAI: OpenAITTSService,
         # TTSProvider.AZURE: AzureTTSService,
@@ -108,6 +110,9 @@ class TTSFactory:
                 elif provider_setting == "inworld":
                     provider = TTSProvider.INWORLD
                     api_key = assistant.inworld_bearer_token or os.getenv("INWORLD_BEARER_TOKEN")
+                elif provider_setting == "resemble":
+                    provider = TTSProvider.RESEMBLE
+                    api_key = assistant.resemble_api_key or os.getenv("RESEMBLE_API_KEY")
                 else:
                     provider = TTSProvider.ELEVENLABS
                     api_key = assistant.elevenlabs_api_key
@@ -119,6 +124,10 @@ class TTSFactory:
                 # If no provider specified but Inworld bearer token is available, prefer Inworld
                 provider = TTSProvider.INWORLD
                 api_key = assistant.inworld_bearer_token
+            elif hasattr(assistant, 'resemble_api_key') and assistant.resemble_api_key:
+                # If no provider specified but Resemble API key is available, prefer Resemble
+                provider = TTSProvider.RESEMBLE
+                api_key = assistant.resemble_api_key
             else:
                 # Default to ElevenLabs
                 provider = TTSProvider.ELEVENLABS
@@ -153,6 +162,17 @@ class TTSFactory:
                         ),
                         "language": provider_config.get("language", "en"),
                         "custom_voice_id": provider_config.get("custom_voice_id"),
+                    })
+                elif provider == TTSProvider.RESEMBLE:
+                    # Audio format is fixed for Twilio compatibility (MULAW, 8kHz, raw)
+                    tts_config.update({
+                        "voice_id": cls._get_voice_id_for_provider(
+                            provider, settings.get("voice_id", "")
+                        ),
+                        "model_id": cls._get_model_id_for_provider(
+                            provider, settings.get("model_id", "default")
+                        ),
+                        "project_uuid": settings.get("project_uuid") or os.getenv("RESEMBLE_PROJECT_UUID"),
                     })
                 else:  # ElevenLabs
                     tts_config.update({
