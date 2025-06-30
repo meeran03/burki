@@ -242,7 +242,7 @@ class AssistantService:
         Returns:
             Optional[Assistant]: Assistant assigned to the phone number or None
         """
-        async with get_async_db_session() as db:
+        async with await get_async_db_session() as db:
             from sqlalchemy.orm import selectinload
             from app.db.models import PhoneNumber
             

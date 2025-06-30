@@ -1,16 +1,20 @@
+"""
+Call endpoints
+"""
+
+# pylint: disable=logging-fstring-interpolation,bare-except,broad-exception-caught,raise-missing-from
 from typing import List, Optional
+import csv
+import io
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
-import csv
-import io
+from sqlalchemy import or_
 
 from app.core.auth import get_current_user_flexible
 from app.db.database import get_db
 from app.db.models import Call, Transcript, Recording, User, Assistant
-from app.services.call_service import CallService
-from app.api.schemas import CallResponse, TranscriptResponse, RecordingResponse, APIResponse
+from app.api.schemas import CallResponse, TranscriptResponse, RecordingResponse
 
 router = APIRouter(prefix="/api/v1/calls", tags=["calls"])
 
