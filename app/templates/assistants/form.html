@@ -224,6 +224,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize TTS provider options
     updateTTSProviderOptions();
     
+    // Add language change listener for Inworld TTS
+    const ttsLanguageSelect = document.getElementById('tts_language');
+    if (ttsLanguageSelect) {
+        ttsLanguageSelect.addEventListener('change', function() {
+            const ttsProvider = document.getElementById('tts_provider');
+            if (ttsProvider && ttsProvider.value === 'inworld') {
+                updateInworldVoices();
+            }
+        });
+    }
+    
     // Initialize fallback providers
     initializeFallbackProviders();
     
@@ -701,6 +712,7 @@ const ASSISTANT_DATA = {
     ttsProvider: "{{ assistant.tts_settings.provider if assistant and assistant.tts_settings and assistant.tts_settings.get('provider') else 'elevenlabs' }}",
     ttsVoice: "{{ assistant.tts_settings.voice_id if assistant and assistant.tts_settings and assistant.tts_settings.voice_id else 'rachel' }}",
     ttsModel: "{{ assistant.tts_settings.model_id if assistant and assistant.tts_settings and assistant.tts_settings.model_id else 'turbo' }}",
+    ttsLanguage: "{{ assistant.tts_settings.provider_config.language if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config') and assistant.tts_settings.provider_config.get('language') else 'en' }}",
     fallbacks: {% if assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('fallbacks') %}{{ assistant.llm_fallback_providers.fallbacks | tojson | safe }}{% else %}[]{% endif %}
 };
 
@@ -716,13 +728,20 @@ function updateTTSProviderOptions() {
     // Show/hide provider-specific settings
     const elevenlabsSettings = document.getElementById('elevenlabs-settings');
     const deepgramSettings = document.getElementById('deepgram-settings');
+    const inworldSettings = document.getElementById('inworld-settings');
     
     if (provider === 'elevenlabs') {
         elevenlabsSettings.classList.remove('hidden');
         deepgramSettings.classList.add('hidden');
+        inworldSettings.classList.add('hidden');
     } else if (provider === 'deepgram') {
         elevenlabsSettings.classList.add('hidden');
         deepgramSettings.classList.remove('hidden');
+        inworldSettings.classList.add('hidden');
+    } else if (provider === 'inworld') {
+        elevenlabsSettings.classList.add('hidden');
+        deepgramSettings.classList.add('hidden');
+        inworldSettings.classList.remove('hidden');
     }
     
     // Clear existing options
@@ -778,6 +797,107 @@ function updateTTSProviderOptions() {
             ],
             recommendation: '<p class="text-xs text-green-200"><strong>🚀 Ultra-Fast TTS:</strong> Deepgram Aura is 3x faster than ElevenLabs, perfect for real-time AI conversations. Aura-2 offers the best quality.</p>',
             customVoiceHelp: 'Enter your custom Deepgram Aura voice model ID'
+        },
+        inworld: {
+            models: [
+                { value: 'inworld-tts-1', label: '🎪 Inworld TTS-1 (Flagship Model)' },
+                { value: 'inworld-tts-1-max', label: '🌟 Inworld TTS-1-Max (More Expressive - Experimental)' }
+            ],
+            // Language-specific voices for Inworld
+            voicesByLanguage: {
+                'en': [
+                    { value: 'hades', label: '👨 Hades (Deep & Commanding Male)' },
+                    { value: 'alex', label: '👨 Alex (Clear & Natural Male)' },
+                    { value: 'ashley', label: '👩 Ashley (Warm & Friendly Female)' },
+                    { value: 'aria', label: '👩 Aria (Professional Female)' },
+                    { value: 'ethan', label: '👨 Ethan (Friendly Male)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'es': [
+                    { value: 'diego', label: '👨 Diego (Warm & Expressive Male)' },
+                    { value: 'lupita', label: '👩 Lupita (Elegant & Clear Female)' },
+                    { value: 'miguel', label: '👨 Miguel (Strong & Confident Male)' },
+                    { value: 'rafael', label: '👨 Rafael (Smooth & Professional Male)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'fr': [
+                    { value: 'alain', label: '👨 Alain (Sophisticated Male)' },
+                    { value: 'helene', label: '👩 Hélène (Graceful & Articulate Female)' },
+                    { value: 'mathieu', label: '👨 Mathieu (Clear & Natural Male)' },
+                    { value: 'etienne', label: '👨 Étienne (Expressive & Warm Male)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'de': [
+                    { value: 'johanna', label: '👩 Johanna (Precise & Professional Female)' },
+                    { value: 'josef', label: '👨 Josef (Strong & Clear Male)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'zh': [
+                    { value: 'yichen', label: '👨 Yichen (Natural & Expressive Male)' },
+                    { value: 'xiaoyin', label: '👩 Xiaoyin (Melodic & Clear Female)' },
+                    { value: 'xinyi', label: '👩 Xinyi (Gentle & Articulate Female)' },
+                    { value: 'jing', label: '👩 Jing (Smooth & Professional Female)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'it': [
+                    { value: 'marco', label: '👨 Marco (Expressive & Warm Male)' },
+                    { value: 'giulia', label: '👩 Giulia (Elegant & Musical Female)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'pt': [
+                    { value: 'joao', label: '👨 João (Rich & Warm Male)' },
+                    { value: 'ana', label: '👩 Ana (Smooth & Expressive Female)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'ja': [
+                    { value: 'hiroshi', label: '👨 Hiroshi (Polite & Clear Male)' },
+                    { value: 'sakura', label: '👩 Sakura (Gentle & Melodic Female)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'nl': [
+                    { value: 'jan', label: '👨 Jan (Friendly & Clear Male)' },
+                    { value: 'emma', label: '👩 Emma (Warm & Approachable Female)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'ko': [
+                    { value: 'min', label: '👨 Min (Professional & Clear Male)' },
+                    { value: 'soo', label: '👩 Soo (Gentle & Articulate Female)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ],
+                'pl': [
+                    { value: 'piotr', label: '👨 Piotr (Strong & Expressive Male)' },
+                    { value: 'anna', label: '👩 Anna (Clear & Professional Female)' },
+                    { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+                ]
+            },
+            // Fallback voices (same as English for backward compatibility)
+            voices: [
+                { value: 'hades', label: '👨 Hades (Deep & Commanding Male)' },
+                { value: 'alex', label: '👨 Alex (Clear & Natural Male)' },
+                { value: 'ashley', label: '👩 Ashley (Warm & Friendly Female)' },
+                { value: 'aria', label: '👩 Aria (Professional Female)' },
+                { value: 'ethan', label: '👨 Ethan (Friendly Male)' },
+                { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+            ],
+            languages: [
+                { value: 'en', label: '🇺🇸 English (Production)', status: 'production' },
+                { value: 'zh', label: '🇨🇳 Chinese (Production)', status: 'production' },
+                { value: 'ko', label: '🇰🇷 Korean (Production)', status: 'production' },
+                { value: 'nl', label: '🇳🇱 Dutch (Production)', status: 'production' },
+                { value: 'fr', label: '🇫🇷 French (Production)', status: 'production' },
+                { value: 'es', label: '🇪🇸 Spanish (Production)', status: 'production' },
+                { value: 'ja', label: '🇯🇵 Japanese (Experimental)', status: 'experimental' },
+                { value: 'de', label: '🇩🇪 German (Experimental)', status: 'experimental' },
+                { value: 'it', label: '🇮🇹 Italian (Experimental)', status: 'experimental' },
+                { value: 'pl', label: '🇵🇱 Polish (Experimental)', status: 'experimental' },
+                { value: 'pt', label: '🇧🇷 Portuguese (Experimental)', status: 'experimental' }
+            ],
+            modelHelp: [
+                '<div><strong>TTS-1:</strong> Flagship model with realistic, context-aware speech synthesis and zero-shot voice cloning</div>',
+                '<div><strong>TTS-1-Max:</strong> Larger, more expressive model with enhanced emotional nuance (experimental)</div>'
+            ],
+            recommendation: '<p class="text-xs text-purple-200"><strong>🎪 AI-Powered TTS:</strong> Inworld.ai offers advanced voice cloning, multi-language support, and emotional markup. Use custom voice IDs for personalized experiences.</p>',
+            customVoiceHelp: 'Enter your custom Inworld voice ID for voice cloning or personalized voices'
         }
     };
     
@@ -791,13 +911,18 @@ function updateTTSProviderOptions() {
         modelSelect.appendChild(option);
     });
     
-    // Populate voice options
-    config.voices.forEach(voice => {
-        const option = document.createElement('option');
-        option.value = voice.value;
-        option.textContent = voice.label;
-        voiceSelect.appendChild(option);
-    });
+    // Populate voice options with language filtering for Inworld
+    if (provider === 'inworld') {
+        updateInworldVoices();
+    } else {
+        // For other providers, use regular voices
+        config.voices.forEach(voice => {
+            const option = document.createElement('option');
+            option.value = voice.value;
+            option.textContent = voice.label;
+            voiceSelect.appendChild(option);
+        });
+    }
     
     // Set selected values if editing existing assistant
     if (ASSISTANT_DATA.ttsProvider === provider) {
@@ -849,6 +974,131 @@ function updateTTSProviderOptions() {
             this.name = 'tts_voice_id';
         }
     });
+}
+
+// Update Inworld voices based on selected language
+function updateInworldVoices() {
+    const languageSelect = document.getElementById('tts_language');
+    const voiceSelect = document.getElementById('tts_voice_id');
+    
+    if (!languageSelect || !voiceSelect) return;
+    
+    const selectedLanguage = languageSelect.value || 'en';
+    
+    // Language-specific voices for Inworld
+    const voicesByLanguage = {
+        'en': [
+            { value: 'hades', label: '👨 Hades (Deep & Commanding Male)' },
+            { value: 'alex', label: '👨 Alex (Clear & Natural Male)' },
+            { value: 'ashley', label: '👩 Ashley (Warm & Friendly Female)' },
+            { value: 'aria', label: '👩 Aria (Professional Female)' },
+            { value: 'ethan', label: '👨 Ethan (Friendly Male)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'es': [
+            { value: 'diego', label: '👨 Diego (Warm & Expressive Male)' },
+            { value: 'lupita', label: '👩 Lupita (Elegant & Clear Female)' },
+            { value: 'miguel', label: '👨 Miguel (Strong & Confident Male)' },
+            { value: 'rafael', label: '👨 Rafael (Smooth & Professional Male)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'fr': [
+            { value: 'alain', label: '👨 Alain (Sophisticated Male)' },
+            { value: 'helene', label: '👩 Hélène (Graceful & Articulate Female)' },
+            { value: 'mathieu', label: '👨 Mathieu (Clear & Natural Male)' },
+            { value: 'etienne', label: '👨 Étienne (Expressive & Warm Male)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'de': [
+            { value: 'johanna', label: '👩 Johanna (Precise & Professional Female)' },
+            { value: 'josef', label: '👨 Josef (Strong & Clear Male)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'zh': [
+            { value: 'yichen', label: '👨 Yichen (Natural & Expressive Male)' },
+            { value: 'xiaoyin', label: '👩 Xiaoyin (Melodic & Clear Female)' },
+            { value: 'xinyi', label: '👩 Xinyi (Gentle & Articulate Female)' },
+            { value: 'jing', label: '👩 Jing (Smooth & Professional Female)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'it': [
+            { value: 'marco', label: '👨 Marco (Expressive & Warm Male)' },
+            { value: 'giulia', label: '👩 Giulia (Elegant & Musical Female)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'pt': [
+            { value: 'joao', label: '👨 João (Rich & Warm Male)' },
+            { value: 'ana', label: '👩 Ana (Smooth & Expressive Female)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'ja': [
+            { value: 'hiroshi', label: '👨 Hiroshi (Polite & Clear Male)' },
+            { value: 'sakura', label: '👩 Sakura (Gentle & Melodic Female)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'nl': [
+            { value: 'jan', label: '👨 Jan (Friendly & Clear Male)' },
+            { value: 'emma', label: '👩 Emma (Warm & Approachable Female)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'ko': [
+            { value: 'min', label: '👨 Min (Professional & Clear Male)' },
+            { value: 'soo', label: '👩 Soo (Gentle & Articulate Female)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ],
+        'pl': [
+            { value: 'piotr', label: '👨 Piotr (Strong & Expressive Male)' },
+            { value: 'anna', label: '👩 Anna (Clear & Professional Female)' },
+            { value: 'custom', label: '🎭 Custom Voice ID (Voice Cloning)' }
+        ]
+    };
+    
+    // Get voices for selected language (fallback to English if not found)
+    const availableVoices = voicesByLanguage[selectedLanguage] || voicesByLanguage['en'];
+    
+    // Clear existing options
+    voiceSelect.innerHTML = '';
+    
+    // Populate voice options for the selected language
+    availableVoices.forEach(voice => {
+        const option = document.createElement('option');
+        option.value = voice.value;
+        option.textContent = voice.label;
+        voiceSelect.appendChild(option);
+    });
+    
+    // Set selected voice if editing existing assistant
+    if (ASSISTANT_DATA.ttsVoice && ASSISTANT_DATA.ttsProvider === 'inworld') {
+        if (voiceSelect.querySelector('option[value="' + ASSISTANT_DATA.ttsVoice + '"]')) {
+            voiceSelect.value = ASSISTANT_DATA.ttsVoice;
+        } else if (ASSISTANT_DATA.ttsVoice !== 'hades' && ASSISTANT_DATA.ttsVoice !== 'custom') {
+            // Custom voice ID - select custom option and populate the input
+            voiceSelect.value = 'custom';
+            const customContainer = document.getElementById('inworld_custom_voice_container');
+            const customInput = document.getElementById('custom_voice_id');
+            if (customContainer && customInput) {
+                customContainer.classList.remove('hidden');
+                customInput.value = ASSISTANT_DATA.ttsVoice;
+            }
+        }
+    }
+    
+    // Handle custom voice selection
+    voiceSelect.removeEventListener('change', handleInworldVoiceChange);
+    voiceSelect.addEventListener('change', handleInworldVoiceChange);
+}
+
+function handleInworldVoiceChange() {
+    const voiceSelect = document.getElementById('tts_voice_id');
+    const customContainer = document.getElementById('inworld_custom_voice_container');
+    
+    if (voiceSelect && customContainer) {
+        if (voiceSelect.value === 'custom') {
+            customContainer.classList.remove('hidden');
+        } else {
+            customContainer.classList.add('hidden');
+        }
+    }
 }
 
 // Show notification

@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any, List
 import logging
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
@@ -7,7 +8,7 @@ import secrets
 import re
 from datetime import datetime
 
-from app.db.database import get_db
+from app.db.database import get_db, get_async_db_session
 from app.db.models import Organization, User, UserAPIKey
 
 logger = logging.getLogger(__name__)
@@ -389,36 +390,37 @@ class APIKeyService:
     @staticmethod
     async def verify_api_key(key: str) -> Optional[tuple[UserAPIKey, User]]:
         """Verify an API key and return the key record and user."""
-        db = next(get_db())
         try:
             key_hash = UserAPIKey.hash_key(key)
+            async with await get_async_db_session() as db:
+                api_key = select(UserAPIKey).filter(
+                    UserAPIKey.key_hash == key_hash,
+                    UserAPIKey.is_active == True
+                )
+                api_key = await db.execute(api_key)
+                api_key = api_key.unique().scalar_one_or_none()
+                
+                if not api_key:
+                    return None
             
-            api_key = db.query(UserAPIKey).filter(
-                UserAPIKey.key_hash == key_hash,
-                UserAPIKey.is_active == True
-            ).first()
+                # Get the user with organization loaded to prevent DetachedInstanceError
+                user = select(User).options(joinedload(User.organization)).filter(
+                    User.id == api_key.user_id,
+                    User.is_active == True
+                )
+                user = await db.execute(user)
+                user = user.unique().scalar_one_or_none()
             
-            if not api_key:
-                return None
-            
-            # Get the user
-            user = db.query(User).filter(
-                User.id == api_key.user_id,
-                User.is_active == True
-            ).first()
-            
-            if not user:
-                return None
-            
-            # Update usage tracking
-            api_key.last_used_at = datetime.utcnow()
-            api_key.usage_count += 1
-            db.commit()
-            
-            return api_key, user
+                if not user:
+                    return None
+                
+                # Update usage tracking
+                api_key.last_used_at = datetime.utcnow()
+                api_key.usage_count += 1
+                await db.commit()
+                
+                return api_key, user
             
         except Exception as e:
             logger.error(f"Error verifying API key: {e}")
             return None
-        finally:
-            db.close() 

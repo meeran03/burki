@@ -13,6 +13,7 @@ class TTSProvider(Enum):
     """Enumeration of supported TTS providers."""
     ELEVENLABS = "elevenlabs"
     DEEPGRAM = "deepgram"
+    INWORLD = "inworld"
     OPENAI = "openai"
     AZURE = "azure"
     AWS_POLLY = "aws_polly"

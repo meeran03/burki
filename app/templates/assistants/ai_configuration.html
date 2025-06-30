@@ -489,6 +489,7 @@
                                 <div class="space-y-2 text-xs">
                                     <div><strong>ElevenLabs:</strong> Premium voice quality, extensive customization options</div>
                                     <div><strong>Deepgram Aura:</strong> Ultra-low latency (3x faster), optimized for real-time AI</div>
+                                    <div><strong>Inworld.ai:</strong> Advanced AI-powered voices, natural emotion expression</div>
                                 </div>
                             </div>
                         </div>
@@ -498,6 +499,7 @@
                         onchange="updateTTSProviderOptions()">
                         <option value="elevenlabs" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider', 'elevenlabs') == 'elevenlabs' %}selected{% endif %}>🎭 ElevenLabs (Premium Quality)</option>
                         <option value="deepgram" {% if assistant and assistant.tts_settings and assistant.tts_settings.provider == 'deepgram' %}selected{% endif %}>⚡ Deepgram Aura (Ultra Fast)</option>
+                        <option value="inworld" {% if assistant and assistant.tts_settings and assistant.tts_settings.provider == 'inworld' %}selected{% endif %}>🎪 Inworld.ai (AI-Powered)</option>
                     </select>
                 </div>
 
@@ -788,6 +790,95 @@
                                     </span>
                                 </div>
                                 <p class="text-xs text-green-200">Deepgram Aura provides ultra-low latency TTS optimized for real-time AI conversations. Perfect for voice bots and interactive applications.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Inworld-specific settings -->
+                <div id="inworld-settings" class="lg:col-span-2 provider-settings hidden">
+                    <h5 class="text-sm font-medium text-white mb-4 flex items-center">
+                        <svg class="w-4 h-4 text-purple-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        Inworld.ai Controls
+                    </h5>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Language Selection -->
+                        <div>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+                                </svg>
+                                <label for="tts_language" class="block text-sm font-medium text-gray-300">Language</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Multi-Language Support 🌍</div>
+                                        <div class="space-y-1 text-xs">
+                                            <div><strong>Production:</strong> English, Chinese, Korean, Dutch, French, Spanish</div>
+                                            <div><strong>Experimental:</strong> Japanese, German, Italian, Polish, Portuguese</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <select name="tts_language" id="tts_language"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                <option value="en" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'en' %}selected{% endif %}>🇺🇸 English (Production)</option>
+                                <option value="zh" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'zh' %}selected{% endif %}>🇨🇳 Chinese (Production)</option>
+                                <option value="ko" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'ko' %}selected{% endif %}>🇰🇷 Korean (Production)</option>
+                                <option value="nl" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'nl' %}selected{% endif %}>🇳🇱 Dutch (Production)</option>
+                                <option value="fr" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'fr' %}selected{% endif %}>🇫🇷 French (Production)</option>
+                                <option value="es" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'es' %}selected{% endif %}>🇪🇸 Spanish (Production)</option>
+                                <optgroup label="🧪 Experimental">
+                                    <option value="ja" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'ja' %}selected{% endif %}>🇯🇵 Japanese</option>
+                                    <option value="de" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'de' %}selected{% endif %}>🇩🇪 German</option>
+                                    <option value="it" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'it' %}selected{% endif %}>🇮🇹 Italian</option>
+                                    <option value="pl" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'pl' %}selected{% endif %}>🇵🇱 Polish</option>
+                                    <option value="pt" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'pt' %}selected{% endif %}>🇧🇷 Portuguese</option>
+                                </optgroup>
+                            </select>
+                        </div>
+
+                        <!-- Custom Voice ID -->
+                        <div id="inworld_custom_voice_container" class="hidden">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                                </svg>
+                                <label for="custom_voice_id" class="block text-sm font-medium text-gray-300">Custom Voice ID</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Voice Cloning 🎭</div>
+                                        <div class="text-xs">
+                                            Enter your custom Inworld voice ID for voice cloning or personalized voices. Inworld offers free zero-shot voice cloning and professional voice cloning services.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="text" name="custom_voice_id" id="custom_voice_id"
+                                value="{{ assistant.tts_settings.get('provider_config', {}).get('custom_voice_id') if assistant and assistant.tts_settings else '' }}"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                placeholder="Enter your custom voice ID">
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <div class="p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-white">Advanced AI Features</span>
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-500/20 text-purple-400">
+                                        🎪 Voice Cloning
+                                    </span>
+                                </div>
+                                <p class="text-xs text-purple-200">Inworld.ai offers free zero-shot voice cloning, multi-language support, emotional markup (like [happy] or [whispering]), and ultra-low latency (~200ms). Perfect for personalized voice experiences.</p>
                             </div>
                         </div>
                     </div>

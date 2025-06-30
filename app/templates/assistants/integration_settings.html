@@ -65,6 +65,20 @@
                         </button>
                     </div>
 
+                    <div class="relative">
+                        <label for="inworld_bearer_token" class="block text-sm font-medium text-gray-300 mb-2">Inworld Bearer Token</label>
+                        <input type="password" name="inworld_bearer_token" id="inworld_bearer_token"
+                            value="{{ assistant.inworld_bearer_token if assistant and assistant.inworld_bearer_token else '' }}"
+                            class="block w-full px-4 py-3 pr-12 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="Base64 encoded API credentials">
+                        <button type="button" onclick="togglePassword('inworld_bearer_token')" class="absolute right-3 top-9 text-gray-400 hover:text-gray-300">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
                     <div class="lg:col-span-2 border border-blue-500/30 bg-blue-500/5 rounded-lg p-4">
                         <h5 class="text-sm font-semibold text-blue-400 mb-3 flex items-center">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
