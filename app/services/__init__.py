@@ -9,6 +9,7 @@ from app.services.tts_base import BaseTTSService, TTSProvider, TTSOptions, Voice
 from app.services.tts_factory import TTSFactory
 from app.services.tts_elevenlabs import ElevenLabsTTSService
 from app.services.tts_deepgram import DeepgramTTSService
+from app.services.tts_inworld import InworldTTSService
 
 __all__ = [
     "DeepgramService", 
@@ -23,4 +24,5 @@ __all__ = [
     "TTSFactory",
     "ElevenLabsTTSService",
     "DeepgramTTSService",
+    "InworldTTSService",
 ] 

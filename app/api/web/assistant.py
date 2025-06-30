@@ -357,6 +357,7 @@ async def create_assistant(
     # Service API Keys
     deepgram_api_key: Optional[str] = Form(None),
     elevenlabs_api_key: Optional[str] = Form(None),
+    inworld_bearer_token: Optional[str] = Form(None),
     twilio_account_sid: Optional[str] = Form(None),
     twilio_auth_token: Optional[str] = Form(None),
     # LLM Settings
@@ -433,6 +434,9 @@ async def create_assistant(
     fallback_2_model: Optional[str] = Form(None),
     fallback_2_api_key: Optional[str] = Form(None),
     fallback_2_base_url: Optional[str] = Form(None),
+    # Inworld TTS Settings
+    tts_language: Optional[str] = Form("en"),
+    custom_voice_id: Optional[str] = Form(None),
 ):
     """Create a new assistant."""
 
@@ -462,6 +466,12 @@ async def create_assistant(
             "encoding": tts_encoding or "mulaw",
             "sample_rate": int(tts_sample_rate) if tts_sample_rate else 8000
         }
+    elif tts_provider == "inworld":
+        # Inworld TTS specific configuration
+        tts_settings["provider_config"] = {
+            "language": tts_language or "en",
+            "custom_voice_id": empty_to_none(custom_voice_id),
+        }
     elif tts_provider == "elevenlabs":
         # ElevenLabs doesn't need additional config for now, but can be extended
         tts_settings["provider_config"] = {}
@@ -484,6 +494,7 @@ async def create_assistant(
         # Service API Keys
         "deepgram_api_key": empty_to_none(deepgram_api_key),
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
+        "inworld_bearer_token": empty_to_none(inworld_bearer_token),
         "twilio_account_sid": empty_to_none(twilio_account_sid),
         "twilio_auth_token": empty_to_none(twilio_auth_token),
         # JSON Settings
@@ -790,7 +801,7 @@ async def view_assistant(
 ):
     """View an assistant."""
     # Get assistant with phone numbers loaded
-    async with get_async_db_session() as async_db:
+    async with await get_async_db_session() as async_db:
         from sqlalchemy.orm import joinedload
         from sqlalchemy import select
         result = await async_db.execute(
@@ -801,7 +812,7 @@ async def view_assistant(
                 Assistant.organization_id == current_user.organization_id
             )
         )
-        assistant = result.scalar_one_or_none()
+        assistant = result.unique().scalar_one_or_none()
     if not assistant:
         raise HTTPException(status_code=404, detail="Assistant not found")
 
@@ -894,6 +905,7 @@ async def update_assistant(
     # Service API Keys
     deepgram_api_key: Optional[str] = Form(None),
     elevenlabs_api_key: Optional[str] = Form(None),
+    inworld_bearer_token: Optional[str] = Form(None),
     twilio_account_sid: Optional[str] = Form(None),
     twilio_auth_token: Optional[str] = Form(None),
     # LLM Settings
@@ -970,6 +982,9 @@ async def update_assistant(
     fallback_2_model: Optional[str] = Form(None),
     fallback_2_api_key: Optional[str] = Form(None),
     fallback_2_base_url: Optional[str] = Form(None),
+    # Inworld TTS Settings
+    tts_language: Optional[str] = Form("en"),
+    custom_voice_id: Optional[str] = Form(None),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
@@ -1004,6 +1019,12 @@ async def update_assistant(
             "encoding": tts_encoding or "mulaw",
             "sample_rate": int(tts_sample_rate) if tts_sample_rate else 8000
         }
+    elif tts_provider == "inworld":
+        # Inworld TTS specific configuration
+        tts_settings["provider_config"] = {
+            "language": tts_language or "en",
+            "custom_voice_id": empty_to_none(custom_voice_id),
+        }
     elif tts_provider == "elevenlabs":
         # ElevenLabs doesn't need additional config for now, but can be extended
         tts_settings["provider_config"] = {}
@@ -1025,6 +1046,7 @@ async def update_assistant(
         # Service API Keys
         "deepgram_api_key": empty_to_none(deepgram_api_key),
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
+        "inworld_bearer_token": empty_to_none(inworld_bearer_token),
         "twilio_account_sid": empty_to_none(twilio_account_sid),
         "twilio_auth_token": empty_to_none(twilio_auth_token),
         # JSON Settings
@@ -1492,207 +1514,6 @@ async def bulk_action_assistants(
     except Exception as e:
         db.rollback()
         return {"success": False, "message": f"Error: {str(e)}"}
-
-
-# ========== RAG (Document Management) Routes ==========
-
-@router.post("/assistants/{assistant_id}/documents/upload")
-async def upload_document(
-    request: Request,
-    assistant_id: int,
-    current_user: User = Depends(require_auth),
-    file: UploadFile = File(...),
-    name: Optional[str] = Form(None),
-    category: Optional[str] = Form(None),
-    tags: Optional[str] = Form(None),
-):
-    """Upload a document to an assistant's knowledge base."""
-    try:
-        # Verify assistant ownership
-        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
-        if not assistant:
-            raise HTTPException(status_code=404, detail="Assistant not found")
-
-        # Check if RAG is available
-        try:
-            from app.services.rag_service import RAGService
-        except ImportError:
-            raise HTTPException(status_code=500, detail="RAG functionality not available")
-
-        # Validate file
-        if file.size > 10 * 1024 * 1024:  # 10MB limit
-            raise HTTPException(status_code=400, detail="File too large (max 10MB)")
-
-        # Read file data
-        file_data = await file.read()
-
-        # Parse tags
-        tag_list = []
-        if tags:
-            tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-
-        # Initialize RAG service
-        rag_service = RAGService.create_default_instance()
-
-        # Upload and process document
-        document = await rag_service.upload_and_process_document(
-            file_data=file_data,
-            filename=file.filename,
-            content_type=file.content_type,
-            assistant_id=assistant_id,
-            organization_id=current_user.organization_id,
-            name=name or file.filename,
-            category=category,
-            tags=tag_list,
-        )
-
-        return {
-            "success": True,
-            "document": {
-                "id": document.id,
-                "name": document.name,
-                "filename": document.original_filename,
-                "status": document.processing_status,
-                "created_at": document.created_at.isoformat(),
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error uploading document: {e}")
-        raise HTTPException(status_code=500, detail="Error uploading document")
-
-
-@router.get("/assistants/{assistant_id}/documents")
-async def list_documents(
-    request: Request,
-    assistant_id: int,
-    current_user: User = Depends(require_auth),
-):
-    """List documents for an assistant."""
-    try:
-        # Verify assistant ownership
-        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
-        if not assistant:
-            raise HTTPException(status_code=404, detail="Assistant not found")
-
-        # Check if RAG is available
-        try:
-            from app.services.rag_service import RAGService
-        except ImportError:
-            return {"documents": []}
-
-        # Initialize RAG service
-        rag_service = RAGService.create_default_instance()
-
-        # Get documents
-        documents = await rag_service.get_assistant_documents(assistant_id, include_processing=True)
-
-        return {
-            "documents": [
-                {
-                    "id": doc.id,
-                    "name": doc.name,
-                    "filename": doc.original_filename,
-                    "content_type": doc.content_type,
-                    "file_size": doc.file_size,
-                    "processing_status": doc.processing_status,
-                    "processing_error": doc.processing_error,
-                    "total_chunks": doc.total_chunks,
-                    "processed_chunks": doc.processed_chunks,
-                    "progress_percentage": doc.get_processing_progress(),
-                    "category": doc.category,
-                    "tags": doc.tags,
-                    "created_at": doc.created_at.isoformat(),
-                    "processed_at": doc.processed_at.isoformat() if doc.processed_at else None,
-                }
-                for doc in documents
-            ]
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error listing documents: {e}")
-        raise HTTPException(status_code=500, detail="Error listing documents")
-
-
-@router.delete("/assistants/{assistant_id}/documents/{document_id}")
-async def delete_document(
-    request: Request,
-    assistant_id: int,
-    document_id: int,
-    current_user: User = Depends(require_auth),
-):
-    """Delete a document from an assistant's knowledge base."""
-    try:
-        # Verify assistant ownership
-        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
-        if not assistant:
-            raise HTTPException(status_code=404, detail="Assistant not found")
-
-        # Check if RAG is available
-        try:
-            from app.services.rag_service import RAGService
-        except ImportError:
-            raise HTTPException(status_code=500, detail="RAG functionality not available")
-
-        # Initialize RAG service
-        rag_service = RAGService.create_default_instance()
-
-        # Delete document
-        success = await rag_service.delete_document(document_id, assistant_id)
-
-        if not success:
-            raise HTTPException(status_code=404, detail="Document not found")
-
-        return {"success": True, "message": "Document deleted successfully"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting document: {e}")
-        raise HTTPException(status_code=500, detail="Error deleting document")
-
-
-@router.get("/assistants/{assistant_id}/documents/{document_id}/status")
-async def get_document_status(
-    request: Request,
-    assistant_id: int,
-    document_id: int,
-    current_user: User = Depends(require_auth),
-    db: Session = Depends(get_db),
-):
-    """Get processing status of a document."""
-    try:
-        # Verify assistant ownership
-        assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
-        if not assistant:
-            raise HTTPException(status_code=404, detail="Assistant not found")
-
-        # Check if RAG is available
-        try:
-            from app.services.rag_service import RAGService
-        except ImportError:
-            raise HTTPException(status_code=500, detail="RAG functionality not available")
-
-        # Initialize RAG service
-        rag_service = RAGService.create_default_instance()
-
-        # Get document status
-        status = await rag_service.get_document_status(document_id)
-
-        if not status:
-            raise HTTPException(status_code=404, detail="Document not found")
-
-        return status
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting document status: {e}")
-        raise HTTPException(status_code=500, detail="Error getting document status")
 
 
 @router.post("/assistants/fetch-phone-numbers", response_class=JSONResponse)

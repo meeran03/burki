@@ -331,6 +331,8 @@ class Assistant(Base):
 
     # Other service API keys
     deepgram_api_key = Column(String(255), nullable=True)
+    inworld_bearer_token = Column(String(255), nullable=True)
+    inworld_workspace_id = Column(String(255), nullable=True)
     elevenlabs_api_key = Column(String(255), nullable=True)
     twilio_account_sid = Column(String(255), nullable=True)
     twilio_auth_token = Column(String(255), nullable=True)

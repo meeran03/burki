@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 from .tts_base import BaseTTSService, TTSProvider, TTSOptions
 from .tts_elevenlabs import ElevenLabsTTSService
 from .tts_deepgram import DeepgramTTSService
+from .tts_inworld import InworldTTSService
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class TTSFactory:
     _providers = {
         TTSProvider.ELEVENLABS: ElevenLabsTTSService,
         TTSProvider.DEEPGRAM: DeepgramTTSService,
+        TTSProvider.INWORLD: InworldTTSService,
         # Future providers can be added here:
         # TTSProvider.OPENAI: OpenAITTSService,
         # TTSProvider.AZURE: AzureTTSService,
@@ -103,13 +105,20 @@ class TTSFactory:
                 if provider_setting == "deepgram":
                     provider = TTSProvider.DEEPGRAM
                     api_key = assistant.deepgram_api_key or os.getenv("DEEPGRAM_API_KEY")
+                elif provider_setting == "inworld":
+                    provider = TTSProvider.INWORLD
+                    api_key = assistant.inworld_bearer_token or os.getenv("INWORLD_BEARER_TOKEN")
                 else:
                     provider = TTSProvider.ELEVENLABS
-                    api_key = assistant.elevenlabs_api_key or os.getenv("ELEVENLABS_API_KEY")
+                    api_key = assistant.elevenlabs_api_key
             elif hasattr(assistant, 'deepgram_api_key') and assistant.deepgram_api_key:
                 # If no provider specified but Deepgram API key is available, prefer Deepgram
                 provider = TTSProvider.DEEPGRAM
                 api_key = assistant.deepgram_api_key
+            elif hasattr(assistant, 'inworld_bearer_token') and assistant.inworld_bearer_token:
+                # If no provider specified but Inworld bearer token is available, prefer Inworld
+                provider = TTSProvider.INWORLD
+                api_key = assistant.inworld_bearer_token
             else:
                 # Default to ElevenLabs
                 provider = TTSProvider.ELEVENLABS
@@ -120,6 +129,8 @@ class TTSFactory:
                 settings = assistant.tts_settings
                 
                 if provider == TTSProvider.DEEPGRAM:
+                    # Extract provider_config for Deepgram settings
+                    provider_config = settings.get("provider_config", {})
                     tts_config.update({
                         "voice_id": cls._get_voice_id_for_provider(
                             provider, settings.get("voice_id", "asteria")
@@ -127,8 +138,21 @@ class TTSFactory:
                         "model_id": cls._get_model_id_for_provider(
                             provider, settings.get("model_id", "aura-2")
                         ),
-                        "encoding": settings.get("encoding", "mulaw"),
-                        "sample_rate": settings.get("sample_rate", 8000),
+                        "encoding": provider_config.get("encoding", "mulaw"),
+                        "sample_rate": provider_config.get("sample_rate", 8000),
+                    })
+                elif provider == TTSProvider.INWORLD:
+                    # Extract provider_config for Inworld settings
+                    provider_config = settings.get("provider_config", {})
+                    tts_config.update({
+                        "voice_id": cls._get_voice_id_for_provider(
+                            provider, settings.get("voice_id", "hades")
+                        ),
+                        "model_id": cls._get_model_id_for_provider(
+                            provider, settings.get("model_id", "inworld-tts-1")
+                        ),
+                        "language": provider_config.get("language", "en"),
+                        "custom_voice_id": provider_config.get("custom_voice_id"),
                     })
                 else:  # ElevenLabs
                     tts_config.update({
@@ -195,6 +219,13 @@ class TTSFactory:
                     # Unknown voice name, use default
                     logger.warning(f"Unknown voice name '{voice_name}' for {provider.value}, using default 'asteria'")
                     return service_class.get_voice_id("asteria")
+        elif provider == TTSProvider.INWORLD and resolved_voice_id == voice_name:
+            # Check if this is a valid Inworld voice name or ID
+            available_voices = service_class.get_available_voices()
+            if voice_name.lower() not in available_voices:
+                # Unknown voice name, use default
+                logger.warning(f"Unknown voice name '{voice_name}' for {provider.value}, using default 'hades'")
+                return service_class.get_voice_id("hades")
         
         return resolved_voice_id
 
@@ -245,6 +276,33 @@ class TTSFactory:
 
         service_class = cls._providers[provider]
         return service_class.get_available_voices()
+
+    @classmethod
+    def get_voices_for_language(cls, provider: TTSProvider, language: str) -> Dict[str, Any]:
+        """
+        Get available voices for a specific provider and language.
+
+        Args:
+            provider: The TTS provider
+            language: Language code (e.g., 'en', 'es', 'fr')
+
+        Returns:
+            Dict[str, Any]: Mapping of voice names to voice information for the specified language
+
+        Raises:
+            ValueError: If the provider is not supported
+        """
+        if provider not in cls._providers:
+            raise ValueError(f"Unsupported TTS provider: {provider}")
+
+        service_class = cls._providers[provider]
+        
+        # Check if the provider supports language filtering
+        if hasattr(service_class, 'get_voices_for_language'):
+            return service_class.get_voices_for_language(language)
+        else:
+            # Fallback to all voices for providers that don't support language filtering
+            return service_class.get_available_voices()
 
     @classmethod
     def get_available_models(cls, provider: TTSProvider) -> Dict[str, Any]:
