@@ -47,12 +47,22 @@ async def create_assistant(
     # Extract user details early to avoid DetachedInstanceError
     organization_id = current_user.organization_id
     user_id = current_user.id
-    
+
     # Note: Phone number validation is now handled separately through the PhoneNumber table
     # This allows for multiple phone numbers per assistant and better management
 
-    # Create the assistant
     assistant_data = assistant.dict(exclude_unset=True)
+    if assistant_data["phone_number"]:
+        assistant = await AssistantService.get_assistant_by_phone_number(
+            phone_number=assistant_data["phone_number"], organization_id=organization_id
+        )
+        if assistant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Assistant with phone number {assistant_data['phone_number']} already exists",
+            )
+
+    # Create the assistant
     new_assistant = await AssistantService.create_assistant(
         assistant_data, user_id, organization_id
     )
