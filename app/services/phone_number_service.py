@@ -130,7 +130,7 @@ class PhoneNumberService:
 
     @staticmethod
     async def assign_phone_to_assistant(
-        phone_number_id: int, assistant_id: Optional[int], organization_id: int
+        phone_number_id: int, assistant_id: Optional[int], organization_id: int, friendly_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """Assign or unassign a phone number to/from an assistant."""
         try:
@@ -160,6 +160,11 @@ class PhoneNumberService:
 
                 # Update assignment
                 phone_number.assistant_id = assistant_id
+                
+                # Update friendly name if provided
+                if friendly_name is not None:
+                    phone_number.friendly_name = friendly_name.strip() if friendly_name else None
+                
                 await db.commit()
 
                 # Configure Twilio webhook for the phone number if assigning to an assistant

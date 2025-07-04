@@ -550,4 +550,79 @@ class OrganizationResponse(BaseModel):
     created_at: datetime.datetime
     
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+
+# Phone Number Assignment schemas
+class PhoneNumberAssignRequest(BaseModel):
+    """Schema for assigning a phone number to an assistant."""
+
+    phone_number: str = Field(..., description="Phone number in E.164 format (e.g., +1234567890)")
+    friendly_name: Optional[str] = Field(None, description="Friendly name for the phone number (e.g., 'Customer Support Line')")
+    auto_sync: bool = Field(True, description="Automatically sync from Twilio if number not found locally")
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone_number(cls, v):
+        """Basic validation for phone number format."""
+        if not v:
+            raise ValueError("Phone number is required")
+        
+        # Remove any whitespace
+        v = v.strip()
+        
+        # Basic E.164 format validation
+        if not v.startswith('+'):
+            raise ValueError("Phone number must be in E.164 format (start with +)")
+        
+        # Check if it contains only digits after the +
+        if not v[1:].isdigit():
+            raise ValueError("Phone number must contain only digits after the + symbol")
+        
+        # Basic length check (E.164 allows 7-15 digits)
+        if len(v[1:]) < 7 or len(v[1:]) > 15:
+            raise ValueError("Phone number must be between 7 and 15 digits long")
+        
+        return v
+
+    @field_validator("friendly_name")
+    @classmethod
+    def validate_friendly_name(cls, v):
+        """Validate friendly name."""
+        if v is not None:
+            v = v.strip()
+            if len(v) == 0:
+                return None
+            if len(v) > 100:
+                raise ValueError("Friendly name must be 100 characters or less")
+        return v
+
+
+class PhoneNumberUnassignRequest(BaseModel):
+    """Schema for unassigning a phone number from an assistant."""
+
+    phone_number: str = Field(..., description="Phone number to unassign")
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone_number(cls, v):
+        """Basic validation for phone number format."""
+        if not v:
+            raise ValueError("Phone number is required")
+        
+        # Remove any whitespace
+        v = v.strip()
+        
+        # Basic E.164 format validation
+        if not v.startswith('+'):
+            raise ValueError("Phone number must be in E.164 format (start with +)")
+        
+        # Check if it contains only digits after the +
+        if not v[1:].isdigit():
+            raise ValueError("Phone number must contain only digits after the + symbol")
+        
+        # Basic length check (E.164 allows 7-15 digits)
+        if len(v[1:]) < 7 or len(v[1:]) > 15:
+            raise ValueError("Phone number must be between 7 and 15 digits long")
+        
+        return v

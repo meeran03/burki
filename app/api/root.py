@@ -277,8 +277,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         await call_handler.start_call(
                             call_sid=call_sid,
                             websocket=websocket,
-                            to_number=to_number,
-                            from_number=from_number,
+                            to_number=to_number if not is_outbound else from_number,
+                            from_number=from_number if not is_outbound else to_number,
                             metadata=call_metadata,
                             assistant=assistant,
                         )
@@ -383,7 +383,7 @@ async def initiate_outbound_call(request: Request):
     
     Expected JSON body:
     {
-        "assistant_id": 123,
+        "from_phone_number": "+1234567890",
         "to_phone_number": "+1234567890",
         "welcome_message": "Hello, this is your AI assistant calling...",
         "agenda": "I'm calling to discuss your recent order and confirm delivery details."
@@ -393,14 +393,14 @@ async def initiate_outbound_call(request: Request):
         # Parse JSON body
         body = await request.json()
         
-        assistant_id = body.get("assistant_id")
+        from_phone_number = body.get("from_phone_number")
         to_phone_number = body.get("to_phone_number")
         welcome_message = body.get("welcome_message")
         agenda = body.get("agenda", None)
         
         # Validate required fields
-        if not assistant_id:
-            raise HTTPException(status_code=400, detail="assistant_id is required")
+        if not from_phone_number:
+            raise HTTPException(status_code=400, detail="from_phone_number is required")
         if not to_phone_number:
             raise HTTPException(status_code=400, detail="to_phone_number is required")
 
@@ -409,7 +409,7 @@ async def initiate_outbound_call(request: Request):
             raise HTTPException(status_code=400, detail="Invalid phone number format. Use E.164 format (e.g., +1234567890)")
         
         # Get the assistant
-        assistant = await assistant_manager.get_assistant_by_id(assistant_id)
+        assistant = await assistant_manager.get_assistant_by_phone(from_phone_number)
         if not assistant:
             raise HTTPException(status_code=404, detail="Assistant not found")
 
@@ -419,7 +419,7 @@ async def initiate_outbound_call(request: Request):
         # Prepare call metadata to pass through the webhook
         call_metadata = {
             "outbound": "true",
-            "assistant_id": str(assistant_id),
+            "assistant_id": str(assistant.id),
             "welcome_message": welcome_message,
             "agenda": agenda,
             "to_phone_number": to_phone_number
@@ -431,17 +431,6 @@ async def initiate_outbound_call(request: Request):
         
         if not twilio_account_sid or not twilio_auth_token:
             raise HTTPException(status_code=500, detail="Twilio credentials not configured")
-        
-        # Get an assigned phone number for this assistant
-        from app.services.phone_number_service import PhoneNumberService
-        phone_numbers = await PhoneNumberService.get_organization_phone_numbers(assistant.organization_id)
-        assigned_phone_numbers = [pn for pn in phone_numbers if pn.assistant_id == assistant.id]
-        
-        if not assigned_phone_numbers:
-            raise HTTPException(status_code=400, detail="No phone number assigned to this assistant")
-        
-        # Use the first assigned phone number as the from number
-        from_phone_number = assigned_phone_numbers[0].phone_number
         
         # Initiate the outbound call through Twilio
         call_sid = TwilioService.initiate_outbound_call(
@@ -457,8 +446,8 @@ async def initiate_outbound_call(request: Request):
             raise HTTPException(status_code=500, detail="Failed to initiate outbound call")
         
         logger.info(
-            f"Initiated outbound call {call_sid} from assistant {assistant_id} "
-            f"to {to_phone_number} with agenda: {agenda[:100]}..."
+            f"Initiated outbound call {call_sid} from assistant {assistant.id} "
+            f"to {to_phone_number} with agenda: {agenda[:100] if agenda else 'None'}..."
         )
         
         # Return success response
@@ -466,7 +455,7 @@ async def initiate_outbound_call(request: Request):
             "success": True,
             "call_sid": call_sid,
             "message": "Outbound call initiated successfully",
-            "assistant_id": assistant_id,
+            "assistant_id": assistant.id,
             "to_phone_number": to_phone_number,
             "from_phone_number": from_phone_number
         }
