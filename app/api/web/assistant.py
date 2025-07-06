@@ -440,6 +440,7 @@ async def create_assistant(
     # Inworld TTS Settings
     tts_language: Optional[str] = Form("en"),
     custom_voice_id: Optional[str] = Form(None),
+    elevenlabs_language: Optional[str] = Form("en"),
 ):
     """Create a new assistant."""
 
@@ -482,7 +483,9 @@ async def create_assistant(
         }
     elif tts_provider == "elevenlabs":
         # ElevenLabs doesn't need additional config for now, but can be extended
-        tts_settings["provider_config"] = {}
+        tts_settings["provider_config"] = {
+            "language": elevenlabs_language or "en",
+        }
 
     # Create assistant data with JSON settings
     assistant_data = {
@@ -997,6 +1000,7 @@ async def update_assistant(
     # Inworld TTS Settings
     tts_language: Optional[str] = Form("en"),
     custom_voice_id: Optional[str] = Form(None),
+    elevenlabs_language: Optional[str] = Form("en"),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
@@ -1044,7 +1048,9 @@ async def update_assistant(
         }
     elif tts_provider == "elevenlabs":
         # ElevenLabs doesn't need additional config for now, but can be extended
-        tts_settings["provider_config"] = {}
+        tts_settings["provider_config"] = {
+            "language": elevenlabs_language or "en",
+        }
 
     # Create update data with JSON settings
     update_data = {

@@ -711,7 +711,7 @@ const ASSISTANT_DATA = {
     baseUrl: "{{ assistant.llm_provider_config.base_url if assistant and assistant.llm_provider_config and assistant.llm_provider_config.get('base_url') else '' }}",
     ttsProvider: "{{ assistant.tts_settings.provider if assistant and assistant.tts_settings and assistant.tts_settings.get('provider') else 'elevenlabs' }}",
     ttsVoice: "{{ assistant.tts_settings.voice_id if assistant and assistant.tts_settings and assistant.tts_settings.voice_id else 'rachel' }}",
-    ttsModel: "{{ assistant.tts_settings.model_id if assistant and assistant.tts_settings and assistant.tts_settings.model_id else 'turbo' }}",
+    ttsModel: "{{ assistant.tts_settings.model_id if assistant and assistant.tts_settings and assistant.tts_settings.model_id else 'eleven_flash_v2_5' }}",
     ttsLanguage: "{{ assistant.tts_settings.provider_config.language if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config') and assistant.tts_settings.provider_config.get('language') else 'en' }}",
     fallbacks: {% if assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('fallbacks') %}{{ assistant.llm_fallback_providers.fallbacks | tojson | safe }}{% else %}[]{% endif %}
 };
@@ -761,9 +761,13 @@ function updateTTSProviderOptions() {
     const ttsProviderConfigs = {
         elevenlabs: {
             models: [
-                { value: 'eleven_multilingual_v2', label: '🎭 Multilingual v2 (Best Quality)' },
-                { value: 'eleven_flash_v2_5', label: '⚡ Flash v2.5 (Ultra Fast - Recommended)' },
-                { value: 'eleven_turbo_v2_5', label: '🚀 Turbo v2.5 (Balanced)' }
+                { value: 'eleven_v3', label: '🌟 Eleven v3 (Most Expressive - 70+ Languages)' },
+                { value: 'eleven_ttv_v3', label: '🎨 TTV v3 (Voice Design - 70+ Languages)' },
+                { value: 'eleven_multilingual_v2', label: '🎭 Multilingual v2 (Rich Emotions)' },
+                { value: 'eleven_flash_v2_5', label: '⚡ Flash v2.5 (Ultra Fast ~75ms - Recommended)' },
+                { value: 'eleven_flash_v2', label: '🚀 Flash v2 (Ultra Fast English Only)' },
+                { value: 'eleven_turbo_v2_5', label: '⚖️ Turbo v2.5 (Balanced ~250ms)' },
+                { value: 'eleven_turbo_v2', label: '🔧 Turbo v2 (Legacy)' }
             ],
             voices: [
                 { value: 'rachel', label: '👩 Rachel (Professional Female)' },
@@ -775,11 +779,15 @@ function updateTTSProviderOptions() {
                 { value: 'custom', label: '🔧 Custom Voice ID' }
             ],
             modelHelp: [
-                '<div><strong>Multilingual v2:</strong> Highest quality, most natural emotions (slower)</div>',
-                '<div><strong>Flash v2.5:</strong> Ultra-fast (~75ms), great for real-time conversations</div>',
-                '<div><strong>Turbo v2.5:</strong> Good balance of speed and quality</div>'
+                '<div><strong>Eleven v3:</strong> Most expressive model with dramatic delivery and performance (70+ languages)</div>',
+                '<div><strong>TTV v3:</strong> Text-to-Voice model optimized for voice design (70+ languages)</div>',
+                '<div><strong>Multilingual v2:</strong> Lifelike model with rich emotional expression</div>',
+                '<div><strong>Flash v2.5:</strong> Ultra-fast (~75ms), 32 languages, 40K character limit</div>',
+                '<div><strong>Flash v2:</strong> Ultra-fast (~75ms), English only</div>',
+                '<div><strong>Turbo v2.5:</strong> High quality, low-latency (~250-300ms), 32 languages</div>',
+                '<div><strong>Turbo v2:</strong> Legacy high-quality model</div>'
             ],
-            recommendation: '<p class="text-xs text-blue-200"><strong>💡 For Phone Calls:</strong> Flash v2.5 is recommended for natural conversations. Multilingual v2 if you prioritize voice quality over speed.</p>',
+            recommendation: '<p class="text-xs text-blue-200"><strong>💡 For Phone Calls:</strong> Flash v2.5 is recommended for natural conversations with ultra-low latency. Use v3 models for maximum expressiveness and emotional range.</p>',
             customVoiceHelp: 'Enter your custom ElevenLabs voice ID from your dashboard'
         },
         deepgram: {

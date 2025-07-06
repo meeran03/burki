@@ -175,6 +175,7 @@ class TTSFactory:
                         "project_uuid": settings.get("project_uuid") or os.getenv("RESEMBLE_PROJECT_UUID"),
                     })
                 else:  # ElevenLabs
+                    provider_config = settings.get("provider_config", {})
                     tts_config.update({
                         "voice_id": cls._get_voice_id_for_provider(
                             provider, settings.get("voice_id", "rachel")
@@ -187,6 +188,7 @@ class TTSFactory:
                         "style": settings.get("style", 0.0),
                         "use_speaker_boost": settings.get("use_speaker_boost", True),
                         "latency": settings.get("latency", 1),
+                        "language": provider_config.get("language", "en"),
                     })
 
         # Override with any provided kwargs
@@ -220,7 +222,7 @@ class TTSFactory:
         # Provider-specific validation and fallbacks
         if provider == TTSProvider.ELEVENLABS and resolved_voice_id == voice_name:
             # Check if this is a valid ElevenLabs voice ID format (28 character alphanumeric)
-            if len(voice_name) == 28 and voice_name.isalnum():
+            if len(voice_name) == 20 and voice_name.isalnum():
                 logger.warning(f"Using custom ElevenLabs voice ID: {voice_name}")
                 return voice_name
             elif voice_name.lower() not in service_class.get_available_voices():
