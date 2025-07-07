@@ -32,6 +32,7 @@ from app.services.auth_service import AuthService
 from app.twilio.twilio_service import TwilioService
 from app.core.assistant_manager import assistant_manager
 from app.utils.url_utils import get_twiml_webhook_url
+from app.utils.config import config
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])

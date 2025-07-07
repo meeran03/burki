@@ -30,6 +30,7 @@ from app.db.models import (
 )
 from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
+from app.utils.config import config
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])

@@ -27,6 +27,7 @@ from app.api.web.assistant import router as web_assistant_router
 from app.api.web.call import router as web_call_router
 from app.api.web.docs import router as web_docs_router
 from app.api.web.phone_numbers import router as web_phone_numbers_router
+from app.api.web.seo import router as web_seo_router
 from app.api.root import router as root_router
 
 load_dotenv()
@@ -74,6 +75,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add compression middleware for better performance and SEO
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # Add session middleware
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
@@ -95,6 +100,7 @@ app.include_router(web_assistant_router)
 app.include_router(web_call_router)
 app.include_router(web_docs_router)
 app.include_router(web_phone_numbers_router)
+app.include_router(web_seo_router)
 
 # API routers - no additional prefix needed since they include full path
 app.include_router(assistants_router)

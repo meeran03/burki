@@ -1,55 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Burki - Open-Source Alternative to vapi.ai | 5x Faster Voice AI</title>
-    <meta name="description" content="The vapi.ai alternative that actually works. 0.8-1.2s latency vs 4-5s, transparent pricing, and a UI that works. Build voice AI assistants without the frustrations.">
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='logo/favicon.svg') }}">
-    <link rel="icon" type="image/png" href="{{ url_for('static', path='logo/favicon.svg') }}">
-    <link rel="apple-touch-icon" href="{{ url_for('static', path='logo/favicon.svg') }}">
-    
-    <!-- Fonts -->
-    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&f[]=inter@400,500,600&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Custom Styles -->
-    <style>
-        :root {
-            --bg-color: #0D1117;
-            --accent-color: #10B981;
-            --accent-gradient: linear-gradient(135deg, #10B981, #A3FFAE);
-            --text-primary: #E6EDF3;
-            --text-secondary: #8B949E;
-            --border-color: rgba(48, 54, 61, 0.8);
-        }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-secondary);
-        }
-        h1, h2, h3, h4, h5, h6 {
-            font-family: 'Satoshi', sans-serif;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        .gradient-text {
-            background: var(--accent-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .glass-morphism {
-            background: rgba(22, 27, 34, 0.5);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-color);
-        }
-    </style>
+    {% include '_head.html' %}
 </head>
 <body>
     <div class="relative overflow-hidden">
@@ -64,7 +16,13 @@
             <div class="max-w-7xl mx-auto px-6 lg:px-8">
                 <div class="flex justify-between items-center h-16">
                     <a href="/" class="flex items-center space-x-3">
-                        <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Logo" class="h-8 w-auto">
+                        <img 
+                            src="{{ url_for('static', path='logo/dark.svg') }}" 
+                            alt="Burki Voice AI Platform - Open Source Alternative to vapi.ai" 
+                            class="h-8 w-auto"
+                            width="32" 
+                            height="32"
+                            loading="eager">
                     </a>
                     <div class="hidden md:flex items-center space-x-8">
                         <a href="#features" class="text-sm font-semibold text-gray-400 hover:text-white transition-colors duration-300">Features</a>
@@ -195,72 +153,22 @@
                     </div>
                 </div>
 
-                <!-- Developer Experience -->
+                <!-- User Experience -->
                 <div class="text-center">
                     <div class="w-16 h-16 mx-auto mb-6 bg-blue-500/10 rounded-full flex items-center justify-center">
-                        <i class="fas fa-code text-blue-400 text-2xl"></i>
+                        <i class="fas fa-heart text-blue-400 text-2xl"></i>
                     </div>
-                    <h3 class="text-2xl font-bold mb-4">Better Experience</h3>
+                    <h3 class="text-2xl font-bold mb-4">UI That Works</h3>
                     <div class="space-y-3">
                         <div class="flex justify-between items-center py-2 px-4 bg-gray-800/50 rounded-lg">
-                            <span class="text-gray-400">Burki UI</span>
-                            <span class="text-[var(--accent-color)] font-bold">✓ Works</span>
+                            <span class="text-gray-400">Burki</span>
+                            <span class="text-[var(--accent-color)] font-bold">Beautiful & Functional</span>
                         </div>
                         <div class="flex justify-between items-center py-2 px-4 bg-gray-800/30 rounded-lg">
-                            <span class="text-gray-400">vapi.ai UI</span>
-                            <span class="text-red-400 font-bold">✗ Broken</span>
+                            <span class="text-gray-400">vapi.ai</span>
+                            <span class="text-red-400 font-bold">Notorious UI Issues</span>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <div class="text-center mt-12">
-                <a href="/auth/register" class="inline-flex items-center px-8 py-4 bg-[var(--accent-color)] text-black rounded-lg font-bold transform hover:scale-105 transition-transform duration-300">
-                    <i class="fas fa-rocket mr-2"></i>
-                    Try Burki Free Today
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Features Section -->
-    <section id="features" class="py-24">
-        <div class="max-w-7xl mx-auto px-6 lg:px-8">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl md:text-5xl font-black tracking-tighter">An All-in-One Platform</h2>
-                <p class="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">Burki provides the entire stack you need to build, deploy, and manage voice agents at scale.</p>
-            </div>
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <!-- Feature Card Template -->
-                <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
-                    <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-sitemap fa-lg"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Multi-Tenant Architecture</h3>
-                    <p class="text-gray-400">Manage multiple organizations and assistants from a single deployment, with complete data isolation.</p>
-                </div>
-                <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
-                    <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-chart-line fa-lg"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Real-time Analytics</h3>
-                    <p class="text-gray-400">An integrated dashboard provides instant insights into call volume, performance, and costs.</p>
-                </div>
-                <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
-                    <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-microphone-alt fa-lg"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Crystal-Clear Audio</h3>
-                    <p class="text-gray-400">Built-in RNNoise denoising and optimized streaming deliver 0.8-1.2s response times. No more waiting 4-5 seconds for responses.</p>
-                </div>
-                <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
-                    <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-cogs fa-lg"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Provider-Agnostic</h3>
-                    <p class="text-gray-400">Integrate with your favorite LLM, TTS, and STT providers. Own your data and infrastructure—no vendor lock-in or hidden costs.</p>
-                </div>
-                <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
-                    <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-code fa-lg"></i></div>
-                    <h3 class="text-xl font-bold mb-3">Developer-First API</h3>
-                    <p class="text-gray-400">A complete REST API and webhooks allow for deep integration and process automation.</p>
-                </div>
-                <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
-                    <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fab fa-docker fa-lg"></i></div>
-                    <h3 class="text-xl font-bold mb-3">One-Command Deploy</h3>
-                    <p class="text-gray-400">Get a full production-ready instance running in minutes with our Docker-based deployment.</p>
                 </div>
             </div>
         </div>

@@ -1,0 +1,222 @@
+<!-- Core Web Vitals and Performance Monitoring -->
+<script type="module">
+  // Import Web Vitals library
+  import {getCLS, getFID, getFCP, getLCP, getTTFB} from 'https://unpkg.com/web-vitals@3/dist/web-vitals.js';
+
+  // Track Core Web Vitals for SEO
+  function trackWebVitals() {
+    // Largest Contentful Paint (LCP) - should be < 2.5s
+    getLCP((metric) => {
+      console.log('LCP:', metric.value);
+      if (window.gtag) {
+        gtag('event', 'web_vitals', {
+          event_category: 'Performance',
+          event_label: 'LCP',
+          value: Math.round(metric.value),
+          non_interaction: true
+        });
+      }
+    });
+
+    // First Input Delay (FID) - should be < 100ms  
+    getFID((metric) => {
+      console.log('FID:', metric.value);
+      if (window.gtag) {
+        gtag('event', 'web_vitals', {
+          event_category: 'Performance', 
+          event_label: 'FID',
+          value: Math.round(metric.value),
+          non_interaction: true
+        });
+      }
+    });
+
+    // Cumulative Layout Shift (CLS) - should be < 0.1
+    getCLS((metric) => {
+      console.log('CLS:', metric.value);
+      if (window.gtag) {
+        gtag('event', 'web_vitals', {
+          event_category: 'Performance',
+          event_label: 'CLS', 
+          value: Math.round(metric.value * 1000), // Convert to milliseconds
+          non_interaction: true
+        });
+      }
+    });
+
+    // First Contentful Paint (FCP) - should be < 1.8s
+    getFCP((metric) => {
+      console.log('FCP:', metric.value);
+      if (window.gtag) {
+        gtag('event', 'web_vitals', {
+          event_category: 'Performance',
+          event_label: 'FCP',
+          value: Math.round(metric.value),
+          non_interaction: true
+        });
+      }
+    });
+
+    // Time to First Byte (TTFB) - should be < 600ms
+    getTTFB((metric) => {
+      console.log('TTFB:', metric.value);
+      if (window.gtag) {
+        gtag('event', 'web_vitals', {
+          event_category: 'Performance',
+          event_label: 'TTFB',
+          value: Math.round(metric.value),
+          non_interaction: true
+        });
+      }
+    });
+  }
+
+  // Track page load performance
+  function trackPagePerformance() {
+    if ('performance' in window) {
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const perfData = performance.getEntriesByType('navigation')[0];
+          
+          // Track key timing metrics
+          const metrics = {
+            'DNS Lookup': perfData.domainLookupEnd - perfData.domainLookupStart,
+            'TCP Connection': perfData.connectEnd - perfData.connectStart,
+            'SSL Handshake': perfData.connectEnd - perfData.secureConnectionStart,
+            'Time to First Byte': perfData.responseStart - perfData.navigationStart,
+            'Content Download': perfData.responseEnd - perfData.responseStart,
+            'DOM Processing': perfData.domContentLoadedEventEnd - perfData.responseEnd,
+            'Resource Loading': perfData.loadEventEnd - perfData.domContentLoadedEventEnd,
+            'Total Page Load': perfData.loadEventEnd - perfData.navigationStart
+          };
+
+          // Log performance metrics
+          console.table(metrics);
+
+          // Track slow pages (> 3 seconds)
+          if (metrics['Total Page Load'] > 3000) {
+            if (window.gtag) {
+              gtag('event', 'slow_page_load', {
+                event_category: 'Performance',
+                event_label: window.location.pathname,
+                value: Math.round(metrics['Total Page Load']),
+                non_interaction: true
+              });
+            }
+          }
+        }, 0);
+      });
+    }
+  }
+
+  // Track user engagement for SEO signals
+  function trackEngagement() {
+    let startTime = Date.now();
+    let maxScroll = 0;
+    let scrollDepth = 0;
+
+    // Track scroll depth
+    window.addEventListener('scroll', () => {
+      const winHeight = window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.pageYOffset;
+      
+      scrollDepth = Math.floor((scrollTop / (docHeight - winHeight)) * 100);
+      maxScroll = Math.max(maxScroll, scrollDepth);
+    });
+
+    // Track time on page and scroll depth when user leaves
+    window.addEventListener('beforeunload', () => {
+      const timeOnPage = Date.now() - startTime;
+      
+      if (window.gtag) {
+        gtag('event', 'engagement', {
+          event_category: 'User Engagement',
+          event_label: 'time_on_page',
+          value: Math.round(timeOnPage / 1000), // Convert to seconds
+          custom_map: {
+            'max_scroll_depth': maxScroll
+          },
+          non_interaction: true
+        });
+      }
+    });
+  }
+
+  // Track CTA clicks for conversion optimization
+  function trackCTAClicks() {
+    // Track primary CTA clicks
+    document.querySelectorAll('a[href="/auth/register"], a[href*="github.com"], a[href="/docs"]').forEach(cta => {
+      cta.addEventListener('click', (e) => {
+        const ctaText = e.target.textContent.trim();
+        const ctaHref = e.target.href;
+        
+        if (window.gtag) {
+          gtag('event', 'cta_click', {
+            event_category: 'Conversion',
+            event_label: ctaText,
+            value: 1,
+            custom_map: {
+              'cta_href': ctaHref,
+              'page_location': window.location.pathname
+            }
+          });
+        }
+      });
+    });
+  }
+
+  // Initialize all tracking
+  document.addEventListener('DOMContentLoaded', () => {
+    trackWebVitals();
+    trackPagePerformance();
+    trackEngagement();
+    trackCTAClicks();
+  });
+
+  // Track errors that might affect SEO
+  window.addEventListener('error', (e) => {
+    if (window.gtag) {
+      gtag('event', 'javascript_error', {
+        event_category: 'Technical SEO',
+        event_label: e.message,
+        value: 1,
+        non_interaction: true
+      });
+    }
+  });
+</script>
+
+<!-- Critical CSS for above-the-fold content -->
+<style>
+  /* Critical CSS - inlined for fastest rendering */
+  .hero-section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .gradient-text {
+    background: linear-gradient(135deg, #10b981, #3b82f6);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  /* Prevent layout shift */
+  img {
+    height: auto;
+    max-width: 100%;
+  }
+</style>
+
+<!-- Preconnect to external domains for performance -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="preconnect" href="https://www.googletagmanager.com">
+
+<!-- Resource hints for better performance -->
+<link rel="prefetch" href="/auth/register">
+<link rel="prefetch" href="/docs">
+<link rel="prefetch" href="https://github.com/meeran03/burki"> 

@@ -1,0 +1,230 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Burki - Open-Source vapi.ai Alternative | 5x Faster Voice AI</title>
+
+<!-- Favicon -->
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='logo/favicon.svg') }}">
+<link rel="icon" type="image/png" href="{{ url_for('static', path='logo/favicon.svg') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', path='logo/favicon.svg') }}">
+
+<!-- SEO Meta Tags -->
+<meta name="description" content="{{ page_description or 'The open-source voice AI platform that actually works. Build production-ready AI voice assistants with 0.8-1.2s response times (5x faster than vapi.ai), transparent self-hosted pricing, and a beautiful web interface that works. No vendor lock-in, no hidden costs, no broken promises - just powerful voice AI infrastructure you can trust.' }}">
+<meta name="keywords" content="voice AI, vapi.ai alternative, open source voice AI, conversational AI, voice assistant platform, low latency voice AI, RNNoise, multi-tenant voice AI">
+<meta name="author" content="Meeran Malik">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{{ request.url }}">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:title" content="{% block og_title %}{{ title }}{% endblock %}">
+<meta property="og:description" content="{% block og_description %}The open-source alternative to vapi.ai with 5x faster response times. Build voice AI assistants without the broken promises.{% endblock %}">
+<meta property="og:image" content="{{ request.url.scheme }}://{{ request.url.netloc }}{{ url_for('static', path='logo/light.svg') }}">
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:url" content="{{ request.url }}">
+<meta property="twitter:title" content="{% block twitter_title %}{{ title }}{% endblock %}">
+<meta property="twitter:description" content="{% block twitter_description %}The open-source alternative to vapi.ai with 5x faster response times. Build voice AI assistants without the broken promises.{% endblock %}">
+<meta property="twitter:image" content="{{ request.url.scheme }}://{{ request.url.netloc }}{{ url_for('static', path='logo/light.svg') }}">
+<meta property="twitter:creator" content="@evolvinginsaan">
+
+<!-- Schema.org markup -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Burki Voice AI",
+  "description": "Open-source alternative to vapi.ai with 5x faster response times and superior audio quality",
+  "url": "https://burki.dev",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Cross-platform",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "Meeran Malik"
+  },
+  "sameAs": [
+    "https://github.com/meeran03/burki",
+    "https://docs.burki.dev"
+  ]
+}
+</script>
+
+<!-- Critical CSS for above-the-fold performance -->
+{% include 'components/critical_css.html' %}
+
+<!-- Preload critical resources -->
+<link rel="preload" href="https://cdn.tailwindcss.com" as="script">
+<link rel="preload" href="{{ url_for('static', path='logo/favicon.svg') }}" as="image">
+
+<!-- DNS prefetch for external resources -->
+<link rel="dns-prefetch" href="//fonts.googleapis.com">
+<link rel="dns-prefetch" href="//cdnjs.cloudflare.com">
+
+<!-- Tailwind CSS CDN with dark mode support -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Google Analytics 4 -->
+{% if config.GOOGLE_ANALYTICS_ID %}
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ config.GOOGLE_ANALYTICS_ID }}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', '{{ config.GOOGLE_ANALYTICS_ID }}', {
+    page_title: '{{ title }}',
+    page_location: '{{ request.url }}'
+  });
+  
+  // Track custom events for SEO insights
+  function trackEvent(action, category, label) {
+    gtag('event', action, {
+      event_category: category,
+      event_label: label
+    });
+  }
+</script>
+{% endif %}
+
+<!-- Google Search Console Verification -->
+{% if config.GOOGLE_SITE_VERIFICATION %}
+<meta name="google-site-verification" content="{{ config.GOOGLE_SITE_VERIFICATION }}">
+{% endif %}
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="/static/manifest.json">
+
+<!-- iOS specific meta tags -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Burki Voice AI">
+<link rel="apple-touch-icon" href="/static/logo/favicon.svg">
+
+<!-- Microsoft specific meta tags -->
+<meta name="msapplication-TileColor" content="#10b981">
+<meta name="msapplication-config" content="/static/browserconfig.xml">
+
+<!-- Canonical URL -->
+<link rel="canonical" href="{{ request.url }}">
+
+<!-- Open Graph basic tags -->
+<meta property="og:title" content="{{ page_title or 'Burki Voice AI - Open Source vapi.ai Alternative' }}">
+<meta property="og:description" content="{{ page_description or 'The open-source voice AI platform that actually works. 5x faster than vapi.ai with 0.8-1.2s response times, transparent pricing, and a UI that works.' }}">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Burki Voice AI">
+<meta property="og:image" content="{{ request.url.scheme }}://{{ request.url.netloc }}{{ url_for('static', path='logo/dark.svg') }}">
+
+<!-- Twitter Card tags -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ page_title or 'Burki Voice AI - Open Source vapi.ai Alternative' }}">
+<meta name="twitter:description" content="{{ page_description or 'The open-source voice AI platform that actually works. 5x faster than vapi.ai with 0.8-1.2s response times.' }}">
+<meta name="twitter:image" content="{{ request.url.scheme }}://{{ request.url.netloc }}{{ url_for('static', path='logo/dark.svg') }}">
+
+<!-- Include FAQ Schema if page has FAQ content -->
+{% if faq_data %}
+{% include 'components/faq_schema.html' %}
+{% endif %}
+
+<!-- Include Organization Schema -->
+{% include 'components/organization_schema.html' %}
+
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- Inter Font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Chart.js for interactive charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Custom styles -->
+<style>
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    .glow-hover {
+        transition: all 0.3s ease;
+    }
+    
+    .glow-hover:hover {
+        box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+        transform: translateY(-2px);
+    }
+    
+    .fade-in {
+        animation: fadeIn 0.6s ease-out;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .floating {
+        animation: floating 3s ease-in-out infinite;
+    }
+    
+    @keyframes floating {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #1f2937;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    }
+
+    /* Additional styles for landing page */
+    .glass-morphism {
+        background: rgba(22, 27, 34, 0.5);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border-color);
+    }
+
+    /* Custom styles for landing page */
+    :root {
+        --bg-color: #0D1117;
+        --accent-color: #10B981;
+        --accent-gradient: linear-gradient(135deg, #10B981, #A3FFAE);
+        --text-primary: #E6EDF3;
+        --text-secondary: #8B949E;
+        --border-color: rgba(48, 54, 61, 0.8);
+    }
+</style>
+
+<script>
+    // PWA Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/js/sw.js').then(registration => {
+          console.log('Service Worker registered:', registration.scope);
+        }).catch(error => {
+          console.log('Service Worker registration failed:', error);
+        });
+      });
+    }
+</script>
+
+{% block head %}{% endblock %} 

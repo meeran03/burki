@@ -1,381 +1,88 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Burki - Voice AI Infrastructure{% endblock %}</title>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='logo/favicon.svg') }}">
-    <link rel="icon" type="image/png" href="{{ url_for('static', path='logo/favicon.svg') }}">
-    <link rel="apple-touch-icon" href="{{ url_for('static', path='logo/favicon.svg') }}">
-    
-    <!-- Tailwind CSS CDN with dark mode support -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Inter Font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Chart.js for interactive charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Custom styles -->
-    <style>
-        * {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        
-        .glow-hover {
-            transition: all 0.3s ease;
-        }
-        
-        .glow-hover:hover {
-            box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
-            transform: translateY(-2px);
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.6s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .floating {
-            animation: floating 3s ease-in-out infinite;
-        }
-        
-        @keyframes floating {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-5px); }
-        }
+    {% include '_head.html' %}
+</head>
+<body class="bg-gray-900 text-white">
 
-        /* Scrollbar Styling */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-        }
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 flex-shrink-0">
+            <div class="p-6">
+                <a href="/dashboard" class="flex items-center space-x-3">
+                    <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Voice AI" class="h-8">
+                </a>
+            </div>
+            <nav class="mt-6">
+                <a href="/dashboard" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                    <i class="fas fa-tachometer-alt mr-3"></i>
+                    Dashboard
+                </a>
+                <a href="/assistants" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                    <i class="fas fa-robot mr-3"></i>
+                    Assistants
+                </a>
+                <a href="/calls" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                    <i class="fas fa-phone-alt mr-3"></i>
+                    Calls
+                </a>
+                <a href="/organization/phone-numbers" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                    <i class="fas fa-hashtag mr-3"></i>
+                    Phone Numbers
+                </a>
+                <a href="/docs" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
+                    <i class="fas fa-book mr-3"></i>
+                    API Docs
+                </a>
+            </nav>
+        </aside>
 
-        /* Dropdown animation */
-        .dropdown-menu {
-            opacity: 0;
-            transform: translateY(-10px);
-            transition: all 0.2s ease;
-            pointer-events: none;
-        }
-        
-        .dropdown:hover .dropdown-menu,
-        .dropdown-menu.show {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
-        }
-    </style>
+        <!-- Main content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- Top bar -->
+            <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
+                <h1 class="text-2xl font-bold">{% block page_title %}Dashboard{% endblock %}</h1>
+                
+                <div class="flex items-center space-x-4">
+                    <a href="/auth/api-keys" class="text-gray-400 hover:text-white">API Keys</a>
+                    
+                    <!-- Profile Dropdown -->
+                    <div class="relative">
+                        <button id="profile-btn" class="flex items-center space-x-2">
+                            <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
+                                {{ session.user_first_name[0] if session.user_first_name }}{{ session.user_last_name[0] if session.user_last_name }}
+                            </div>
+                            <span>{{ session.user_first_name }} {{ session.user_last_name }}</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div id="profile-dropdown" class="absolute right-0 mt-2 w-48 bg-gray-700 rounded-md shadow-lg py-1 z-50 hidden">
+                            <a href="/profile" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600">Profile</a>
+                            <a href="/organization" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600">Organization</a>
+                            <a href="/auth/logout" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page content -->
+            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900 p-6">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Performance Monitor -->
+    {% include 'components/performance_monitor.html' %}
     
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        'inter': ['Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        primary: {
-                            50: '#eff6ff',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            900: '#1e3a8a',
-                        }
-                    }
-                }
-            }
+        // Profile dropdown toggle
+        const profileBtn = document.getElementById('profile-btn');
+        const profileDropdown = document.getElementById('profile-dropdown');
+        if (profileBtn) {
+            profileBtn.addEventListener('click', () => {
+                profileDropdown.classList.toggle('hidden');
+            });
         }
     </script>
-    
-    {% block extra_head %}{% endblock %}
-</head>
-<body class="bg-gray-900 text-white min-h-screen font-inter">
-    <!-- Modern Top Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-md border-b border-gray-800">
-        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-14">
-                <!-- Brand -->
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="flex items-center space-x-3 group">
-                        <!-- Dark mode logo -->
-                        <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Logo" class="h-8 w-auto hidden dark:block">
-                        <!-- Light mode logo -->
-                        <img src="{{ url_for('static', path='logo/light.svg') }}" alt="Burki Logo" class="h-8 w-auto block dark:hidden">
-                    </a>
-                </div>
-
-                <!-- Center Navigation (Desktop) -->
-                {% if session.user_id %}
-                <div class="hidden md:flex items-center space-x-6">
-                    <a href="/dashboard" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path == '/dashboard' %}bg-blue-600/20 text-blue-400{% endif %}">
-                        <i class="fas fa-tachometer-alt w-4"></i>
-                        <span class="font-medium">Dashboard</span>
-                    </a>
-                    <a href="/assistants" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/assistants') %}bg-blue-600/20 text-blue-400{% endif %}">
-                        <i class="fas fa-robot w-4"></i>
-                        <span class="font-medium">Assistants</span>
-                    </a>
-                    <a href="/calls" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/calls') %}bg-blue-600/20 text-blue-400{% endif %}">
-                        <i class="fas fa-phone w-4"></i>
-                        <span class="font-medium">Calls</span>
-                    </a>
-                    <a href="/docs" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
-                        <i class="fas fa-book w-4"></i>
-                        <span class="font-medium">API Docs</span>
-                    </a>
-                </div>
-                {% else %}
-                <!-- Unauthenticated users can still access docs -->
-                <div class="hidden md:flex items-center space-x-6">
-                    <a href="/docs" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200 {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
-                        <i class="fas fa-book w-4"></i>
-                        <span class="font-medium">API Docs</span>
-                    </a>
-                </div>
-                {% endif %}
-
-                <!-- Right Side -->
-                <div class="flex items-center space-x-4">
-                    {% if not session.user_id %}
-                    <!-- Unauthenticated -->
-                    <a href="/auth/login" class="text-gray-300 hover:text-white transition-colors">Sign In</a>
-                    <a href="/auth/register" class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200">
-                        Sign Up
-                    </a>
-                    {% else %}
-                    <!-- Organization Badge -->
-                    {% if session.organization_name %}
-                    <div class="hidden lg:flex items-center space-x-2 bg-gray-800/50 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-700">
-                        <i class="fas fa-building text-blue-400 text-sm"></i>
-                        <div class="text-sm">
-                            <div class="font-medium text-white">{{ session.organization_name }}</div>
-                            <div class="text-gray-400 text-xs">{{ session.organization_slug }}</div>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <!-- API Keys -->
-                    <a href="/auth/api-keys" class="relative flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-all duration-200">
-                        <i class="fas fa-key w-4"></i>
-                        <span class="hidden sm:inline font-medium">API Keys</span>
-                        {% if session.api_key_count > 0 %}
-                        <span class="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                            {{ session.api_key_count }}
-                        </span>
-                        {% endif %}
-                    </a>
-
-                    <!-- User Menu -->
-                    <div class="relative dropdown">
-                        <button class="flex items-center space-x-3 bg-gray-800/50 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition-all duration-200">
-                            <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white text-sm">
-                                {{ session.user_first_name[0] if session.user_first_name else 'U' }}{{ session.user_last_name[0] if session.user_last_name else '' }}
-                            </div>
-                            <div class="hidden md:block text-left">
-                                <div class="font-medium text-white text-sm">{{ session.user_first_name }} {{ session.user_last_name }}</div>
-                                <div class="text-gray-400 text-xs">{{ session.user_email }}</div>
-                            </div>
-                            <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
-                        </button>
-                        
-                        <!-- Dropdown Menu -->
-                        <div class="dropdown-menu absolute right-0 mt-2 w-64 bg-gray-800/95 backdrop-blur-md rounded-xl border border-gray-700 shadow-2xl">
-                            <!-- User Info Header -->
-                            <div class="px-4 py-3 border-b border-gray-700">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white">
-                                        {{ session.user_first_name[0] if session.user_first_name else 'U' }}{{ session.user_last_name[0] if session.user_last_name else '' }}
-                                    </div>
-                                    <div>
-                                        <div class="font-medium text-white">{{ session.user_first_name }} {{ session.user_last_name }}</div>
-                                        <div class="text-gray-400 text-sm">{{ session.user_email }}</div>
-                                        {% if session.organization_name %}
-                                        <div class="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded-md text-xs font-medium mt-1">
-                                            {{ session.organization_name }}
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Menu Items -->
-                            <div class="py-2">
-                                <a href="/profile" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
-                                    <i class="fas fa-user-circle text-blue-400"></i>
-                                    <span>Profile Settings</span>
-                                </a>
-                                <a href="/organization" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
-                                    <i class="fas fa-building text-blue-400"></i>
-                                    <span>Organization</span>
-                                </a>
-                                <a href="/auth/api-keys" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
-                                    <i class="fas fa-key text-blue-400"></i>
-                                    <span>API Keys</span>
-                                    {% if session.api_key_count > 0 %}
-                                    <span class="ml-auto bg-blue-600 text-white text-xs rounded-full px-2 py-1">{{ session.api_key_count }}</span>
-                                    {% endif %}
-                                </a>
-
-                                <div class="border-t border-gray-700 my-2"></div>
-                                
-                                <a href="/settings" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
-                                    <i class="fas fa-cog text-gray-500"></i>
-                                    <span>Settings</span>
-                                </a>
-                                <a href="/help" class="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700/50 transition-colors">
-                                    <i class="fas fa-question-circle text-gray-500"></i>
-                                    <span>Help & Support</span>
-                                </a>
-                                
-                                <div class="border-t border-gray-700 my-2"></div>
-                                
-                                <a href="/auth/logout" class="flex items-center space-x-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors">
-                                    <i class="fas fa-sign-out-alt"></i>
-                                    <span>Sign Out</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Mobile Menu Button -->
-                    <button class="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors" onclick="toggleMobileMenu()">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Mobile Menu -->
-        {% if session.user_id %}
-        <div id="mobile-menu" class="hidden md:hidden bg-gray-800/95 backdrop-blur-md border-t border-gray-700">
-            <div class="px-4 py-4 space-y-2">
-                <a href="/dashboard" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path == '/dashboard' %}bg-blue-600/20 text-blue-400{% endif %}">
-                    <i class="fas fa-tachometer-alt w-4 mr-3"></i>Dashboard
-                </a>
-                <a href="/assistants" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/assistants') %}bg-blue-600/20 text-blue-400{% endif %}">
-                    <i class="fas fa-robot w-4 mr-3"></i>Assistants
-                </a>
-                <a href="/calls" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/calls') %}bg-blue-600/20 text-blue-400{% endif %}">
-                    <i class="fas fa-phone w-4 mr-3"></i>Calls
-                </a>
-                <a href="/docs" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
-                    <i class="fas fa-book w-4 mr-3"></i>API Docs
-                </a>
-            </div>
-        </div>
-        {% else %}
-        <!-- Mobile menu for unauthenticated users -->
-        <div id="mobile-menu" class="hidden md:hidden bg-gray-800/95 backdrop-blur-md border-t border-gray-700">
-            <div class="px-4 py-4 space-y-2">
-                <a href="/docs" class="block px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors {% if request.url.path.startswith('/docs') %}bg-blue-600/20 text-blue-400{% endif %}">
-                    <i class="fas fa-book w-4 mr-3"></i>API Docs
-                </a>
-            </div>
-        </div>
-        {% endif %}
-    </nav>
-
-    <!-- Main content -->
-    <main class="pt-14" style="min-height: calc(100vh - 56px);">
-        <!-- Main Content Area -->
-        <div class="w-full p-6">            
-            {% block content %}{% endblock %}
-        </div>
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-gray-900/50 backdrop-blur-md border-t border-gray-800 py-6">
-        <div class="max-w-7xl mx-auto px-6">
-            <div class="flex flex-col md:flex-row items-center justify-between">
-                <p class="text-gray-400 text-sm">
-                    &copy; 2025 Burki. Voice AI Infrastructure Platform.
-                </p>
-                <div class="flex space-x-6 mt-4 md:mt-0">
-                    <a href="/docs" class="text-gray-400 hover:text-white text-sm transition-colors">Documentation</a>
-                    <a href="/api" class="text-gray-400 hover:text-white text-sm transition-colors">API Reference</a>
-                    <a href="/support" class="text-gray-400 hover:text-white text-sm transition-colors">Support</a>
-                </div>
-            </div>
-        </div>
-    </footer>
-    
-    <!-- Scripts -->
-    <script>        
-        function toggleMobileMenu() {
-            const menu = document.getElementById('mobile-menu');
-            if (menu) {
-                menu.classList.toggle('hidden');
-            }
-        }
-        
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', function(event) {
-            const dropdowns = document.querySelectorAll('.dropdown');
-            dropdowns.forEach(dropdown => {
-                if (!dropdown.contains(event.target)) {
-                    const menu = dropdown.querySelector('.dropdown-menu');
-                    if (menu) {
-                        menu.classList.remove('show');
-                    }
-                }
-            });
-            
-            // Close mobile menu when clicking outside
-            const mobileMenu = document.getElementById('mobile-menu');
-            const menuButton = event.target.closest('button[onclick="toggleMobileMenu()"]');
-            if (mobileMenu && !mobileMenu.contains(event.target) && !menuButton) {
-                mobileMenu.classList.add('hidden');
-            }
-        });
-        
-        // Add click handlers for dropdowns
-        document.querySelectorAll('.dropdown > button').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const menu = this.parentElement.querySelector('.dropdown-menu');
-                if (menu) {
-                    menu.classList.toggle('show');
-                }
-            });
-        });
-        
-        // Handle window resize
-        window.addEventListener('resize', function() {
-            const mobileMenu = document.getElementById('mobile-menu');
-            
-            if (window.innerWidth > 768 && mobileMenu) {
-                mobileMenu.classList.add('hidden');
-            }
-        });
-    </script>
-    
-    {% block extra_scripts %}{% endblock %}
 </body>
 </html> 

@@ -13,6 +13,7 @@ from app.db.database import get_db
 from app.db.models import User, PhoneNumber, Assistant
 from app.services.phone_number_service import PhoneNumberService
 from app.api.web.index import get_template_context
+from app.utils.config import config
 
 logger = logging.getLogger(__name__)
 

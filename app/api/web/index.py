@@ -18,6 +18,7 @@ from app.db.models import (
     User,
 )
 from app.services.auth_service import AuthService
+from app.utils.config import config
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])
@@ -44,6 +45,7 @@ def get_template_context(request: Request, **extra_context) -> dict:
     """Get template context with session data and any extra context."""
     context = {
         "request": request,
+        "config": config,
         "session": {
             "user_id": request.session.get("user_id"),
             "organization_id": request.session.get("organization_id"),
@@ -88,7 +90,15 @@ async def require_auth(request: Request, db: Session = Depends(get_db)) -> User:
 @router.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Landing page showcasing Burki Voice AI."""
-    return templates.TemplateResponse("landing.html", get_template_context(request))
+    return templates.TemplateResponse(
+        "landing.html", 
+        get_template_context(
+            request,
+            page_title="Burki - Open-Source Alternative to vapi.ai | 5x Faster Voice AI",
+            page_description="The vapi.ai alternative that actually works. 0.8-1.2s latency vs 4-5s, transparent pricing, and a UI that works. Build voice AI assistants without the frustrations.",
+            title="Burki - Open-Source Alternative to vapi.ai | 5x Faster Voice AI"
+        )
+    )
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

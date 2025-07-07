@@ -152,7 +152,7 @@ If you prefer to run the application directly on your host machine:
     git clone https://github.com/meeran03/burki.git
     cd burki
 pip install -r requirements.txt
-    ```
+```
 
 2.  **Configure your environment:**
     ```bash
