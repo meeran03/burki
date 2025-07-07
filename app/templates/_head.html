@@ -70,13 +70,12 @@
 <script src="https://cdn.tailwindcss.com"></script>
 
 <!-- Google Analytics 4 -->
-{% if config.GOOGLE_ANALYTICS_ID %}
-<script async src="https://www.googletagmanager.com/gtag/js?id={{ config.GOOGLE_ANALYTICS_ID }}"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-QMH6NTHEEM"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', '{{ config.GOOGLE_ANALYTICS_ID }}', {
+  gtag('config', 'G-QMH6NTHEEM', {
     page_title: '{{ title }}',
     page_location: '{{ request.url }}'
   });
@@ -89,12 +88,9 @@
     });
   }
 </script>
-{% endif %}
 
 <!-- Google Search Console Verification -->
-{% if config.GOOGLE_SITE_VERIFICATION %}
-<meta name="google-site-verification" content="{{ config.GOOGLE_SITE_VERIFICATION }}">
-{% endif %}
+<meta name="google-site-verification" content="E8FYS-p20rqt3b_WDAKeeYNizwLxjrRQtND7VniwSWM">
 
 <!-- PWA Manifest -->
 <link rel="manifest" href="/static/manifest.json">

@@ -71,6 +71,7 @@ def get_template_context(request: Request, **extra_context) -> dict:
             "organization_name": request.session.get("organization_name", ""),
             "organization_slug": request.session.get("organization_slug", ""),
             "api_key_count": request.session.get("api_key_count", 0),
+            "config": config,
         },
     }
     context.update(extra_context)
