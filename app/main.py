@@ -15,8 +15,6 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
-from asgi_correlation_id.middleware import CorrelationIdMiddleware
 from app.utils.proxy_headers import ProxyHeadersMiddleware
 from dotenv import load_dotenv
 
