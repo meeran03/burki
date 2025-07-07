@@ -61,6 +61,8 @@ app = FastAPI(
     title="Burki",
     description="A system that uses AI to answer customer Calls.",
     version="0.1.0",
+    docs_url="/api/docs",  # Move auto-generated docs to /api/docs
+    redoc_url="/api/redoc",  # Move ReDoc to /api/redoc
 )
 
 # Add CORS middleware

@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Burki - The Open-Source Voice AI Platform</title>
-    <meta name="description" content="Build and deploy production-ready, multi-tenant AI voice assistants in minutes, not months.">
+    <title>Burki - Open-Source Alternative to vapi.ai | 5x Faster Voice AI</title>
+    <meta name="description" content="The vapi.ai alternative that actually works. 0.8-1.2s latency vs 4-5s, transparent pricing, and a UI that works. Build voice AI assistants without the frustrations.">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='logo/favicon.svg') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', path='logo/favicon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', path='logo/favicon.svg') }}">
     
     <!-- Fonts -->
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&f[]=inter@400,500,600&display=swap" rel="stylesheet">
@@ -59,7 +64,7 @@
             <div class="max-w-7xl mx-auto px-6 lg:px-8">
                 <div class="flex justify-between items-center h-16">
                     <a href="/" class="flex items-center space-x-3">
-                        <img src="{{ url_for('static', path='logo/light.svg') }}" alt="Burki Logo" class="h-8 w-auto">
+                        <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Logo" class="h-8 w-auto">
                     </a>
                     <div class="hidden md:flex items-center space-x-8">
                         <a href="#features" class="text-sm font-semibold text-gray-400 hover:text-white transition-colors duration-300">Features</a>
@@ -81,13 +86,31 @@
         <!-- Hero Section -->
         <main class="relative min-h-screen flex items-center justify-center pt-16 z-10">
             <div class="max-w-4xl mx-auto px-6 lg:px-8 text-center">
+                <div class="inline-flex items-center px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm font-semibold mb-6">
+                    <i class="fas fa-rocket mr-2"></i>
+                    The vapi.ai alternative that actually works
+                </div>
                 <h1 class="text-5xl md:text-7xl font-black tracking-tighter mb-6">
                     The Open-Source
                     <span class="gradient-text block">Voice AI Stack</span>
                 </h1>
-                <p class="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+                <p class="text-lg md:text-xl text-gray-400 mb-6 max-w-2xl mx-auto">
                     Build and deploy production-ready, multi-tenant AI voice assistants in minutes, not months.
                 </p>
+                <div class="flex justify-center items-center space-x-8 mb-10 text-sm">
+                    <div class="flex items-center text-[var(--accent-color)]">
+                        <i class="fas fa-bolt mr-2"></i>
+                        <span>0.8-1.2s latency</span>
+                    </div>
+                    <div class="flex items-center text-[var(--accent-color)]">
+                        <i class="fas fa-dollar-sign mr-2"></i>
+                        <span>No hidden costs</span>
+                    </div>
+                    <div class="flex items-center text-[var(--accent-color)]">
+                        <i class="fas fa-check mr-2"></i>
+                        <span>UI that works</span>
+                    </div>
+                </div>
                 <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
                     <a href="/auth/register" class="w-full sm:w-auto px-8 py-4 bg-[var(--accent-color)] text-black rounded-lg font-bold transform hover:scale-105 transition-transform duration-300">Get Started Free</a>
                     <a href="https://github.com/meeran03/burki" target="_blank" class="w-full sm:w-auto px-8 py-4 bg-gray-800/50 border border-[var(--border-color)] text-white rounded-lg font-semibold transform hover:scale-105 hover:border-gray-600 transition-all duration-300">
@@ -109,6 +132,93 @@
                 <span class="text-2xl font-semibold">Anthropic</span>
                 <span class="text-2xl font-semibold">ElevenLabs</span>
                 <span class="text-2xl font-semibold">Groq</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why Choose Burki Section -->
+    <section class="py-24 bg-gradient-to-b from-black/10 to-black/30">
+        <div class="max-w-7xl mx-auto px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl font-black tracking-tighter mb-6">Why Developers Choose Burki Over vapi.ai</h2>
+                <div class="glass-morphism rounded-2xl p-8 max-w-4xl mx-auto">
+                    <div class="flex items-start space-x-4 text-left">
+                        <div class="flex-shrink-0">
+                            <div class="w-12 h-12 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-quote-left text-yellow-500"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-gray-300 italic text-lg mb-3">
+                                "I was a vapi.ai power user for 2.5 years. The UI never worked properly, latency was terrible (4-5 seconds), and their recent pricing changes would cost my startup $800/month. With Burki, I get sub-second response times and complete control over my costs."
+                            </p>
+                            <p class="text-sm text-gray-500">— Real user experience that inspired Burki</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Performance Comparison -->
+                <div class="text-center">
+                    <div class="w-16 h-16 mx-auto mb-6 bg-red-500/10 rounded-full flex items-center justify-center">
+                        <i class="fas fa-tachometer-alt text-red-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">5x Faster Response</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center py-2 px-4 bg-gray-800/50 rounded-lg">
+                            <span class="text-gray-400">Burki</span>
+                            <span class="text-[var(--accent-color)] font-bold">0.8-1.2s</span>
+                        </div>
+                        <div class="flex justify-between items-center py-2 px-4 bg-gray-800/30 rounded-lg">
+                            <span class="text-gray-400">vapi.ai</span>
+                            <span class="text-red-400 font-bold">4-5+ seconds</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cost Comparison -->
+                <div class="text-center">
+                    <div class="w-16 h-16 mx-auto mb-6 bg-green-500/10 rounded-full flex items-center justify-center">
+                        <i class="fas fa-dollar-sign text-green-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">Transparent Pricing</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center py-2 px-4 bg-gray-800/50 rounded-lg">
+                            <span class="text-gray-400">Burki</span>
+                            <span class="text-[var(--accent-color)] font-bold">$0 (self-hosted)</span>
+                        </div>
+                        <div class="flex justify-between items-center py-2 px-4 bg-gray-800/30 rounded-lg">
+                            <span class="text-gray-400">vapi.ai</span>
+                            <span class="text-red-400 font-bold">$0.07-$0.30/min</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Developer Experience -->
+                <div class="text-center">
+                    <div class="w-16 h-16 mx-auto mb-6 bg-blue-500/10 rounded-full flex items-center justify-center">
+                        <i class="fas fa-code text-blue-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">Better Experience</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center py-2 px-4 bg-gray-800/50 rounded-lg">
+                            <span class="text-gray-400">Burki UI</span>
+                            <span class="text-[var(--accent-color)] font-bold">✓ Works</span>
+                        </div>
+                        <div class="flex justify-between items-center py-2 px-4 bg-gray-800/30 rounded-lg">
+                            <span class="text-gray-400">vapi.ai UI</span>
+                            <span class="text-red-400 font-bold">✗ Broken</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-12">
+                <a href="/auth/register" class="inline-flex items-center px-8 py-4 bg-[var(--accent-color)] text-black rounded-lg font-bold transform hover:scale-105 transition-transform duration-300">
+                    <i class="fas fa-rocket mr-2"></i>
+                    Try Burki Free Today
+                </a>
             </div>
         </div>
     </section>
@@ -135,12 +245,12 @@
                 <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
                     <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-microphone-alt fa-lg"></i></div>
                     <h3 class="text-xl font-bold mb-3">Crystal-Clear Audio</h3>
-                    <p class="text-gray-400">Built-in noise cancellation and optimized streaming deliver natural, low-latency conversations.</p>
+                    <p class="text-gray-400">Built-in RNNoise denoising and optimized streaming deliver 0.8-1.2s response times. No more waiting 4-5 seconds for responses.</p>
                 </div>
                 <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
                     <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-cogs fa-lg"></i></div>
                     <h3 class="text-xl font-bold mb-3">Provider-Agnostic</h3>
-                    <p class="text-gray-400">Integrate with your favorite LLM, TTS, and STT providers. No vendor lock-in.</p>
+                    <p class="text-gray-400">Integrate with your favorite LLM, TTS, and STT providers. Own your data and infrastructure—no vendor lock-in or hidden costs.</p>
                 </div>
                 <div class="glass-morphism rounded-2xl p-8 transform hover:-translate-y-2 transition-transform duration-300">
                     <div class="w-12 h-12 mb-6 bg-green-600/10 text-[var(--accent-color)] rounded-lg flex items-center justify-center"><i class="fas fa-code fa-lg"></i></div>
@@ -161,7 +271,7 @@
         <div class="max-w-7xl mx-auto px-6 lg:px-8">
             <div class="text-center mb-16">
                 <h2 class="text-4xl md:text-5xl font-black tracking-tighter">Get Started in 2 Simple Steps</h2>
-                <p class="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">From cloning the repo to a running instance in minutes.</p>
+                <p class="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">From cloning the repo to a running instance in minutes. No weeks of API integration like with vapi.ai.</p>
             </div>
             <div class="relative max-w-3xl mx-auto">
                 <div class="absolute top-8 left-0 w-full h-px bg-[var(--border-color)] border-t border-dashed border-gray-700 hidden md:block"></div>
@@ -198,7 +308,7 @@
             <div class="flex flex-col md:flex-row justify-between items-center">
                 <div class="flex items-center space-x-4">
                     <img src="{{ url_for('static', path='logo/light.svg') }}" alt="Burki Logo" class="h-7 w-auto">
-                    <p class="text-gray-500 text-sm">&copy; 2024 Burki. All rights reserved.</p>
+                    <p class="text-gray-500 text-sm">&copy; 2025 Burki. All rights reserved.</p>
                 </div>
                 <div class="flex items-center space-x-6 mt-4 md:mt-0">
                     <a href="https://github.com/meeran03/burki" target="_blank" class="text-gray-500 hover:text-white transition-colors"><i class="fab fa-github fa-lg"></i></a>
