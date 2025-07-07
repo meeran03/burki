@@ -708,6 +708,7 @@ class InitiateCallRequest(BaseModel):
     to_phone_number: str
     welcome_message: Optional[str] = None
     agenda: Optional[str] = None
+    from_phone_number: Optional[str] = None
 
 class InitiateCallResponse(BaseModel):
     """Response model for initiating an outbound call."""

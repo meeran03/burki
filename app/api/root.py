@@ -384,52 +384,78 @@ async def initiate_outbound_call(call_data: InitiateCallRequest):
     This endpoint is protected and requires authentication.
     """
     try:
-        # Get the assistant configuration
-        assistant = await assistant_manager.get_assistant_by_id(call_data.assistant_id)
+        from_phone_number = call_data.from_phone_number
+        to_phone_number = call_data.to_phone_number
+        welcome_message = call_data.welcome_message
+        agenda = call_data.agenda
+        
+        # Validate required fields
+        if not from_phone_number:
+            raise HTTPException(status_code=400, detail="from_phone_number is required")
+        if not to_phone_number:
+            raise HTTPException(status_code=400, detail="to_phone_number is required")
+
+        # Validate phone number format
+        if not TwilioService.validate_phone_number(to_phone_number):
+            raise HTTPException(status_code=400, detail="Invalid phone number format. Use E.164 format (e.g., +1234567890)")
+        
+        # Get the assistant
+        assistant = await assistant_manager.get_assistant_by_phone(from_phone_number)
         if not assistant:
             raise HTTPException(status_code=404, detail="Assistant not found")
 
-        # Get the 'from' phone number from the assistant's assigned numbers
-        # For simplicity, we'll just take the first one if available.
-        # In a real-world scenario, you might want more complex logic to select a number.
-        from_phone_number = await assistant_manager.get_assistant_phone_number(assistant.id)
-        if not from_phone_number:
-            raise HTTPException(
-                status_code=400,
-                detail="Assistant does not have an assigned phone number to call from."
-            )
-
-        # Build the TwiML webhook URL with metadata
-        twiml_url = get_twiml_webhook_url(
-            assistant_id=assistant.id,
-            welcome_message=call_data.welcome_message,
-            agenda=call_data.agenda,
-            to_phone_number=call_data.to_phone_number,
-        )
-
-        # Use TwilioService to create the call
-        twilio_service = TwilioService()
-        call_sid = await twilio_service.create_call(
-            to_phone_number=call_data.to_phone_number,
+        # Use the get_twiml_webhook_url function to determine the webhook URL
+        webhook_url = get_twiml_webhook_url()
+        
+        # Prepare call metadata to pass through the webhook
+        call_metadata = {
+            "outbound": "true",
+            "assistant_id": str(assistant.id),
+            "welcome_message": welcome_message,
+            "agenda": agenda,
+            "to_phone_number": to_phone_number
+        }
+        
+        # Get Twilio credentials from assistant or environment
+        twilio_account_sid = assistant.twilio_account_sid or os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_auth_token = assistant.twilio_auth_token or os.getenv("TWILIO_AUTH_TOKEN")
+        
+        if not twilio_account_sid or not twilio_auth_token:
+            raise HTTPException(status_code=500, detail="Twilio credentials not configured")
+        
+        # Initiate the outbound call through Twilio
+        call_sid = TwilioService.initiate_outbound_call(
+            to_phone_number=to_phone_number,
             from_phone_number=from_phone_number,
-            twiml_url=twiml_url,
+            webhook_url=webhook_url,
+            call_metadata=call_metadata,
+            account_sid=twilio_account_sid,
+            auth_token=twilio_auth_token
         )
-
+        
         if not call_sid:
-            raise HTTPException(status_code=500, detail="Failed to initiate call with Twilio")
-
-        logger.info(f"Successfully initiated outbound call with SID: {call_sid}")
-        return InitiateCallResponse(
-            message="Call initiated successfully",
-            call_sid=call_sid
+            raise HTTPException(status_code=500, detail="Failed to initiate outbound call")
+        
+        logger.info(
+            f"Initiated outbound call {call_sid} from assistant {assistant.id} "
+            f"to {to_phone_number} with agenda: {agenda[:100] if agenda else 'None'}..."
         )
-
+        
+        # Return success response
+        return {
+            "success": True,
+            "call_sid": call_sid,
+            "message": "Outbound call initiated successfully",
+            "assistant_id": assistant.id,
+            "to_phone_number": to_phone_number,
+            "from_phone_number": from_phone_number
+        }
+        
     except HTTPException:
-        raise  # Re-raise HTTPException to let FastAPI handle it
+        raise
     except Exception as e:
         logger.error(f"Error initiating outbound call: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
-
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 @router.post("/recording-status")
 async def recording_status_callback(request: Request):
