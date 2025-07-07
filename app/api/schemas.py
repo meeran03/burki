@@ -704,7 +704,6 @@ class ToolResponse(BaseModel):
 # Schemas for initiating an outbound call
 class InitiateCallRequest(BaseModel):
     """Request model for initiating an outbound call."""
-    assistant_id: int
     to_phone_number: str
     welcome_message: Optional[str] = None
     agenda: Optional[str] = None
