@@ -3,69 +3,90 @@
 <head>
     {% include '_head.html' %}
 </head>
-<body class="bg-gray-900 text-white">
+<body style="background-color: #0D1117; color: #E6EDF3;">
 
     <div class="flex h-screen overflow-hidden">
-        <!-- Sidebar -->
-        <aside class="w-64 bg-gray-800 border-r border-gray-700 flex-shrink-0">
+        <!-- Sidebar - Electric Slate Glass Morphism -->
+        <aside class="w-64 flex-shrink-0 auth-card" style="border-radius: 0; border-right: 1px solid #30363D; border-left: none; border-top: none; border-bottom: none;">
             <div class="p-6">
-                <a href="/dashboard" class="flex items-center space-x-3">
-                    <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Voice AI" class="h-8">
+                <a href="/dashboard" class="flex items-center space-x-3 group">
+                    <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Voice AI" class="h-8 transition-transform group-hover:scale-105">
+                    <span class="font-satoshi font-bold text-xl" style="color: #E6EDF3;">Burki</span>
                 </a>
             </div>
-            <nav class="mt-6">
-                <a href="/dashboard" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
-                    <i class="fas fa-tachometer-alt mr-3"></i>
-                    Dashboard
+            <nav class="mt-6 px-3">
+                <a href="/dashboard" class="flex items-center px-3 py-3 rounded-lg mb-2 transition-all duration-200 group hover:transform hover:translate-x-1" style="color: #8B949E;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'; this.style.color='#10B981'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#8B949E'">
+                    <i class="fas fa-tachometer-alt mr-3 w-5"></i>
+                    <span class="font-inter font-medium">Dashboard</span>
                 </a>
-                <a href="/assistants" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
-                    <i class="fas fa-robot mr-3"></i>
-                    Assistants
+                <a href="/assistants" class="flex items-center px-3 py-3 rounded-lg mb-2 transition-all duration-200 group hover:transform hover:translate-x-1" style="color: #8B949E;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'; this.style.color='#10B981'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#8B949E'">
+                    <i class="fas fa-robot mr-3 w-5"></i>
+                    <span class="font-inter font-medium">Assistants</span>
                 </a>
-                <a href="/calls" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
-                    <i class="fas fa-phone-alt mr-3"></i>
-                    Calls
+                <a href="/calls" class="flex items-center px-3 py-3 rounded-lg mb-2 transition-all duration-200 group hover:transform hover:translate-x-1" style="color: #8B949E;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'; this.style.color='#10B981'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#8B949E'">
+                    <i class="fas fa-phone-alt mr-3 w-5"></i>
+                    <span class="font-inter font-medium">Calls</span>
                 </a>
-                <a href="/organization/phone-numbers" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
-                    <i class="fas fa-hashtag mr-3"></i>
-                    Phone Numbers
+                <a href="/organization/phone-numbers" class="flex items-center px-3 py-3 rounded-lg mb-2 transition-all duration-200 group hover:transform hover:translate-x-1" style="color: #8B949E;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'; this.style.color='#10B981'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#8B949E'">
+                    <i class="fas fa-hashtag mr-3 w-5"></i>
+                    <span class="font-inter font-medium">Phone Numbers</span>
                 </a>
-                <a href="/docs" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700">
-                    <i class="fas fa-book mr-3"></i>
-                    API Docs
+                <a href="/docs" class="flex items-center px-3 py-3 rounded-lg mb-2 transition-all duration-200 group hover:transform hover:translate-x-1" style="color: #8B949E;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'; this.style.color='#10B981'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#8B949E'">
+                    <i class="fas fa-book mr-3 w-5"></i>
+                    <span class="font-inter font-medium">API Docs</span>
                 </a>
             </nav>
+            
+            <!-- Status Indicator at Bottom -->
+            <div class="absolute bottom-6 left-6 right-6">
+                <div class="p-3 rounded-lg" style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-2 h-2 rounded-full animate-pulse" style="background-color: #10B981;"></div>
+                        <span class="text-xs font-inter" style="color: #10B981;">System Online</span>
+                    </div>
+                </div>
+            </div>
         </aside>
 
         <!-- Main content -->
         <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- Top bar -->
-            <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
-                <h1 class="text-2xl font-bold">{% block page_title %}Dashboard{% endblock %}</h1>
+            <!-- Top bar - Electric Slate Header -->
+            <header class="border-b p-4 flex justify-between items-center auth-card" style="border-radius: 0; border-color: #30363D; border-left: none; border-right: none; border-top: none;">
+                <h1 class="font-satoshi text-2xl font-bold" style="color: #E6EDF3;">{% block page_title %}Dashboard{% endblock %}</h1>
                 
                 <div class="flex items-center space-x-4">
-                    <a href="/auth/api-keys" class="text-gray-400 hover:text-white">API Keys</a>
+                    <a href="/auth/api-keys" class="text-sm font-inter transition-colors hover:transform hover:scale-105" style="color: #8B949E;" onmouseover="this.style.color='#10B981'" onmouseout="this.style.color='#8B949E'">
+                        <i class="fas fa-key mr-2"></i>
+                        API Keys
+                    </a>
                     
                     <!-- Profile Dropdown -->
                     <div class="relative">
-                        <button id="profile-btn" class="flex items-center space-x-2">
-                            <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
+                        <button id="profile-btn" class="flex items-center space-x-2 p-2 rounded-lg transition-all duration-200" style="color: #E6EDF3;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'" onmouseout="this.style.backgroundColor='transparent'">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm font-satoshi" style="background: linear-gradient(135deg, #10B981, #A3FFAE);">
                                 {{ session.user_first_name[0] if session.user_first_name }}{{ session.user_last_name[0] if session.user_last_name }}
                             </div>
-                            <span>{{ session.user_first_name }} {{ session.user_last_name }}</span>
-                            <i class="fas fa-chevron-down"></i>
+                            <span class="font-inter">{{ session.user_first_name }} {{ session.user_last_name }}</span>
+                            <i class="fas fa-chevron-down text-xs"></i>
                         </button>
-                        <div id="profile-dropdown" class="absolute right-0 mt-2 w-48 bg-gray-700 rounded-md shadow-lg py-1 z-50 hidden">
-                            <a href="/profile" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600">Profile</a>
-                            <a href="/organization" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600">Organization</a>
-                            <a href="/auth/logout" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600">Logout</a>
+                        <div id="profile-dropdown" class="absolute right-0 mt-2 w-48 auth-card py-1 z-50 hidden">
+                            <a href="/profile" class="block px-4 py-2 text-sm font-inter transition-colors" style="color: #8B949E;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'; this.style.color='#10B981'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#8B949E'">
+                                <i class="fas fa-user mr-2"></i>Profile
+                            </a>
+                            <a href="/organization" class="block px-4 py-2 text-sm font-inter transition-colors" style="color: #8B949E;" onmouseover="this.style.backgroundColor='rgba(16, 185, 129, 0.1)'; this.style.color='#10B981'" onmouseout="this.style.backgroundColor='transparent'; this.style.color='#8B949E'">
+                                <i class="fas fa-building mr-2"></i>Organization
+                            </a>
+                            <hr style="border-color: #30363D; margin: 0.5rem 0;">
+                            <a href="/auth/logout" class="block px-4 py-2 text-sm font-inter transition-colors" style="color: #F87171;" onmouseover="this.style.backgroundColor='rgba(248, 113, 113, 0.1)'" onmouseout="this.style.backgroundColor='transparent'">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                            </a>
                         </div>
                     </div>
                 </div>
             </header>
 
             <!-- Page content -->
-            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-900 p-6">
+            <main class="flex-1 overflow-x-hidden overflow-y-auto p-6" style="background-color: #0D1117;">
                 {% block content %}{% endblock %}
             </main>
         </div>
@@ -75,14 +96,37 @@
     {% include 'components/performance_monitor.html' %}
     
     <script>
-        // Profile dropdown toggle
+        // Profile dropdown toggle with improved UX
         const profileBtn = document.getElementById('profile-btn');
         const profileDropdown = document.getElementById('profile-dropdown');
         if (profileBtn) {
-            profileBtn.addEventListener('click', () => {
+            profileBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 profileDropdown.classList.toggle('hidden');
             });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', () => {
+                profileDropdown.classList.add('hidden');
+            });
+            
+            // Prevent dropdown from closing when clicking inside it
+            profileDropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
         }
+        
+        // Add active state highlighting for navigation
+        const currentPath = window.location.pathname;
+        const navLinks = document.querySelectorAll('nav a');
+        navLinks.forEach(link => {
+            if (link.getAttribute('href') === currentPath || 
+                (currentPath === '/' && link.getAttribute('href') === '/dashboard')) {
+                link.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
+                link.style.color = '#10B981';
+                link.style.transform = 'translateX(4px)';
+            }
+        });
     </script>
 </body>
 </html> 
