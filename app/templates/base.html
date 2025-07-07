@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Burki - Voice AI Infrastructure{% endblock %}</title>
     
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', path='logo/favicon.svg') }}" type="image/svg+xml">
+    
     <!-- Tailwind CSS CDN with dark mode support -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -118,13 +121,10 @@
                 <!-- Brand -->
                 <div class="flex items-center space-x-4">
                     <a href="/" class="flex items-center space-x-3 group">
-                        <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center font-bold text-white floating">
-                            ب
-                        </div>
-                        <div class="hidden sm:block">
-                            <div class="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">Burki</div>
-                            <div class="text-xs text-gray-400 -mt-1">Voice AI Infrastructure</div>
-                        </div>
+                        <!-- Dark mode logo -->
+                        <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Logo" class="h-8 w-auto hidden dark:block">
+                        <!-- Light mode logo -->
+                        <img src="{{ url_for('static', path='logo/light.svg') }}" alt="Burki Logo" class="h-8 w-auto block dark:hidden">
                     </a>
                 </div>
 

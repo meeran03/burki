@@ -27,24 +27,14 @@
                         </div>
                     </div>
                 </div>
-                <div class="hidden lg:block">
-                    <div class="w-24 h-24 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center floating">
-                        <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                        </svg>
-                    </div>
-                </div>
             </div>
         </div>
-        <div class="absolute -bottom-12 -right-12 w-48 h-48 rounded-full bg-white/5 backdrop-blur-sm"></div>
-        <div class="absolute -top-6 -left-6 w-24 h-24 rounded-full bg-white/5 backdrop-blur-sm"></div>
     </div>
 
     <!-- Primary KPI Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- AI Assistants Card -->
-        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
-            <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6">
             <div class="relative z-10">
                 <div class="flex items-center justify-between mb-4">
                     <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
@@ -63,24 +53,15 @@
                         <span class="text-xs text-gray-500">Ready to serve</span>
                         <div class="flex items-center space-x-1">
                             <div class="w-6 h-1 bg-blue-500 rounded-full"></div>
-                            <span class="text-xs text-blue-400">100%</span>
+                            <span class="text-xs text-blue-400">{{ assistant_availability|default('0') }}%</span>
                         </div>
                     </div>
-                    <div class="mt-3">
-                        <a href="/assistants" class="text-blue-400 hover:text-blue-300 text-xs font-medium flex items-center space-x-1">
-                            <span>Manage Assistants</span>
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                        </a>
-            </div>
                 </div>
             </div>
         </div>
 
         <!-- Call Volume Card -->
-        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
-            <div class="absolute inset-0 bg-gradient-to-br from-green-500/10 to-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6">
             <div class="relative z-10">
                 <div class="flex items-center justify-between mb-4">
                     <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
@@ -97,28 +78,13 @@
                     <h3 class="text-gray-300 font-medium mb-2">Voice Calls</h3>
                     <div class="flex items-center justify-between">
                         <span class="text-xs text-gray-500">All time</span>
-                        <div class="flex items-center space-x-1">
-                            <span class="text-xs text-green-400">+12%</span>
-                            <svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                            </svg>
-                        </div>
                     </div>
-                    <div class="mt-3">
-                        <a href="/calls" class="text-green-400 hover:text-green-300 text-xs font-medium flex items-center space-x-1">
-                            <span>View Analytics</span>
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                        </a>
-            </div>
                 </div>
             </div>
         </div>
 
         <!-- Live Sessions Card -->
-        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
-            <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6">
             <div class="relative z-10">
                 <div class="flex items-center justify-between mb-4">
                     <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
@@ -138,25 +104,13 @@
                             <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                             <span class="text-xs text-gray-500">Real-time</span>
                         </div>
-                        <div class="flex items-center space-x-1">
-                            <div class="w-8 h-1 bg-purple-500 rounded-full animate-pulse"></div>
-                        </div>
                     </div>
-                    <div class="mt-3">
-                        <a href="/calls?status=ongoing" class="text-purple-400 hover:text-purple-300 text-xs font-medium flex items-center space-x-1">
-                            <span>Monitor Live</span>
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        </a>
-            </div>
                 </div>
             </div>
         </div>
 
-        <!-- Performance Score Card -->
-        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6 glow-hover">
-            <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        <!-- Success Rate Card -->
+        <div class="group relative overflow-hidden rounded-xl bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 p-6">
             <div class="relative z-10">
                 <div class="flex items-center justify-between mb-4">
                     <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
@@ -165,167 +119,42 @@
                         </svg>
                     </div>
                     <div class="text-right">
-                        <div class="text-3xl font-bold text-emerald-400">98.7%</div>
-                        <div class="text-sm text-gray-400">Score</div>
+                        <div class="text-3xl font-bold text-emerald-400">{{ success_rate|default('0') }}%</div>
+                        <div class="text-sm text-gray-400">Success Rate</div>
                     </div>
                 </div>
                 <div>
-                    <h3 class="text-gray-300 font-medium mb-2">AI Performance</h3>
+                    <h3 class="text-gray-300 font-medium mb-2">Call Success</h3>
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs text-gray-500">Success Rate</span>
+                        <span class="text-xs text-gray-500">Completed Calls</span>
                         <div class="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                            <div class="w-full h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full"></div>
+                            <div class="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full" style="width: {{ success_rate|default('0') }}%"></div>
                         </div>
                     </div>
-                    <div class="mt-3">
-                        <span class="text-emerald-400 text-xs font-medium">Excellent Performance</span>
-            </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Advanced Analytics Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Call Volume Chart -->
-        <div class="lg:col-span-2 bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-xl font-bold text-white">Call Volume Analytics</h3>
-                <div class="flex items-center space-x-2">
-                    <button class="px-3 py-1 text-xs font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">24H</button>
-                    <button class="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-lg">7D</button>
-                    <button class="px-3 py-1 text-xs font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">30D</button>
-                </div>
-            </div>
-            <div class="relative h-64">
-                <canvas id="callVolumeChart" class="w-full h-full"></canvas>
-            </div>
+    <!-- Call Volume Chart -->
+    <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-white">Call Volume (Last 7 Days)</h3>
         </div>
-
-        <!-- Top Performing Assistants -->
-        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-            <h3 class="text-xl font-bold text-white mb-6">Top Assistants</h3>
-            <div class="space-y-4">
-                {% for assistant in active_assistants[:5] %}
-                <div class="flex items-center space-x-3 p-3 rounded-lg bg-gray-700/30 hover:bg-gray-600/30 transition-colors">
-                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-sm">
-                        {{ assistant.name[0] }}
-                    </div>
-                    <div class="flex-1">
-                        <div class="text-sm font-medium text-white">{{ assistant.name }}</div>
-                        <div class="text-xs text-gray-400">
-                            {% if assistant.phone_numbers %}
-                                {% for phone_number in assistant.phone_numbers %}
-                                    {{ phone_number.phone_number }}{% if not loop.last %}, {% endif %}
-                                {% endfor %}
-                            {% else %}
-                                No phone numbers
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-sm font-bold text-green-400">{{ (loop.index * 23) % 100 + 150 }}</div>
-                        <div class="text-xs text-gray-500">calls</div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Performance Metrics Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Average Duration -->
-        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-            <div class="flex items-center justify-between mb-4">
-                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-                <div class="text-right">
-                    <div class="text-2xl font-bold text-white">4m 32s</div>
-                    <div class="text-xs text-gray-400">Avg Duration</div>
-                </div>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="text-xs text-gray-500">vs last week</span>
-                <span class="text-xs text-green-400">+8%</span>
-            </div>
-        </div>
-
-        <!-- Success Rate -->
-        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-            <div class="flex items-center justify-between mb-4">
-                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-                <div class="text-right">
-                    <div class="text-2xl font-bold text-white">96.8%</div>
-                    <div class="text-xs text-gray-400">Success Rate</div>
-                </div>
-            </div>
-            <div class="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                <div class="w-[96.8%] h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full"></div>
-            </div>
-        </div>
-
-        <!-- Response Time -->
-        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-            <div class="flex items-center justify-between mb-4">
-                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                </div>
-                <div class="text-right">
-                    <div class="text-2xl font-bold text-white">1.2s</div>
-                    <div class="text-xs text-gray-400">Avg Response</div>
-                </div>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="text-xs text-gray-500">Latency</span>
-                <span class="text-xs text-green-400">Excellent</span>
-            </div>
-        </div>
-
-        <!-- Cost Efficiency -->
-        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-            <div class="flex items-center justify-between mb-4">
-                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                    </svg>
-                </div>
-                <div class="text-right">
-                    <div class="text-2xl font-bold text-white">$0.34</div>
-                    <div class="text-xs text-gray-400">Cost per Call</div>
-                </div>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="text-xs text-gray-500">vs industry</span>
-                <span class="text-xs text-green-400">-23%</span>
-            </div>
+        <div class="relative h-64">
+            <canvas id="callVolumeChart" class="w-full h-full"></canvas>
         </div>
     </div>
 
     <!-- Recent Activity Section -->
     <div class="space-y-6">
         <div class="flex items-center justify-between">
-            <h2 class="text-2xl font-bold text-white">Live Activity Feed</h2>
+            <h2 class="text-2xl font-bold text-white">Recent Calls</h2>
             <div class="flex items-center space-x-3">
                 <div class="flex items-center space-x-2">
                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                     <span class="text-sm text-gray-300">Live Updates</span>
                 </div>
-                <button class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors">
-                    Last 24h
-                </button>
-                <button class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                    Refresh
-                </button>
             </div>
         </div>
 
@@ -338,12 +167,10 @@
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Assistant</th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Caller</th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Duration</th>
-                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Quality</th>
                             <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Started</th>
                             <th class="px-6 py-4 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
+                        </tr>
+                    </thead>
                     <tbody class="divide-y divide-gray-700/50">
                     {% for call in recent_calls %}
                         <tr class="hover:bg-gray-700/30 transition-colors">
@@ -360,36 +187,24 @@
                             </td>
                             <td class="px-6 py-4">
                                 <div class="text-sm text-gray-300">{{ call.customer_phone_number }}</div>
-                        </td>
+                            </td>
                             <td class="px-6 py-4">
                             {% if call.status == "ongoing" %}
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                        <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mr-2 animate-pulse"></div>
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-400 mr-2 animate-pulse"></div>
                                     Ongoing
                                 </span>
                             {% elif call.status == "completed" %}
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
-                                        <div class="w-1.5 h-1.5 rounded-full bg-green-400 mr-2"></div>
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-green-400 mr-2"></div>
                                     Completed
                                 </span>
                             {% else %}
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
-                                        <div class="w-1.5 h-1.5 rounded-full bg-red-400 mr-2"></div>
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-red-400 mr-2"></div>
                                     {{ call.status|capitalize }}
                                 </span>
                             {% endif %}
-                        </td>
-                            <td class="px-6 py-4 text-sm text-gray-300">
-                                {{ call.duration or '-' }}{% if call.duration %} sec{% endif %}
-                            </td>
-                            <td class="px-6 py-4">
-                                {% set quality_score = (loop.index * 13 + 75) % 25 + 75 %}
-                                <div class="flex items-center space-x-2">
-                                    <div class="w-8 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                        <div class="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full quality-bar" data-width="{{ quality_score }}"></div>
-                                    </div>
-                                    <span class="text-xs text-gray-400">{{ quality_score }}%</span>
-                                </div>
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-300">
                                 {{ call.started_at.strftime('%b %d, %H:%M') }}
@@ -411,11 +226,11 @@
                                     </button>
                                     {% endif %}
                                 </div>
-                        </td>
-                    </tr>
+                            </td>
+                        </tr>
                     {% endfor %}
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
             </div>
             {% else %}
             <div class="p-12 text-center">
@@ -439,10 +254,7 @@
 <!-- Pass data from backend to JavaScript -->
 <script id="dashboard-data" type="application/json">
 {
-    "total_calls": {{ total_calls|default(156) }},
-    "success_rate": {{ success_rate|default(96.8) }},
-    "avg_duration": {{ avg_duration|default(272) }},
-    "avg_quality": {{ avg_quality|default(94.2) }}
+    "daily_call_data": {{ daily_call_data|tojson|safe if daily_call_data else '[]' }}
 }
 </script>
 
@@ -454,18 +266,8 @@
         
         const ctx = document.getElementById('callVolumeChart').getContext('2d');
         
-        // Generate sample data based on total calls for the last 7 days
-        const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const baseValue = dashboardData.total_calls;
-        const callData = [
-            Math.round(baseValue * 0.8),
-            Math.round(baseValue * 0.9),
-            Math.round(baseValue * 1.1),
-            Math.round(baseValue * 0.7),
-            Math.round(baseValue * 1.2),
-            Math.round(baseValue * 0.9),
-            baseValue
-        ];
+        // Use actual daily call data or empty array if not available
+        const callData = dashboardData.daily_call_data || [];
         
         // Create gradient for the chart
         const gradient = ctx.createLinearGradient(0, 0, 0, 400);
@@ -475,10 +277,10 @@
         const chart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: labels,
+                labels: callData.map(d => d.date),
                 datasets: [{
                     label: 'Call Volume',
-                    data: callData,
+                    data: callData.map(d => d.count),
                     borderColor: 'rgb(99, 102, 241)',
                     backgroundColor: gradient,
                     borderWidth: 3,
@@ -517,19 +319,6 @@
                         },
                         beginAtZero: true
                     }
-                },
-                elements: {
-                    point: {
-                        hoverBackgroundColor: 'rgb(139, 92, 246)'
-                    }
-                },
-                animation: {
-                    duration: 2000,
-                    easing: 'easeOutQuart'
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
                 }
             }
         });
@@ -543,39 +332,6 @@
             indicator.style.opacity = indicator.style.opacity === '0.5' ? '1' : '0.5';
         });
     }, 2000);
-
-    // Add hover effects to metric cards
-    document.addEventListener('DOMContentLoaded', () => {
-        const metricCards = document.querySelectorAll('.glow-hover');
-        metricCards.forEach(card => {
-            card.addEventListener('mouseenter', () => {
-                card.style.transform = 'translateY(-4px)';
-            });
-            card.addEventListener('mouseleave', () => {
-                card.style.transform = 'translateY(0)';
-            });
-        });
-
-        // Set quality bar widths from data attributes
-        const qualityBars = document.querySelectorAll('.quality-bar');
-        qualityBars.forEach(bar => {
-            const width = bar.getAttribute('data-width');
-            bar.style.width = width + '%';
-        });
-    });
-
-    // Smooth scroll for navigation
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({
-                    behavior: 'smooth'
-                });
-            }
-        });
-    });
 </script>
 {% endblock %}
 {% endblock %} 

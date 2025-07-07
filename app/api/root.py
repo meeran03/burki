@@ -22,6 +22,7 @@ from app.services.webhook_service import WebhookService
 from app.twilio.twilio_service import TwilioService
 from app.utils.url_utils import get_twiml_webhook_url
 from app.db.database import get_async_db_session
+from app.api.schemas import InitiateCallRequest, InitiateCallResponse
 
 
 router = APIRouter()
@@ -376,95 +377,59 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"Error in WebSocket connection: {e}", exc_info=True)
 
 
-@router.post("/calls/initiate")
-async def initiate_outbound_call(request: Request):
+@router.post("/calls/initiate", response_model=InitiateCallResponse)
+async def initiate_outbound_call(call_data: InitiateCallRequest):
     """
-    Initiate an outbound call through the API.
-    
-    Expected JSON body:
-    {
-        "from_phone_number": "+1234567890",
-        "to_phone_number": "+1234567890",
-        "welcome_message": "Hello, this is your AI assistant calling...",
-        "agenda": "I'm calling to discuss your recent order and confirm delivery details."
-    }
+    Initiates an outbound call from an assistant to a specified phone number.
+    This endpoint is protected and requires authentication.
     """
     try:
-        # Parse JSON body
-        body = await request.json()
-        
-        from_phone_number = body.get("from_phone_number")
-        to_phone_number = body.get("to_phone_number")
-        welcome_message = body.get("welcome_message")
-        agenda = body.get("agenda", None)
-        
-        # Validate required fields
-        if not from_phone_number:
-            raise HTTPException(status_code=400, detail="from_phone_number is required")
-        if not to_phone_number:
-            raise HTTPException(status_code=400, detail="to_phone_number is required")
-
-        # Validate phone number format
-        if not TwilioService.validate_phone_number(to_phone_number):
-            raise HTTPException(status_code=400, detail="Invalid phone number format. Use E.164 format (e.g., +1234567890)")
-        
-        # Get the assistant
-        assistant = await assistant_manager.get_assistant_by_phone(from_phone_number)
+        # Get the assistant configuration
+        assistant = await assistant_manager.get_assistant_by_id(call_data.assistant_id)
         if not assistant:
             raise HTTPException(status_code=404, detail="Assistant not found")
 
-        # Use the get_twiml_webhook_url function to determine the webhook URL
-        webhook_url = get_twiml_webhook_url()
-        
-        # Prepare call metadata to pass through the webhook
-        call_metadata = {
-            "outbound": "true",
-            "assistant_id": str(assistant.id),
-            "welcome_message": welcome_message,
-            "agenda": agenda,
-            "to_phone_number": to_phone_number
-        }
-        
-        # Get Twilio credentials from assistant or environment
-        twilio_account_sid = assistant.twilio_account_sid or os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_auth_token = assistant.twilio_auth_token or os.getenv("TWILIO_AUTH_TOKEN")
-        
-        if not twilio_account_sid or not twilio_auth_token:
-            raise HTTPException(status_code=500, detail="Twilio credentials not configured")
-        
-        # Initiate the outbound call through Twilio
-        call_sid = TwilioService.initiate_outbound_call(
-            to_phone_number=to_phone_number,
+        # Get the 'from' phone number from the assistant's assigned numbers
+        # For simplicity, we'll just take the first one if available.
+        # In a real-world scenario, you might want more complex logic to select a number.
+        from_phone_number = await assistant_manager.get_assistant_phone_number(assistant.id)
+        if not from_phone_number:
+            raise HTTPException(
+                status_code=400,
+                detail="Assistant does not have an assigned phone number to call from."
+            )
+
+        # Build the TwiML webhook URL with metadata
+        twiml_url = get_twiml_webhook_url(
+            assistant_id=assistant.id,
+            welcome_message=call_data.welcome_message,
+            agenda=call_data.agenda,
+            to_phone_number=call_data.to_phone_number,
+        )
+
+        # Use TwilioService to create the call
+        twilio_service = TwilioService()
+        call_sid = await twilio_service.create_call(
+            to_phone_number=call_data.to_phone_number,
             from_phone_number=from_phone_number,
-            webhook_url=webhook_url,
-            call_metadata=call_metadata,
-            account_sid=twilio_account_sid,
-            auth_token=twilio_auth_token
+            twiml_url=twiml_url,
         )
-        
+
         if not call_sid:
-            raise HTTPException(status_code=500, detail="Failed to initiate outbound call")
-        
-        logger.info(
-            f"Initiated outbound call {call_sid} from assistant {assistant.id} "
-            f"to {to_phone_number} with agenda: {agenda[:100] if agenda else 'None'}..."
+            raise HTTPException(status_code=500, detail="Failed to initiate call with Twilio")
+
+        logger.info(f"Successfully initiated outbound call with SID: {call_sid}")
+        return InitiateCallResponse(
+            message="Call initiated successfully",
+            call_sid=call_sid
         )
-        
-        # Return success response
-        return {
-            "success": True,
-            "call_sid": call_sid,
-            "message": "Outbound call initiated successfully",
-            "assistant_id": assistant.id,
-            "to_phone_number": to_phone_number,
-            "from_phone_number": from_phone_number
-        }
-        
+
     except HTTPException:
-        raise
+        raise  # Re-raise HTTPException to let FastAPI handle it
     except Exception as e:
         logger.error(f"Error initiating outbound call: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
+
 
 @router.post("/recording-status")
 async def recording_status_callback(request: Request):

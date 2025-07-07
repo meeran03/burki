@@ -30,6 +30,9 @@ from app.api.schemas import (
     APIResponse,
     PhoneNumberAssignRequest,
     PhoneNumberUnassignRequest,
+    SyncPhoneNumbersResponse,
+    OrganizationPhoneNumberResponse,
+    OrganizationAssistantInfo
 )
 
 logger = logging.getLogger(__name__)
@@ -1051,7 +1054,7 @@ async def unassign_phone_number_by_string(
 
 # ========== Organization Phone Number Management ==========
 
-@router.post("/organization/phone-numbers/sync", response_model=APIResponse)
+@router.post("/organization/phone-numbers/sync", response_model=SyncPhoneNumbersResponse)
 async def sync_organization_phone_numbers(
     current_user: User = Depends(get_current_user_flexible)
 ):
@@ -1069,10 +1072,10 @@ async def sync_organization_phone_numbers(
         )
 
         if result["success"]:
-            return APIResponse(
+            return SyncPhoneNumbersResponse(
                 success=True,
                 message=f"Successfully synced {result.get('synced_count', 0)} phone numbers from Twilio",
-                data=result
+                synced_count=result.get('synced_count', 0)
             )
         else:
             raise HTTPException(
@@ -1089,7 +1092,7 @@ async def sync_organization_phone_numbers(
         )
 
 
-@router.get("/organization/phone-numbers", response_model=List[dict])
+@router.get("/organization/phone-numbers", response_model=List[OrganizationPhoneNumberResponse])
 async def list_organization_phone_numbers(
     include_assigned: bool = Query(True, description="Include phone numbers assigned to assistants"),
     include_unassigned: bool = Query(True, description="Include unassigned phone numbers"),
@@ -1121,23 +1124,23 @@ async def list_organization_phone_numbers(
                         pn.assistant_id, current_user.organization_id
                     )
                     if assistant:
-                        assistant_info = {
-                            "id": assistant.id,
-                            "name": assistant.name,
-                            "is_active": assistant.is_active
-                        }
+                        assistant_info = OrganizationAssistantInfo(
+                            id=assistant.id,
+                            name=assistant.name,
+                            is_active=assistant.is_active
+                        )
 
-                filtered_numbers.append({
-                    "id": pn.id,
-                    "phone_number": pn.phone_number,
-                    "friendly_name": pn.friendly_name,
-                    "twilio_sid": pn.twilio_sid,
-                    "is_active": pn.is_active,
-                    "capabilities": pn.capabilities,
-                    "assistant": assistant_info,
-                    "created_at": pn.created_at.isoformat(),
-                    "updated_at": pn.updated_at.isoformat() if pn.updated_at else None
-                })
+                filtered_numbers.append(OrganizationPhoneNumberResponse(
+                    id=pn.id,
+                    phone_number=pn.phone_number,
+                    friendly_name=pn.friendly_name,
+                    twilio_sid=pn.twilio_sid,
+                    is_active=pn.is_active,
+                    capabilities=pn.capabilities,
+                    assistant=assistant_info,
+                    created_at=pn.created_at,
+                    updated_at=pn.updated_at
+                ))
 
         return filtered_numbers
 
@@ -1148,7 +1151,7 @@ async def list_organization_phone_numbers(
         )
 
 
-@router.get("/organization/phone-numbers/available", response_model=List[dict])
+@router.get("/organization/phone-numbers/available", response_model=List[OrganizationPhoneNumberResponse])
 async def list_available_phone_numbers(
     current_user: User = Depends(get_current_user_flexible)
 ):
@@ -1163,16 +1166,17 @@ async def list_available_phone_numbers(
         )
 
         return [
-            {
-                "id": pn.id,
-                "phone_number": pn.phone_number,
-                "friendly_name": pn.friendly_name,
-                "twilio_sid": pn.twilio_sid,
-                "is_active": pn.is_active,
-                "capabilities": pn.capabilities,
-                "created_at": pn.created_at.isoformat(),
-                "updated_at": pn.updated_at.isoformat() if pn.updated_at else None
-            }
+            OrganizationPhoneNumberResponse(
+                id=pn.id,
+                phone_number=pn.phone_number,
+                friendly_name=pn.friendly_name,
+                twilio_sid=pn.twilio_sid,
+                is_active=pn.is_active,
+                capabilities=pn.capabilities,
+                assistant=None,
+                created_at=pn.created_at,
+                updated_at=pn.updated_at
+            )
             for pn in available_numbers
         ]
 

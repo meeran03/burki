@@ -14,7 +14,10 @@ from sqlalchemy import or_
 from app.core.auth import get_current_user_flexible
 from app.db.database import get_db
 from app.db.models import Call, Transcript, Recording, User, Assistant
-from app.api.schemas import CallResponse, TranscriptResponse, RecordingResponse
+from app.api.schemas import (
+    CallResponse, TranscriptResponse, RecordingResponse, CallAnalyticsResponse,
+    DailyStat, AssistantStat, CallCountResponse, CallStatsResponse, UpdateCallMetadataRequest
+)
 
 router = APIRouter(prefix="/api/v1/calls", tags=["calls"])
 
@@ -177,7 +180,7 @@ async def export_calls(
         )
 
 
-@router.get("/analytics", response_model=dict)
+@router.get("/analytics", response_model=CallAnalyticsResponse)
 async def get_call_analytics(
     period: str = Query("7d", regex="^(1d|7d|30d|90d)$", description="Analysis period"),
     current_user: User = Depends(get_current_user_flexible),
@@ -250,27 +253,20 @@ async def get_call_analytics(
         reverse=True
     )[:10]
     
-    return {
-        "period": period,
-        "date_range": {
-            "from": date_from.isoformat(),
-            "to": datetime.utcnow().isoformat()
-        },
-        "summary": {
-            "total_calls": total_calls,
-            "completed_calls": len(completed_calls),
-            "failed_calls": len(failed_calls),
-            "ongoing_calls": len(ongoing_calls),
-            "success_rate": round(success_rate, 2),
-            "total_duration_seconds": total_duration,
-            "average_duration_seconds": round(avg_duration, 2)
-        },
-        "daily_statistics": daily_stats,
-        "top_assistants": top_assistants
-    }
+    return CallAnalyticsResponse(
+        total_calls=total_calls,
+        completed_calls=len(completed_calls),
+        failed_calls=len(failed_calls),
+        ongoing_calls=len(ongoing_calls),
+        total_duration=total_duration,
+        avg_duration=avg_duration,
+        success_rate=success_rate,
+        daily_stats={day: DailyStat(**stats) for day, stats in daily_stats.items()},
+        top_assistants=[AssistantStat(**data) for data in top_assistants]
+    )
 
 
-@router.get("/count", response_model=dict)
+@router.get("/count", response_model=CallCountResponse)
 async def get_calls_count(
     status: Optional[str] = Query(None, description="Filter by call status"),
     assistant_id: Optional[int] = Query(None, description="Filter by assistant ID"),
@@ -320,10 +316,7 @@ async def get_calls_count(
         status_query = query.filter(Call.status == call_status) if not status else query
         status_breakdown[call_status] = status_query.filter(Call.status == call_status).count() if not status else (count if status == call_status else 0)
 
-    return {
-        "total_count": count,
-        "status_breakdown": status_breakdown
-    }
+    return CallCountResponse(count=count)
 
 
 @router.get("/{call_id}", response_model=CallResponse)
@@ -387,25 +380,22 @@ async def get_call_by_sid(
 @router.patch("/{call_id}/metadata", response_model=CallResponse)
 async def update_call_metadata(
     call_id: int,
-    metadata: dict,
+    request: UpdateCallMetadataRequest,
     current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
 ):
     """
-    Update call metadata.
+    Update the metadata for a specific call.
     
-    Allows updating custom metadata for a call.
+    This allows you to store custom information against a call record.
+    The new metadata will be merged with any existing metadata.
     """
-    call = (
-        db.query(Call)
-        .join(Assistant)
-        .filter(
-            Call.id == call_id,
-            Assistant.organization_id == current_user.organization_id
-        )
-        .first()
-    )
-    
+    # First, get the call and verify it belongs to the user's organization
+    call = db.query(Call).join(Assistant).filter(
+        Assistant.organization_id == current_user.organization_id,
+        Call.id == call_id
+    ).first()
+
     if not call:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -413,10 +403,13 @@ async def update_call_metadata(
         )
     
     # Update metadata
-    if call.call_meta is None:
-        call.call_meta = {}
+    if call.metadata:
+        # Merge new metadata with existing
+        call.metadata.update(request.metadata)
+    else:
+        # Set new metadata
+        call.metadata = request.metadata
     
-    call.call_meta.update(metadata)
     db.commit()
     db.refresh(call)
     
@@ -704,7 +697,7 @@ async def get_call_sid_recordings(
     return recordings
 
 
-@router.get("/stats", response_model=dict)
+@router.get("/stats", response_model=CallStatsResponse)
 async def get_call_stats(
     current_user: User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db)
@@ -741,16 +734,11 @@ async def get_call_stats(
     recent_cutoff = datetime.utcnow() - timedelta(hours=24)
     recent_calls = base_query.filter(Call.started_at >= recent_cutoff).count()
     
-    return {
-        "total_calls": total_calls,
-        "ongoing_calls": ongoing_calls,
-        "completed_calls": completed_calls,
-        "failed_calls": failed_calls,
-        "total_duration_seconds": total_duration,
-        "average_duration_seconds": round(average_duration, 2),
-        "success_rate": round((completed_calls / total_calls * 100) if total_calls > 0 else 0, 2),
-        "recent_calls_24h": recent_calls
-    }
+    return CallStatsResponse(
+        total_calls=total_calls,
+        total_duration=total_duration,
+        average_duration=average_duration
+    )
 
 
 @router.get("/search", response_model=List[CallResponse])

@@ -1,172 +1,134 @@
-# Burki
+<div align="center">
+  <img src="https://raw.githubusercontent.com/meeran03/burki/main/app/static/logo/light.svg#gh-light-mode-only" alt="Burki Logo" width="300"/>
+  <img src="https://raw.githubusercontent.com/meeran03/burki/main/app/static/logo/dark.svg#gh-dark-mode-only" alt="Burki Logo" width="300"/>
 
-A comprehensive AI-powered voice assistant system that handles customer calls with advanced features including multi-tenant support, and real-time audio processing.
+  <h1>Burki - The Open-Source Voice AI Platform</h1>
+  
+  <p><strong>Build and deploy production-ready, multi-tenant AI voice assistants in minutes, not months.</strong></p>
 
-## 🚀 Features
-
-### Core Voice AI Capabilities
-- **Twilio Integration**: Handle phone calls through Twilio's Media Streams API with WebSocket support
-- **Speech-to-Text**: Real-time transcription using Deepgram Nova 3 with confidence scoring
-- **Natural Language Processing**: Generate intelligent responses with OpenAI GPT models or custom LLM providers
-- **Text-to-Speech**: Convert responses to natural speech with ElevenLabs
-- **Audio Denoising**: Built-in RNNoise integration for crystal-clear audio quality
-- **Call Recording**: Automatic recording with transcription storage and metadata tracking
-
-### Multi-Assistant Management
-- **Multiple AI Assistants**: Configure different assistants with unique personalities and settings
-- **Phone Number Assignment**: Assign specific assistants to different phone numbers
-- **Database-Driven Configuration**: Store and manage assistant configurations dynamically
-- **Real-time Assistant Loading**: Hot-reload assistant configurations without restart
-
-### Web Dashboard & Management
-- **Modern Web Interface**: Beautiful, responsive dashboard for managing your voice AI system
-- **Real-time Analytics**: Advanced call statistics, success rates, and performance metrics
-- **Call Management**: View call history, transcripts, and recordings through the web interface
-- **Assistant Configuration**: Create and manage assistants through an intuitive web UI
-- **User Profile Management**: Comprehensive user and organization management
-
-### Authentication & Security
-- **Multi-tenant Architecture**: Support for multiple organizations with isolated data
-- **Google OAuth Integration**: Seamless authentication with Google accounts
-- **API Key Management**: Generate and manage API keys for programmatic access
-- **Session Management**: Secure session handling with JWT tokens
-- **Role-based Access Control**: User roles and permissions system
-
-### Advanced Audio Processing
-- **Real-time Noise Reduction**: RNNoise integration for superior audio quality
-- **Voice Activity Detection**: Smart silence detection and speech processing
-- **Audio Format Support**: Support for various audio formats with automatic conversion
-- **Recording Quality Enhancement**: Post-processing tools for improving recording quality
-
-### API & Integration
-- **RESTful API**: Comprehensive REST API for all system operations
-- **WebSocket Support**: Real-time communication for live call handling
-- **Webhook Support**: Configurable webhooks for call events and notifications
-- **Custom LLM Support**: Integrate with various LLM providers beyond OpenAI
-
-## 📋 Requirements
-
-- Python 3.11+
-- PostgreSQL database
-- Twilio account with phone number
-- Deepgram API key
-- OpenAI API key (or custom LLM API)
-- ElevenLabs API key
-
-## 🛠 Installation
-
-### 1. Clone and Setup Environment
-
-```bash
-git clone https://github.com/meeran03/burki.git
-cd burki
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 2. Environment Configuration
-
-Copy the example environment file and configure your settings:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your configuration:
-
-### 3. Database Setup
-
-Initialize the database with Alembic migrations:
-
-```bash
-alembic upgrade head
-```
-
-### 4. Audio Processing Setup (Optional)
-
-For enhanced audio quality, install RNNoise:
-
-```bash
-./scripts/build_rnnoise.sh
-```
-
-## 🚀 Running the Application
-
-### Development Mode
-
-```bash
-python -m app.main
-```
-
-### Production Mode with Gunicorn
-
-```bash
-gunicorn app.main:app --bind 0.0.0.0:8000 --worker-class uvicorn.workers.UvicornWorker --workers 2
-```
-
-The application will be available at:
-- **Web Dashboard**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-
-## 🐳 Docker Deployment
-
-### Build and Run with Docker
-
-```bash
-docker build -t burki .
-docker run -p 8000:8000 --env-file .env burki
-```
-
-### Railway Deployment
-
-The project includes Railway deployment configuration. See `docs/RAILWAY_DEPLOYMENT.md` for detailed instructions.
-
-## 📖 Documentation
-
-Detailed documentation is available in the `docs/` directory:
-
-- **[Audio Denoising Setup](docs/AUDIO_DENOISING.md)** - Configure RNNoise for better audio quality
-- **[Railway Deployment](docs/RAILWAY_DEPLOYMENT.md)** - Deploy to Railway platform
-- **[Design Philosophy](docs/DESIGN_PHILOSOPHY.md)** - System architecture and design decisions
-
-## 🛠 Utilities & Scripts
-
-- **`scripts/build_rnnoise.sh`** - Build RNNoise for audio denoising
-- **`scripts/verify_rnnoise.sh`** - Verify RNNoise installation
-
-## 🏗 Architecture
-
-Burki follows a modular architecture with clear separation of concerns:
-
-- **`app/core/`** - Core business logic and managers
-- **`app/services/`** - Service layer for external integrations
-- **`app/api/`** - REST API endpoints and web routes
-- **`app/db/`** - Database models and migrations
-- **`app/utils/`** - Utility functions and helpers
-- **`app/templates/`** - Web interface templates
-- **`app/static/`** - Static assets for web interface
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-For support and questions:
-- Check the documentation in the `docs/` directory
-- Open an issue on GitHub
-- Review the API documentation at `/docs` endpoint
+  <p>
+    <a href="https://github.com/meeran03/burki/blob/main/LICENSE"><img src="https://img.shields.io/github/license/meeran03/burki?style=for-the-badge" alt="License"></a>
+    <a href="https://github.com/meeran03/burki/pulls"><img src="https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge" alt="PRs Welcome"></a>
+    <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.11+-blue.svg?style=for-the-badge" alt="Python 3.11+"></a>
+    <a href="https://hub.docker.com/"><img src="https://img.shields.io/badge/Docker-Ready-blueviolet.svg?style=for-the-badge" alt="Docker Ready"></a>
+  </p>
+</div>
 
 ---
 
-**Burki** - Transforming customer communication with AI-powered voice assistants.
+**Burki** is a complete, all-in-one platform for creating sophisticated, human-like voice AI agents. It provides the backend infrastructure, a beautiful web UI for management, and all the necessary integrations so you can focus on building great conversational experiences, not on plumbing.
+
+## 📖 Full Documentation
+
+While this README provides a great overview, our full documentation contains detailed guides, API references, and tutorials.
+
+**[➡️ View the Full Documentation](https://burki.mintlify.app)**
+
+---
+
+## 🤔 Why Burki?
+
+- **Production-Ready:** Built with a robust, multi-tenant architecture to handle real-world call volume.
+- **All-in-One Platform:** Includes a web dashboard, call management, analytics, and API key management out of the box.
+- **Extensible & Provider-Agnostic:** Easily integrate with your favorite LLM, TTS, and STT providers.
+- **Blazing Fast & Crystal Clear:** Uses real-time audio denoising (RNNoise) and optimized streaming for low-latency conversations.
+- **Open-Source & Free:** All the power of a professional voice AI platform, with the flexibility of open-source.
+
+---
+
+## 🚀 Features
+
+- **📞 End-to-End Call Handling:** Full lifecycle management from incoming call to post-call analysis.
+- **🤖 Multi-Assistant Support:** Create and manage multiple assistants with unique voices, prompts, and configurations.
+- **🌐 Multi-Tenant Architecture:** Support multiple organizations with isolated data and assistants.
+- **📊 Real-time Analytics Dashboard:** Monitor call volume, success rates, and performance metrics.
+- **🔌 Rich Integrations:**
+  - **Telephony:** Twilio
+  - **LLM Providers:** OpenAI, Groq, Anthropic, Gemini, and more.
+  - **TTS Providers:** ElevenLabs, Deepgram, Inworld, Resemble.
+  - **STT Providers:** Deepgram.
+- **🎙️ Advanced Audio Processing:**
+  - **Real-time Noise Reduction:** Built-in RNNoise for superior audio quality.
+  - **Voice Activity Detection (VAD):** Intelligent silence detection for natural turn-taking.
+- **💻 Developer Experience:**
+  - **RESTful API:** Programmatically manage every aspect of the system.
+  - **Webhook Support:** Get real-time notifications for call events.
+  - **API Key Management:** Securely manage access for your integrations.
+
+---
+
+## 🛠️ 5-Minute Quick Start (Docker)
+
+Get a full Burki instance running locally with a single command.
+
+**Prerequisites:** Docker & Docker Compose
+
+1.  **Clone the repository:**
+   ```bash
+   git clone https://github.com/meeran03/burki.git
+   cd burki
+   ```
+
+2.  **Configure your environment:**
+   ```bash
+   cp .env.example .env
+   ```
+    Now, open the `.env` file and add your API keys for Twilio, your chosen LLM, TTS, and STT providers.
+
+3.  **Deploy!**
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+    This script will build the Docker images and start the application and database using Docker Compose.
+
+**🎉 That's it!** Your Burki instance is now running.
+- **Web Dashboard:** [http://localhost:8000](http://localhost:8000)
+- **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+## ⚙️ Manual Installation
+
+If you prefer to run the application directly on your host machine:
+
+**Prerequisites:** Python 3.11+, PostgreSQL
+
+1.  **Clone and install dependencies:**
+```bash
+    git clone https://github.com/meeran03/burki.git
+    cd burki
+pip install -r requirements.txt
+    ```
+
+2.  **Configure your environment:**
+    ```bash
+    cp .env.example .env
+    # Edit the .env file with your credentials and database URL
+    ```
+
+3.  **Set up the database:**
+    This command runs all necessary database migrations.
+```bash
+    alembic upgrade head
+    ```
+
+4.  **Run the application:**
+    ```bash
+    # For development
+    uvicorn app.main:app --reload
+
+    # For production
+    gunicorn app.main:app --bind 0.0.0.0:8000 --worker-class uvicorn.workers.UvicornWorker
+    ```
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to fork the repository, make changes, and submit a pull request. For major changes, please open an issue first to discuss what you would like to change.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
