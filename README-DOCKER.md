@@ -14,8 +14,8 @@ This guide shows you how to deploy Burki Voice AI using Docker Compose with our 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/burki-voice-ai.git
-cd burki-voice-ai
+git clone https://github.com/meeran03/burki.git
+cd burki
 
 # Copy environment template
 cp .env.example .env

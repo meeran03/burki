@@ -9,46 +9,28 @@ templates = Jinja2Templates(directory="app/templates")
 router = APIRouter(tags=["docs"])
 
 
-@router.get("/docs", response_class=HTMLResponse)
+@router.get("/docs")
 async def docs_page(request: Request):
     """
-    API Documentation page - publicly accessible.
-    
-    Comprehensive documentation for the Burki Voice AI API,
-    including authentication, endpoints, examples, and code samples.
+    Redirect to external documentation at docs.burki.dev
     """
-    return templates.TemplateResponse(
-        "docs.html",
-        {
-            "request": request,
-            "title": "API Documentation - Burki Voice AI"
-        }
-    )
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="https://docs.burki.dev", status_code=301)
 
 
-@router.get("/api-reference", response_class=HTMLResponse)
+@router.get("/api-reference")
 async def api_reference_redirect(request: Request):
     """
-    Redirect /api-reference to /docs for consistency.
+    Redirect /api-reference to external docs.
     """
-    return templates.TemplateResponse(
-        "docs.html",
-        {
-            "request": request,
-            "title": "API Reference - Burki Voice AI"
-        }
-    )
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="https://docs.burki.dev", status_code=301)
 
 
-@router.get("/documentation", response_class=HTMLResponse)
+@router.get("/documentation")
 async def documentation_redirect(request: Request):
     """
-    Redirect /documentation to /docs for consistency.
+    Redirect /documentation to external docs.
     """
-    return templates.TemplateResponse(
-        "docs.html",
-        {
-            "request": request,
-            "title": "Documentation - Burki Voice AI"
-        }
-    ) 
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="https://docs.burki.dev", status_code=301) 

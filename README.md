@@ -22,7 +22,7 @@
 
 While this README provides a great overview, our full documentation contains detailed guides, API references, and tutorials.
 
-**[➡️ View the Full Documentation](https://burki.mintlify.app)**
+**[➡️ View the Full Documentation](https://docs.burki.dev)**
 
 ---
 
@@ -132,3 +132,13 @@ Contributions are welcome! Please feel free to fork the repository, make changes
 ## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👨‍💻 Maintainer
+
+**Meeran Malik**
+- Portfolio: [meeran.dev](https://meeran.dev)
+- Twitter/X: [@evolvinginsaan](https://x.com/evolvinginsaan)
+- LinkedIn: [Meeran Malik](https://www.linkedin.com/in/meeran-malik-34431316b/)
+- GitHub: [@meeran03](https://github.com/meeran03)
