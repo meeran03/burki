@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - Burki Voice AI</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='logo/favicon.svg') }}">
+    
+    <!-- Electric Slate Design System -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/electric-slate.css') }}">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Fonts: Satoshi + Inter from Fontshare (as per design guide) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&f[]=inter@400,500,600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            font-family: "Inter", sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .verify-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-lg);
+            position: relative;
+        }
+        
+        .verify-content {
+            width: 100%;
+            max-width: 450px;
+            position: relative;
+            z-index: 10;
+            text-align: center;
+        }
+        
+        .email-icon {
+            width: 5rem;
+            height: 5rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 2px solid var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: var(--accent-color);
+            margin: 0 auto var(--spacing-xl);
+            animation: emailPulse 2s ease-in-out infinite;
+            position: relative;
+        }
+        
+        @keyframes emailPulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 0 0 0 15px rgba(16, 185, 129, 0);
+            }
+        }
+        
+        .status-pending .email-icon {
+            animation: emailPulse 2s ease-in-out infinite;
+        }
+        
+        .status-verified .email-icon {
+            background: var(--accent-gradient);
+            color: var(--bg-color);
+            animation: verifiedBounce 0.8s ease-out;
+        }
+        
+        .status-expired .email-icon {
+            background: rgba(248, 113, 113, 0.1);
+            border-color: var(--error-color);
+            color: var(--error-color);
+            animation: expiredShake 0.6s ease-in-out;
+        }
+        
+        @keyframes verifiedBounce {
+            0% { transform: scale(0.8); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes expiredShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        
+        .verify-title {
+            font-family: "Satoshi", sans-serif;
+            font-weight: 700;
+            font-size: 2rem;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-md);
+            animation: fadeInUp 0.6s ease-out 0.2s both;
+        }
+        
+        .verify-subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xl);
+            line-height: 1.6;
+            animation: fadeInUp 0.6s ease-out 0.4s both;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .verification-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            margin: var(--spacing-xl) 0;
+            animation: fadeInUp 0.6s ease-out 0.6s both;
+        }
+        
+        .verify-actions {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+        
+        .code-input-group {
+            display: flex;
+            gap: var(--spacing-sm);
+            justify-content: center;
+            margin: var(--spacing-lg) 0;
+        }
+        
+        .code-input {
+            width: 3rem;
+            height: 3rem;
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: 600;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: rgba(48, 54, 61, 0.3);
+            color: var(--text-primary);
+            transition: all var(--transition-base);
+        }
+        
+        .code-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+            background: rgba(48, 54, 61, 0.4);
+        }
+        
+        .code-input.filled {
+            border-color: var(--accent-color);
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .resend-section {
+            background: rgba(48, 54, 61, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            margin-top: var(--spacing-lg);
+        }
+        
+        .countdown-timer {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin: var(--spacing-sm) 0;
+        }
+        
+        .link {
+            color: var(--accent-color);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color var(--transition-base);
+        }
+        
+        .link:hover {
+            color: #A3FFAE;
+        }
+        
+        .separator {
+            border-top: 1px solid var(--border-color);
+            margin: var(--spacing-xl) 0 var(--spacing-lg);
+            padding-top: var(--spacing-lg);
+        }
+        
+        @media (min-width: 640px) {
+            .verify-actions {
+                flex-direction: row;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Electric Slate Background -->
+    <div class="electric-bg"></div>
+
+    <div class="verify-container">
+        <div class="verify-content">
+            <!-- Brand Header -->
+            <div style="margin-bottom: var(--spacing-xl);">
+                <div class="brand-logo" style="margin-bottom: var(--spacing-md);">ب</div>
+                <h1 class="brand-title" style="margin-bottom: 0;">BURKI</h1>
+            </div>
+            
+            <!-- Verification Status Card -->
+            <div class="verification-card status-pending" id="verificationCard">
+                <!-- Email Icon -->
+                <div class="email-icon" id="emailIcon">
+                    <i class="fas fa-envelope" id="emailIconSymbol"></i>
+                </div>
+                
+                <!-- Verification Message -->
+                <div id="pendingState">
+                    <h2 class="verify-title">Check Your Email</h2>
+                    <p class="verify-subtitle">
+                        We've sent a verification code to <strong>{{ email or 'your email address' }}</strong>. 
+                        Enter the 6-digit code below to verify your account.
+                    </p>
+                    
+                    <!-- Verification Code Input -->
+                    <form id="verifyForm" method="post" action="/auth/verify-email">
+                        <div class="code-input-group">
+                            <input type="text" class="code-input" maxlength="1" data-index="0">
+                            <input type="text" class="code-input" maxlength="1" data-index="1">
+                            <input type="text" class="code-input" maxlength="1" data-index="2">
+                            <input type="text" class="code-input" maxlength="1" data-index="3">
+                            <input type="text" class="code-input" maxlength="1" data-index="4">
+                            <input type="text" class="code-input" maxlength="1" data-index="5">
+                        </div>
+                        
+                        <input type="hidden" name="email" value="{{ email or '' }}">
+                        <input type="hidden" name="code" id="hiddenCode">
+                        
+                        <button type="submit" class="btn btn-primary" style="width: 100%;" id="verifyBtn" disabled>
+                            <i class="fas fa-check-circle" style="margin-right: var(--spacing-sm);"></i>
+                            Verify Email
+                        </button>
+                    </form>
+                    
+                    <!-- Resend Section -->
+                    <div class="resend-section">
+                        <p style="margin: 0 0 var(--spacing-sm) 0; font-size: 0.875rem; color: var(--text-secondary);">
+                            Didn't receive the code?
+                        </p>
+                        <div class="countdown-timer" id="resendTimer">
+                            You can resend in <span id="countdown">60</span> seconds
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="resendCode()" id="resendBtn" disabled style="width: 100%; margin-top: var(--spacing-sm);">
+                            <i class="fas fa-redo" style="margin-right: var(--spacing-sm);"></i>
+                            Resend Code
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Success State (Hidden) -->
+                <div id="successState" style="display: none;">
+                    <h2 class="verify-title" style="color: var(--success-color);">Email Verified!</h2>
+                    <p class="verify-subtitle">
+                        Your email has been successfully verified. Welcome to Burki!
+                    </p>
+                    
+                    <div class="verify-actions">
+                        <a href="/dashboard" class="btn btn-primary" style="flex: 1;">
+                            <i class="fas fa-tachometer-alt" style="margin-right: var(--spacing-sm);"></i>
+                            Go to Dashboard
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Error State (Hidden) -->
+                <div id="errorState" style="display: none;">
+                    <h2 class="verify-title" style="color: var(--error-color);">Verification Failed</h2>
+                    <p class="verify-subtitle" id="errorMessage">
+                        The verification code is invalid or has expired. Please request a new code.
+                    </p>
+                    
+                    <div class="verify-actions">
+                        <button type="button" class="btn btn-primary" onclick="requestNewCode()" style="flex: 1;">
+                            <i class="fas fa-paper-plane" style="margin-right: var(--spacing-sm);"></i>
+                            Send New Code
+                        </button>
+                        <a href="/auth/register" class="btn btn-secondary" style="flex: 1;">
+                            <i class="fas fa-arrow-left" style="margin-right: var(--spacing-sm);"></i>
+                            Back to Register
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Back to Login Link -->
+            <div class="separator text-center">
+                <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md);">
+                    Having trouble?
+                </p>
+                <a href="/auth/login" class="link">
+                    <i class="fas fa-arrow-left" style="margin-right: var(--spacing-xs);"></i>
+                    Back to Sign In
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let resendCooldown = 60;
+        let resendTimer = null;
+        let currentCode = '';
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            setupCodeInputs();
+            startResendCooldown();
+            
+            // Auto-focus first input
+            document.querySelector('.code-input').focus();
+        });
+
+        function setupCodeInputs() {
+            const inputs = document.querySelectorAll('.code-input');
+            
+            inputs.forEach((input, index) => {
+                input.addEventListener('input', function(e) {
+                    const value = e.target.value.replace(/[^0-9]/g, '');
+                    e.target.value = value;
+                    
+                    if (value) {
+                        e.target.classList.add('filled');
+                        // Move to next input
+                        if (index < inputs.length - 1) {
+                            inputs[index + 1].focus();
+                        }
+                    } else {
+                        e.target.classList.remove('filled');
+                    }
+                    
+                    updateCode();
+                });
+                
+                input.addEventListener('keydown', function(e) {
+                    // Backspace handling
+                    if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                        inputs[index - 1].focus();
+                        inputs[index - 1].value = '';
+                        inputs[index - 1].classList.remove('filled');
+                        updateCode();
+                    }
+                    
+                    // Arrow key navigation
+                    if (e.key === 'ArrowLeft' && index > 0) {
+                        inputs[index - 1].focus();
+                    }
+                    if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+                        inputs[index + 1].focus();
+                    }
+                });
+                
+                input.addEventListener('paste', function(e) {
+                    e.preventDefault();
+                    const paste = (e.clipboardData || window.clipboardData).getData('text');
+                    const digits = paste.replace(/[^0-9]/g, '').slice(0, 6);
+                    
+                    digits.split('').forEach((digit, i) => {
+                        if (inputs[i]) {
+                            inputs[i].value = digit;
+                            inputs[i].classList.add('filled');
+                        }
+                    });
+                    
+                    updateCode();
+                    
+                    if (digits.length === 6) {
+                        document.getElementById('verifyForm').dispatchEvent(new Event('submit'));
+                    }
+                });
+            });
+        }
+
+        function updateCode() {
+            const inputs = document.querySelectorAll('.code-input');
+            currentCode = Array.from(inputs).map(input => input.value).join('');
+            document.getElementById('hiddenCode').value = currentCode;
+            
+            const verifyBtn = document.getElementById('verifyBtn');
+            verifyBtn.disabled = currentCode.length !== 6;
+            
+            // Auto-submit when all 6 digits are entered
+            if (currentCode.length === 6) {
+                setTimeout(() => {
+                    document.getElementById('verifyForm').dispatchEvent(new Event('submit'));
+                }, 300);
+            }
+        }
+
+        function startResendCooldown() {
+            const resendBtn = document.getElementById('resendBtn');
+            const countdownSpan = document.getElementById('countdown');
+            const timerDiv = document.getElementById('resendTimer');
+            
+            function updateCountdown() {
+                if (resendCooldown > 0) {
+                    countdownSpan.textContent = resendCooldown;
+                    resendBtn.disabled = true;
+                    resendCooldown--;
+                    resendTimer = setTimeout(updateCountdown, 1000);
+                } else {
+                    timerDiv.style.display = 'none';
+                    resendBtn.disabled = false;
+                    resendBtn.innerHTML = '<i class="fas fa-redo" style="margin-right: var(--spacing-sm);"></i>Resend Code';
+                }
+            }
+            
+            updateCountdown();
+        }
+
+        function resendCode() {
+            const resendBtn = document.getElementById('resendBtn');
+            const originalText = resendBtn.innerHTML;
+            
+            resendBtn.classList.add('loading');
+            resendBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: var(--spacing-sm);"></i>Sending...';
+            resendBtn.disabled = true;
+            
+            // Simulate API call
+            setTimeout(() => {
+                resendBtn.classList.remove('loading');
+                resendBtn.innerHTML = originalText;
+                
+                // Show success feedback
+                showAlert('New verification code sent!', 'success');
+                
+                // Reset countdown
+                resendCooldown = 60;
+                document.getElementById('resendTimer').style.display = 'block';
+                startResendCooldown();
+                
+                // Clear current inputs
+                clearCodeInputs();
+            }, 2000);
+        }
+
+        function requestNewCode() {
+            // Reset to pending state
+            showPendingState();
+            resendCode();
+        }
+
+        function clearCodeInputs() {
+            const inputs = document.querySelectorAll('.code-input');
+            inputs.forEach(input => {
+                input.value = '';
+                input.classList.remove('filled');
+            });
+            updateCode();
+            inputs[0].focus();
+        }
+
+        function showSuccessState() {
+            const card = document.getElementById('verificationCard');
+            card.className = 'verification-card status-verified';
+            
+            document.getElementById('pendingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'none';
+            document.getElementById('successState').style.display = 'block';
+            
+            document.getElementById('emailIconSymbol').className = 'fas fa-check';
+        }
+
+        function showErrorState(message = 'The verification code is invalid or has expired.') {
+            const card = document.getElementById('verificationCard');
+            card.className = 'verification-card status-expired';
+            
+            document.getElementById('pendingState').style.display = 'none';
+            document.getElementById('successState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+            
+            document.getElementById('emailIconSymbol').className = 'fas fa-exclamation-triangle';
+        }
+
+        function showPendingState() {
+            const card = document.getElementById('verificationCard');
+            card.className = 'verification-card status-pending';
+            
+            document.getElementById('successState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'none';
+            document.getElementById('pendingState').style.display = 'block';
+            
+            document.getElementById('emailIconSymbol').className = 'fas fa-envelope';
+        }
+
+        function showAlert(message, type = 'info') {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = `<i class="fas fa-info-circle"></i><span>${message}</span>`;
+            alert.style.position = 'fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.zIndex = '1000';
+            alert.style.maxWidth = '300px';
+            
+            document.body.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+
+        // Form submission
+        document.getElementById('verifyForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (currentCode.length !== 6) return;
+            
+            const verifyBtn = document.getElementById('verifyBtn');
+            verifyBtn.classList.add('loading');
+            verifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: var(--spacing-sm);"></i>Verifying...';
+            verifyBtn.disabled = true;
+            
+            // Simulate API call
+            setTimeout(() => {
+                // For demo: codes starting with '1' are valid
+                if (currentCode.startsWith('1')) {
+                    showSuccessState();
+                    
+                    // Redirect after success
+                    setTimeout(() => {
+                        window.location.href = '/auth/success';
+                    }, 2000);
+                } else {
+                    showErrorState();
+                    clearCodeInputs();
+                }
+                
+                verifyBtn.classList.remove('loading');
+                verifyBtn.innerHTML = '<i class="fas fa-check-circle" style="margin-right: var(--spacing-sm);"></i>Verify Email';
+                verifyBtn.disabled = true;
+            }, 2000);
+        });
+
+        // Handle URL parameters for different states
+        const urlParams = new URLSearchParams(window.location.search);
+        const status = urlParams.get('status');
+        const message = urlParams.get('message');
+
+        if (status === 'verified') {
+            showSuccessState();
+        } else if (status === 'expired' || status === 'invalid') {
+            showErrorState(message || 'The verification link has expired or is invalid.');
+        }
+    </script>
+</body>
+</html> 
