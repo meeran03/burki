@@ -15,6 +15,9 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from asgi_correlation_id.middleware import CorrelationIdMiddleware
+from app.utils.proxy_headers import ProxyHeadersMiddleware
 from dotenv import load_dotenv
 
 from app.core.call_manager import CallManager
@@ -65,6 +68,9 @@ app = FastAPI(
     docs_url="/api/docs",  # Move auto-generated docs to /api/docs
     redoc_url="/api/redoc",  # Move ReDoc to /api/redoc
 )
+
+# Add Proxy middleware to handle running behind a reverse proxy
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # Add CORS middleware
 app.add_middleware(
