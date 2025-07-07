@@ -193,46 +193,6 @@ class AssistantBase(BaseModel):
     @classmethod
     def handle_legacy_fields(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         """Move legacy flat API keys and settings to their new nested locations."""
-        
-        # Ensure nested config dicts exist
-        llm_config = values.get("llm_provider_config", {}) or {}
-        twilio_conf = values.get("twilio_config", {}) or {}
-        tts_conf = values.get("tts_settings", {}) or {}
-        
-        # Move legacy LLM fields
-        if "openai_api_key" in values and values["openai_api_key"]:
-            llm_config["api_key"] = llm_config.get("api_key") or values["openai_api_key"]
-        if "custom_llm_url" in values and values["custom_llm_url"]:
-            llm_config["base_url"] = llm_config.get("base_url") or values["custom_llm_url"]
-        
-        # Move legacy Twilio fields
-        if "twilio_account_sid" in values and values["twilio_account_sid"]:
-            twilio_conf["account_sid"] = twilio_conf.get("account_sid") or values["twilio_account_sid"]
-        if "twilio_auth_token" in values and values["twilio_auth_token"]:
-            twilio_conf["auth_token"] = twilio_conf.get("auth_token") or values["twilio_auth_token"]
-            
-        # Move legacy TTS/STT provider keys
-        tts_provider_conf = tts_conf.get("provider_config", {}) or {}
-        if "elevenlabs_api_key" in values and values["elevenlabs_api_key"]:
-            tts_provider_conf["elevenlabs_api_key"] = tts_provider_conf.get("elevenlabs_api_key") or values["elevenlabs_api_key"]
-        if "deepgram_api_key" in values and values["deepgram_api_key"]:
-            tts_provider_conf["deepgram_api_key"] = tts_provider_conf.get("deepgram_api_key") or values["deepgram_api_key"]
-        
-        tts_conf["provider_config"] = tts_provider_conf
-        
-        # Update the main values dict
-        values["llm_provider_config"] = llm_config
-        values["twilio_config"] = twilio_conf
-        values["tts_settings"] = tts_conf
-        
-        # Clean up legacy fields so they don't get processed further
-        values.pop("openai_api_key", None)
-        values.pop("custom_llm_url", None)
-        values.pop("twilio_account_sid", None)
-        values.pop("twilio_auth_token", None)
-        values.pop("elevenlabs_api_key", None)
-        values.pop("deepgram_api_key", None)
-
         return values
 
     @field_validator("llm_provider_config", mode="before")
