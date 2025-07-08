@@ -126,13 +126,20 @@ async def assign_phone_number(
     phone_number_id: int,
     request: Request,
     current_user: User = Depends(require_auth),
-    assistant_id: Optional[int] = Form(None),
+    assistant_id: str = Form(""),
 ):
     """Assign or unassign a phone number to/from an assistant."""
     try:
+        assistant_id_to_assign: Optional[int] = None
+        if assistant_id:
+            try:
+                assistant_id_to_assign = int(assistant_id)
+            except ValueError:
+                pass
+
         result = await PhoneNumberService.assign_phone_to_assistant(
             phone_number_id=phone_number_id,
-            assistant_id=assistant_id if assistant_id else None,
+            assistant_id=assistant_id_to_assign,
             organization_id=current_user.organization_id
         )
         
