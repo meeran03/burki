@@ -46,6 +46,9 @@ call_handler = CallHandler()
 assistant_manager = AssistantManager()
 
 
+
+
+
 @router.post("/twiml")
 async def get_twiml(request: Request):
     """
@@ -79,6 +82,7 @@ async def get_twiml(request: Request):
     logger.info("Request headers: %s", request.headers)
 
     assistant = None
+    phone_number_obj = None
     
     if is_outbound and outbound_assistant_id:
         # For outbound calls, use the assistant ID from metadata
@@ -89,6 +93,19 @@ async def get_twiml(request: Request):
     elif to_phone_number:
         # For inbound calls, lookup assistant by phone number
         assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
+        
+        # Also get the phone number object to check for Google Voice forwarding
+        try:
+            from app.services.phone_number_service import PhoneNumberService
+            phone_numbers = await PhoneNumberService.get_organization_phone_numbers(
+                assistant.organization_id if assistant else None
+            )
+            for pn in phone_numbers:
+                if pn.phone_number == to_phone_number:
+                    phone_number_obj = pn
+                    break
+        except Exception as e:
+            logger.error(f"Error fetching phone number object: {e}")
 
     # Create call record in database and send initial webhook as soon as call comes in
     if assistant and call_sid:
@@ -136,6 +153,21 @@ async def get_twiml(request: Request):
 
     # Create the TwiML response
     response = VoiceResponse()
+
+    # Check if Google Voice forwarding is enabled for this phone number
+    should_send_dtmf = False
+    if phone_number_obj and phone_number_obj.phone_metadata:
+        google_voice_forwarding = phone_number_obj.phone_metadata.get("is_google_voice_forwarding", False)
+        if google_voice_forwarding:
+            should_send_dtmf = True
+            logger.info(f"Google Voice forwarding enabled for {to_phone_number}, will send DTMF '1' after connection")
+
+    # If Google Voice forwarding is enabled, send DTMF "1" after a pause
+    if should_send_dtmf:
+        # Add a pause and then send DTMF "1"
+        # Using 'ww' for 1 second pause to ensure the call is fully connected
+        response.play(digits="ww1")
+        logger.info(f"Added DTMF '1' to TwiML response for Google Voice forwarding")
 
     # Create a <Connect> verb with the WebSocket stream
     connect = Connect()
@@ -230,6 +262,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     outbound_welcome_message = custom_params.get("welcome_message")
                     outbound_agenda = custom_params.get("agenda")
                     outbound_to_phone = custom_params.get("to_phone_number")
+                    
+
 
                     if not stream_sid or not call_sid:
                         logger.error("Missing streamSid or callSid in start message")
@@ -297,6 +331,8 @@ async def websocket_endpoint(websocket: WebSocket):
                             "mark": {"name": "start_acknowledged"},
                         }
                     )
+
+
 
                 elif event_type == "media":
                     # Process incoming audio

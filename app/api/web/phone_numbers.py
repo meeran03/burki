@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.api.web.index import require_auth
 from app.db.database import get_db
@@ -19,6 +20,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+class GoogleVoiceForwardingRequest(BaseModel):
+    """Request model for updating Google Voice forwarding setting."""
+    is_google_voice_forwarding: bool
 
 
 @router.get("/organization/phone-numbers", response_class=HTMLResponse)
@@ -191,6 +197,66 @@ async def delete_phone_number(
         return RedirectResponse(
             url="/organization/phone-numbers?error=Failed to delete phone number",
             status_code=303
+        )
+
+
+@router.post("/organization/phone-numbers/{phone_number_id}/google-voice-forwarding", response_class=JSONResponse)
+async def update_google_voice_forwarding(
+    phone_number_id: int,
+    request: GoogleVoiceForwardingRequest,
+    current_user: User = Depends(require_auth),
+):
+    """Update Google Voice forwarding setting for a phone number."""
+    try:
+        # Get the phone number
+        phone_numbers = await PhoneNumberService.get_organization_phone_numbers(
+            current_user.organization_id
+        )
+        
+        phone_number = None
+        for pn in phone_numbers:
+            if pn.id == phone_number_id:
+                phone_number = pn
+                break
+        
+        if not phone_number:
+            raise HTTPException(status_code=404, detail="Phone number not found")
+        
+        # Update the phone metadata
+        if phone_number.phone_metadata is None:
+            phone_number.phone_metadata = {}
+        
+        phone_number.phone_metadata["is_google_voice_forwarding"] = request.is_google_voice_forwarding
+        
+        # Save the changes using the service
+        result = await PhoneNumberService.update_phone_number_metadata(
+            phone_number_id, 
+            current_user.organization_id,
+            phone_number.phone_metadata
+        )
+        
+        if result.get("success"):
+            logger.info(
+                f"Updated Google Voice forwarding for phone {phone_number.phone_number} "
+                f"to {request.is_google_voice_forwarding} by user {current_user.email}"
+            )
+            return JSONResponse({
+                "success": True,
+                "message": f"Google Voice forwarding {'enabled' if request.is_google_voice_forwarding else 'disabled'}"
+            })
+        else:
+            return JSONResponse(
+                {"success": False, "error": result.get("error", "Failed to update setting")},
+                status_code=400
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating Google Voice forwarding: {e}")
+        return JSONResponse(
+            {"success": False, "error": "Failed to update Google Voice forwarding setting"},
+            status_code=500
         )
 
 
