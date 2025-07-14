@@ -165,8 +165,8 @@ async def get_twiml(request: Request):
     # If Google Voice forwarding is enabled, send DTMF "1" after a pause
     if should_send_dtmf:
         # Add a pause and then send DTMF "1"
-        # Using 'ww' for 1 second pause to ensure the call is fully connected
-        response.play(digits="ww1")
+        # Using 'wwww' for 2 second pause to ensure the call is fully connected
+        response.play(digits="wwww1")
         logger.info(f"Added DTMF '1' to TwiML response for Google Voice forwarding")
 
     # Create a <Connect> verb with the WebSocket stream
