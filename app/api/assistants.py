@@ -915,10 +915,19 @@ async def assign_phone_number_by_string(
             )
             other_name = other_assistant.name if other_assistant else f"Assistant ID {existing_phone.assistant_id}"
             
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Phone number {normalized_number} is already assigned to {other_name}"
+            return APIResponse(
+                success=False,
+                message=f"Phone number {normalized_number} is already assigned to {other_name}",
+                data={
+                    "phone_number": normalized_number,
+                    "phone_number_id": existing_phone.id,
+                    "assistant_id": assistant_id,
+                    "assistant_name": assistant.name,
+                    "friendly_name": friendly_name,
+                    "was_synced": not existing_phone or auto_sync
+                }
             )
+
 
         # Assign the phone number
         result = await PhoneNumberService.assign_phone_to_assistant(
