@@ -95,6 +95,89 @@ class CallHandler:
         # Track active calls
         self.active_calls: Dict[str, CallState] = {}
 
+    async def _create_and_broadcast_transcript(
+        self,
+        call_sid: str,
+        content: str,
+        speaker: str,
+        is_final: bool = True,
+        confidence: Optional[float] = None,
+        segment_start: Optional[float] = None,
+        segment_end: Optional[float] = None,
+    ) -> None:
+        """
+        Create a transcript in the database and broadcast it to connected WebSocket clients.
+
+        Args:
+            call_sid: The Twilio call SID
+            content: Transcript content
+            speaker: Speaker identifier (user, assistant)
+            is_final: Whether this is a final transcript
+            confidence: Confidence score
+            segment_start: Start time in seconds
+            segment_end: End time in seconds
+        """
+        try:
+            logger.info(f"Creating transcript for call {call_sid}, speaker: {speaker}, content: '{content[:50]}...'")
+            # Store transcript in database
+            transcript = await CallService.create_transcript(
+                call_sid=call_sid,
+                content=content,
+                is_final=is_final,
+                speaker=speaker,
+                segment_start=segment_start,
+                segment_end=segment_end,
+                confidence=confidence,
+            )
+
+            # Broadcast to connected WebSocket clients
+            if transcript:
+                logger.info(f"Successfully created transcript {transcript.id} for call {call_sid}, now broadcasting...")
+                # Import here to avoid circular imports
+                from app.api.root import transcript_broadcaster
+                
+                transcript_data = {
+                    "content": content,
+                    "speaker": speaker,
+                    "is_final": is_final,
+                    "confidence": confidence,
+                    "segment_start": segment_start,
+                    "segment_end": segment_end,
+                    "created_at": transcript.created_at.isoformat() if transcript.created_at else None
+                }
+                
+                await transcript_broadcaster.broadcast_transcript(call_sid, transcript_data)
+                logger.info(f"Successfully broadcasted {speaker} transcript for call {call_sid}: {content[:50]}...")
+            else:
+                logger.error(f"Failed to create transcript for call {call_sid}, speaker: {speaker}")
+
+        except Exception as e:
+            logger.error(f"Error creating and broadcasting transcript for call {call_sid}: {e}", exc_info=True)
+
+    async def _broadcast_call_status(
+        self,
+        call_sid: str,
+        status: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Broadcast call status updates to connected WebSocket clients.
+
+        Args:
+            call_sid: The Twilio call SID
+            status: Call status (in-progress, completed, failed)
+            metadata: Additional metadata about the status update
+        """
+        try:
+            # Import here to avoid circular imports
+            from app.api.root import transcript_broadcaster
+            
+            await transcript_broadcaster.broadcast_call_status(call_sid, status, metadata)
+            logger.debug(f"Broadcasted call status for call {call_sid}: {status}")
+
+        except Exception as e:
+            logger.error(f"Error broadcasting call status for call {call_sid}: {e}", exc_info=True)
+
     async def start_call(
         self,
         call_sid: str,
@@ -259,6 +342,20 @@ class CallHandler:
 
         # Start non-critical services in background for better latency
         asyncio.create_task(self._start_background_services(call_sid, metadata, assistant, websocket))
+
+        # Broadcast call status to connected clients
+        asyncio.create_task(
+            self._broadcast_call_status(
+                call_sid=call_sid,
+                status="in-progress",
+                metadata={
+                    "assistant_id": assistant.id if assistant else None,
+                    "to_number": to_number,
+                    "from_number": from_number,
+                    "call_type": "outbound" if is_outbound else "inbound"
+                }
+            )
+        )
 
         call_type = "outbound" if is_outbound else "inbound"
         logger.info(f"Started handling {call_type} call {call_sid} with optimized initialization")
@@ -719,8 +816,11 @@ class CallHandler:
                 
                 # Store assistant response in database asynchronously with timing
                 if response:
+                    logger.info(f"Processing final LLM response for transcript storage: '{response[:100]}...'")
                     # Clean up flush tags and other formatting before storing
                     cleaned_response = response.replace("<flush/>", "").replace("<flush>", "").strip()
+                    logger.info(f"Cleaned response for call {call_sid}: '{cleaned_response[:100]}...' (length: {len(cleaned_response)})")
+                    
                     if cleaned_response:  # Only store if there's actual content
                         # Calculate response end time
                         call_start_time = self.active_calls[call_sid].start_time
@@ -733,12 +833,13 @@ class CallHandler:
                             # Estimate response took about 2-3 seconds if we don't have start time
                             response_start_time = max(0, response_end_time - 2.5)
                         
+                        logger.info(f"Creating assistant transcript for call {call_sid}: '{cleaned_response[:50]}...'")
                         asyncio.create_task(
-                            CallService.create_transcript(
+                            self._create_and_broadcast_transcript(
                                 call_sid=call_sid,
                                 content=cleaned_response,
-                                is_final=True,
                                 speaker="assistant",
+                                is_final=True,
                                 segment_start=response_start_time,
                                 segment_end=response_end_time,
                             )
@@ -746,6 +847,10 @@ class CallHandler:
                         
                         # Reset the response start tracking for next response
                         self.active_calls[call_sid].current_assistant_response_start = None
+                    else:
+                        logger.warning(f"Cleaned response is empty for call {call_sid}, original: '{response[:100]}...'")
+                else:
+                    logger.warning(f"No response content found in metadata for call {call_sid}, metadata keys: {list(metadata.keys())}")
             else:
                 logger.debug(f"LLM response chunk for {call_sid}: {content}")
 
@@ -798,11 +903,11 @@ class CallHandler:
                 
                 # Store the complete utterance in database
                 asyncio.create_task(
-                    CallService.create_transcript(
+                    self._create_and_broadcast_transcript(
                         call_sid=call_sid,
                         content=complete_utterance,
-                        is_final=True,
                         speaker="user",
+                        is_final=True,
                         confidence=metadata.get("confidence"),
                         segment_start=self.active_calls[call_sid].utterance_start_time,
                         segment_end=metadata.get("last_word_end"),  # Use UtteranceEnd timing
@@ -894,11 +999,11 @@ class CallHandler:
                         # Store buffered transcript in database
                         if buffered_transcript:
                             asyncio.create_task(
-                                CallService.create_transcript(
+                                self._create_and_broadcast_transcript(
                                     call_sid=call_sid,
                                     content=buffered_transcript,
-                                    is_final=True,
                                     speaker="user",
+                                    is_final=True,
                                     segment_start=self._get_segment_start_time(call_sid, metadata),
                                     segment_end=self._get_segment_end_time(call_sid, metadata),
                                 )
@@ -996,11 +1101,11 @@ class CallHandler:
                 
                 # Store the complete utterance in database
                 asyncio.create_task(
-                    CallService.create_transcript(
+                    self._create_and_broadcast_transcript(
                         call_sid=call_sid,
                         content=complete_utterance,
-                        is_final=True,
                         speaker="user",
+                        is_final=True,
                         confidence=metadata.get("confidence"),
                         segment_start=self.active_calls[call_sid].utterance_start_time,
                         segment_end=self.active_calls[call_sid].utterance_end_time,
@@ -1208,6 +1313,15 @@ class CallHandler:
                     )
                 )
                 logger.info(f"Scheduled call {call_sid} status update to completed in database")
+                
+                # Broadcast call status to connected clients
+                asyncio.create_task(
+                    self._broadcast_call_status(
+                        call_sid=call_sid,
+                        status="completed",
+                        metadata={"duration": duration}
+                    )
+                )
             except Exception as e:
                 logger.error(f"Error scheduling call status update for {call_sid}: {e}", exc_info=True)
 
@@ -1343,11 +1457,11 @@ class CallHandler:
                 
                 # Store the complete utterance in database
                 asyncio.create_task(
-                    CallService.create_transcript(
+                    self._create_and_broadcast_transcript(
                         call_sid=call_sid,
                         content=complete_utterance,
-                        is_final=True,
                         speaker="user",
+                        is_final=True,
                         confidence=None,  # No confidence available for timeout
                         segment_start=self.active_calls[call_sid].utterance_start_time,
                         segment_end=self.active_calls[call_sid].utterance_end_time,

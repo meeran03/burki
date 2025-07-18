@@ -8,7 +8,7 @@ import json
 import base64
 import os
 import asyncio
-from typing import Optional
+from typing import Optional, Dict, Set
 from datetime import datetime
 from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import Response, FileResponse
@@ -45,8 +45,394 @@ CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "http://localhost:8001/ai/chat/comp
 call_handler = CallHandler()
 assistant_manager = AssistantManager()
 
+# Global transcript broadcaster
+class TranscriptBroadcaster:
+    """
+    Manages WebSocket connections for live transcript streaming.
+    """
+    
+    def __init__(self):
+        # Dict mapping call_sid to set of websocket connections
+        self.connections: Dict[str, Set[WebSocket]] = {}
+    
+    async def connect(self, call_sid: str, websocket: WebSocket):
+        """Add a WebSocket connection for a specific call."""
+        if call_sid not in self.connections:
+            self.connections[call_sid] = set()
+        self.connections[call_sid].add(websocket)
+        logger.info(f"Client connected to transcript stream for call {call_sid}. Total connections: {len(self.connections[call_sid])}")
+    
+    async def disconnect(self, call_sid: str, websocket: WebSocket):
+        """Remove a WebSocket connection for a specific call."""
+        if call_sid in self.connections:
+            self.connections[call_sid].discard(websocket)
+            if not self.connections[call_sid]:
+                # Remove empty set
+                del self.connections[call_sid]
+            logger.info(f"Client disconnected from transcript stream for call {call_sid}")
+    
+    async def broadcast_transcript(self, call_sid: str, transcript_data: dict):
+        """Broadcast transcript data to all connected clients for a specific call."""
+        logger.info(f"Attempting to broadcast transcript for call {call_sid}, speaker: {transcript_data.get('speaker')}")
+        
+        if call_sid not in self.connections:
+            logger.info(f"No WebSocket connections found for call {call_sid}")
+            return
+        
+        # Create a copy of connections to avoid modification during iteration
+        connections = self.connections[call_sid].copy()
+        if not connections:
+            logger.info(f"No active connections for call {call_sid}")
+            return
+        
+        logger.info(f"Broadcasting transcript to {len(connections)} connected clients for call {call_sid}")
+        
+        message = {
+            "type": "transcript",
+            "call_sid": call_sid,
+            "timestamp": datetime.utcnow().isoformat(),
+            "data": transcript_data
+        }
+        
+        # Send to all connected clients
+        disconnected = set()
+        for websocket in connections:
+            try:
+                await websocket.send_json(message)
+                logger.debug(f"Successfully sent transcript to client for call {call_sid}")
+            except Exception as e:
+                logger.warning(f"Failed to send transcript to client for call {call_sid}: {e}")
+                disconnected.add(websocket)
+        
+        # Clean up disconnected clients
+        for websocket in disconnected:
+            await self.disconnect(call_sid, websocket)
+        
+        logger.info(f"Successfully broadcasted transcript for call {call_sid} to {len(connections) - len(disconnected)} clients")
+    
+    async def broadcast_call_status(self, call_sid: str, status: str, metadata: Optional[dict] = None):
+        """Broadcast call status updates to connected clients."""
+        if call_sid not in self.connections:
+            return
+        
+        # Create a copy of connections to avoid modification during iteration
+        connections = self.connections[call_sid].copy()
+        if not connections:
+            return
+        
+        message = {
+            "type": "call_status",
+            "call_sid": call_sid,
+            "timestamp": datetime.utcnow().isoformat(),
+            "status": status,
+            "metadata": metadata or {}
+        }
+        
+        # Send to all connected clients
+        disconnected = set()
+        for websocket in connections:
+            try:
+                await websocket.send_json(message)
+            except Exception as e:
+                logger.warning(f"Failed to send call status to client for call {call_sid}: {e}")
+                disconnected.add(websocket)
+        
+        # Clean up disconnected clients
+        for websocket in disconnected:
+            await self.disconnect(call_sid, websocket)
 
+# Global instance
+transcript_broadcaster = TranscriptBroadcaster()
 
+async def authenticate_websocket_connection(websocket: WebSocket, token: str = None):
+    """
+    Authenticate WebSocket connection using various methods.
+    
+    Supports authentication via:
+    1. Query parameter 'token' with API key
+    2. Authorization header with Bearer token  
+    3. Subprotocol with token
+    
+    Returns:
+        User object if authenticated, None otherwise
+    """
+    from app.services.auth_service import APIKeyService
+    
+    api_key = None
+    
+    # Method 1: Query parameter
+    if token:
+        api_key = token
+        logger.debug("Using token from query parameter")
+    
+    # Method 2: Authorization header
+    if not api_key:
+        auth_header = None
+        for name, value in websocket.headers:
+            if name.lower() == b'authorization':
+                auth_header = value.decode()
+                break
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            api_key = auth_header[7:]  # Remove 'Bearer ' prefix
+            logger.debug("Using token from Authorization header")
+    
+    # Method 3: Subprotocol (token passed as subprotocol)
+    if not api_key:
+        try:
+            protocol_header = websocket.headers.get('sec-websocket-protocol')
+            if protocol_header:
+                protocols = protocol_header.decode().split(',')
+                for protocol in protocols:
+                    protocol = protocol.strip()
+                    if protocol.startswith('burki-token-'):
+                        api_key = protocol[12:]  # Remove 'burki-token-' prefix
+                        logger.debug("Using token from WebSocket subprotocol")
+                        break
+        except Exception as e:
+            logger.debug(f"Error reading WebSocket subprotocol: {e}")
+    
+    if not api_key:
+        logger.warning("No authentication token provided for WebSocket connection")
+        return None
+    
+    # Verify the API key
+    try:
+        result = await APIKeyService.verify_api_key(api_key)
+        if result:
+            api_key_obj, user = result
+            logger.info(f"WebSocket authenticated for user: {user.email}")
+            return user
+        else:
+            logger.warning("Invalid API key provided for WebSocket connection")
+            return None
+    except Exception as e:
+        logger.error(f"Error verifying API key for WebSocket: {e}")
+        return None
+
+async def verify_call_access(user, call_sid: str) -> bool:
+    """
+    Verify that the authenticated user has access to the specified call.
+    
+    Args:
+        user: Authenticated user object
+        call_sid: Call SID to check access for
+        
+    Returns:
+        bool: True if user has access, False otherwise
+    """
+    try:
+        # Get the call and verify it belongs to the user's organization
+        call = await CallService.get_call_by_sid(call_sid)
+        if not call:
+            logger.warning(f"Call {call_sid} not found")
+            return False
+        
+        # Check if the call's assistant belongs to the user's organization
+        if call.assistant and call.assistant.organization_id == user.organization_id:
+            logger.debug(f"User {user.email} has access to call {call_sid}")
+            return True
+        else:
+            logger.warning(f"User {user.email} does not have access to call {call_sid}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error verifying call access: {e}")
+        return False
+
+@router.websocket("/live-transcript/{call_sid}")
+async def live_transcript_endpoint(websocket: WebSocket, call_sid: str, token: str = None):
+    """
+    WebSocket endpoint for streaming live transcripts of a specific call.
+    
+    Clients can connect to this endpoint to receive real-time transcripts
+    as they are generated during the call.
+    
+    Message format:
+    {
+        "type": "transcript",
+        "call_sid": "CA123...",
+        "timestamp": "2024-01-01T12:00:00.000Z",
+        "data": {
+            "content": "Hello, how can I help you?",
+            "speaker": "assistant",
+            "is_final": true,
+            "confidence": 0.95,
+            "segment_start": 5.2,
+            "segment_end": 7.1
+        }
+    }
+    
+    Or for call status updates:
+    {
+        "type": "call_status", 
+        "call_sid": "CA123...",
+        "timestamp": "2024-01-01T12:00:00.000Z",
+        "status": "in-progress|completed|failed",
+        "metadata": {}
+    }
+    """
+    logger.info(f"Live transcript WebSocket connection attempt for call {call_sid}")
+    
+    try:
+        # Accept the WebSocket connection first
+        await websocket.accept()
+        logger.info(f"Live transcript WebSocket connection accepted for call {call_sid}")
+        
+        # Then authenticate the connection
+        authenticated_user = await authenticate_websocket_connection(websocket, token)
+        if not authenticated_user:
+            await websocket.send_json({
+                "type": "error",
+                "call_sid": call_sid,
+                "timestamp": datetime.utcnow().isoformat(),
+                "error": "authentication_failed",
+                "message": "Authentication failed"
+            })
+            await websocket.close(code=1008, reason="Authentication failed")
+            return
+        
+        logger.info(f"User {authenticated_user.email} authenticated for call {call_sid}")
+        
+        # Verify user has access to this call
+        if not await verify_call_access(authenticated_user, call_sid):
+            await websocket.send_json({
+                "type": "error",
+                "call_sid": call_sid,
+                "timestamp": datetime.utcnow().isoformat(),
+                "error": "access_denied",
+                "message": "Access denied to this call"
+            })
+            await websocket.close(code=1008, reason="Access denied to this call")
+            return
+        
+        # Add this connection to the broadcaster
+        await transcript_broadcaster.connect(call_sid, websocket)
+        
+        # Send initial connection confirmation
+        await websocket.send_json({
+            "type": "connection_established",
+            "call_sid": call_sid,
+            "timestamp": datetime.utcnow().isoformat(),
+            "message": "Connected to live transcript stream"
+        })
+        
+        # Check if call exists and send current status
+        try:
+            call = await CallService.get_call_by_sid(call_sid)
+            if call:
+                await websocket.send_json({
+                    "type": "call_status",
+                    "call_sid": call_sid,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "status": call.status,
+                    "metadata": {
+                        "assistant_id": call.assistant_id,
+                        "started_at": call.started_at.isoformat() if call.started_at else None,
+                        "to_phone_number": call.to_phone_number,
+                        "customer_phone_number": call.customer_phone_number
+                    }
+                })
+                
+                # Send any existing transcripts for this call
+                try:
+                    transcripts = await CallService.get_call_transcripts(call_sid)
+                    for transcript in transcripts:
+                        transcript_data = {
+                            "content": transcript.content,
+                            "speaker": transcript.speaker,
+                            "is_final": transcript.is_final,
+                            "confidence": transcript.confidence,
+                            "segment_start": transcript.segment_start,
+                            "segment_end": transcript.segment_end,
+                            "created_at": transcript.created_at.isoformat() if transcript.created_at else None
+                        }
+                        await websocket.send_json({
+                            "type": "transcript",
+                            "call_sid": call_sid,
+                            "timestamp": transcript.created_at.isoformat() if transcript.created_at else datetime.utcnow().isoformat(),
+                            "data": transcript_data
+                        })
+                except Exception as transcript_error:
+                    logger.error(f"Error sending existing transcripts for call {call_sid}: {transcript_error}")
+                    
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "call_sid": call_sid,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "message": f"Call {call_sid} not found"
+                })
+        except Exception as e:
+            logger.error(f"Error fetching call info for live transcript stream {call_sid}: {e}")
+            await websocket.send_json({
+                "type": "error",
+                "call_sid": call_sid,
+                "timestamp": datetime.utcnow().isoformat(),
+                "message": "Error fetching call information"
+            })
+        
+        # Keep connection alive and handle incoming messages (if any)
+        try:
+            while True:
+                # Wait for incoming messages (clients might send heartbeats or requests)
+                message = await websocket.receive_json()
+                
+                # Handle different message types
+                if message.get("type") == "ping":
+                    await websocket.send_json({
+                        "type": "pong", 
+                        "timestamp": datetime.utcnow().isoformat()
+                    })
+                elif message.get("type") == "request_status":
+                    # Client requesting current call status
+                    call = await CallService.get_call_by_sid(call_sid)
+                    if call:
+                        await websocket.send_json({
+                            "type": "call_status",
+                            "call_sid": call_sid,
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "status": call.status,
+                            "metadata": {
+                                "assistant_id": call.assistant_id,
+                                "started_at": call.started_at.isoformat() if call.started_at else None,
+                                "duration": call.duration
+                            }
+                        })
+                        
+        except WebSocketDisconnect:
+            logger.info(f"Live transcript WebSocket disconnected for call {call_sid}")
+        except Exception as e:
+            logger.error(f"Error in live transcript WebSocket for call {call_sid}: {e}", exc_info=True)
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "call_sid": call_sid,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "message": "Internal server error"
+                })
+            except:
+                pass  # Connection might be closed already
+        
+    except Exception as e:
+        logger.error(f"Error accepting live transcript WebSocket for call {call_sid}: {e}", exc_info=True)
+        try:
+            if websocket.client_state.name != "DISCONNECTED":
+                await websocket.send_json({
+                    "type": "error",
+                    "call_sid": call_sid,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "message": "Connection initialization failed"
+                })
+                await websocket.close(code=1011, reason="Internal server error")
+        except:
+            pass  # Connection might be closed already
+    finally:
+        # Clean up connection
+        try:
+            await transcript_broadcaster.disconnect(call_sid, websocket)
+        except Exception as cleanup_error:
+            logger.error(f"Error cleaning up WebSocket connection for call {call_sid}: {cleanup_error}")
 
 
 @router.post("/twiml")
