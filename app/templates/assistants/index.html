@@ -406,6 +406,18 @@
 </div>
 
 <script>
-// ... existing code ...
+// Delete assistant functionality
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.delete-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const assistantId = this.getAttribute('data-assistant-id');
+            const assistantName = this.getAttribute('data-assistant-name');
+            
+            if (confirm(`Are you sure you want to delete "${assistantName}"? This action cannot be undone.`)) {
+                window.location.href = `/assistants/${assistantId}/delete`;
+            }
+        });
+    });
+});
 </script>
 {% endblock %} 
