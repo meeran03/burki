@@ -1,0 +1,26 @@
+# WebP Image Serving
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Check if browser supports WebP
+    RewriteCond %{HTTP_ACCEPT} image/webp
+    # Check if WebP version exists
+    RewriteCond %{REQUEST_FILENAME}.webp -f
+    # Serve WebP version
+    RewriteRule ^(.+)\.(jpg|jpeg|png)$ $1.$2.webp [T=image/webp,E=accept:1]
+</IfModule>
+
+# Add Vary header for proper caching
+<IfModule mod_headers.c>
+    Header append Vary Accept env=REDIRECT_accept
+</IfModule>
+
+# Cache static assets
+<IfModule mod_expires.c>
+    ExpiresActive on
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+</IfModule>

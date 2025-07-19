@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from app.utils.proxy_headers import ProxyHeadersMiddleware
 from dotenv import load_dotenv
 
 from app.core.call_manager import CallManager
@@ -27,6 +28,7 @@ from app.api.web.assistant import router as web_assistant_router
 from app.api.web.call import router as web_call_router
 from app.api.web.docs import router as web_docs_router
 from app.api.web.phone_numbers import router as web_phone_numbers_router
+from app.api.web.seo import router as web_seo_router
 from app.api.root import router as root_router
 
 load_dotenv()
@@ -61,7 +63,12 @@ app = FastAPI(
     title="Burki",
     description="A system that uses AI to answer customer Calls.",
     version="0.1.0",
+    docs_url="/api/docs",  # Move auto-generated docs to /api/docs
+    redoc_url="/api/redoc",  # Move ReDoc to /api/redoc
 )
+
+# Add Proxy middleware to handle running behind a reverse proxy
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # Add CORS middleware
 app.add_middleware(
@@ -71,6 +78,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add compression middleware for better performance and SEO
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Add session middleware
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
@@ -93,6 +104,7 @@ app.include_router(web_assistant_router)
 app.include_router(web_call_router)
 app.include_router(web_docs_router)
 app.include_router(web_phone_numbers_router)
+app.include_router(web_seo_router)
 
 # API routers - no additional prefix needed since they include full path
 app.include_router(assistants_router)

@@ -1,15 +1,15 @@
 <!-- Section 1: Basic Information -->
-<div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
-    <div class="px-6 py-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-b border-gray-700/50">
+<div class="auth-card rounded-xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-[#30363D]" style="background: linear-gradient(135deg, #10B981, #A3FFAE); background-size: 200% 200%;">
         <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+            <div class="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
                 <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </svg>
             </div>
             <div>
-                <h3 class="text-lg font-semibold text-white">Basic Information</h3>
-                <p class="text-gray-400 text-sm">Core details about your assistant</p>
+                <h3 class="font-satoshi text-lg font-semibold text-white">Basic Information</h3>
+                <p class="text-white/80 text-sm font-inter">Core details about your assistant</p>
             </div>
         </div>
     </div>
@@ -17,10 +17,11 @@
         <div class="grid grid-cols-1 gap-6">
             <!-- Assistant Name -->
             <div>
-                <label for="name" class="block text-sm font-medium text-gray-300 mb-2">Assistant Name</label>
+                <label for="name" class="block text-sm font-medium mb-2 font-inter" style="color: #E6EDF3">Assistant Name</label>
                 <input type="text" name="name" id="name" required
                     value="{{ assistant.name if assistant else '' }}"
-                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    class="block w-full px-4 py-3 rounded-lg transition-colors font-inter" 
+                    style="background-color: #0D1117; border: 1px solid #30363D; color: #E6EDF3;"
                     placeholder="My Voice Assistant">
             </div>
 
@@ -28,9 +29,10 @@
 
             <!-- Description -->
             <div>
-                <label for="description" class="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                <label for="description" class="block text-sm font-medium mb-2 font-inter" style="color: #E6EDF3">Description</label>
                 <textarea id="description" name="description" rows="3"
-                    class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    class="block w-full px-4 py-3 rounded-lg transition-colors font-inter" 
+                    style="background-color: #0D1117; border: 1px solid #30363D; color: #E6EDF3;"
                     placeholder="Describe your assistant's purpose and capabilities">{{ assistant.description if assistant else '' }}</textarea>
             </div>
 
@@ -39,10 +41,10 @@
                 <div class="flex items-center space-x-3">
                     <input id="is_active" name="is_active" type="checkbox" 
                         {% if not assistant or assistant.is_active %}checked{% endif %}
-                        class="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800">
+                        class="w-5 h-5 rounded border-[#30363D] bg-[#0D1117] text-[#10B981] focus:ring-[#10B981] focus:ring-offset-[#0D1117]">
                     <div>
-                        <label for="is_active" class="text-sm font-medium text-white">Active Assistant</label>
-                        <p class="text-xs text-gray-400">When active, the assistant can receive and handle calls</p>
+                        <label for="is_active" class="text-sm font-medium font-inter" style="color: #E6EDF3">Active Assistant</label>
+                        <p class="text-xs font-inter" style="color: #7D8590">When active, the assistant can receive and handle calls</p>
                     </div>
                 </div>
             </div>

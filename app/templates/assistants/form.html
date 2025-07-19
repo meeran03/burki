@@ -5,23 +5,23 @@
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gray-900 p-6">
+<div class="min-h-screen p-6">
     <div class="max-w-7xl mx-auto space-y-8">
-        <!-- Header Section -->
-        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 p-8">
+        <!-- Header Section with Electric Slate Theme -->
+        <div class="relative overflow-hidden rounded-2xl p-8" style="background: linear-gradient(135deg, #10B981, #A3FFAE);">
             <div class="absolute inset-0 bg-black/20"></div>
             <div class="relative z-10">
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <h1 class="text-3xl font-bold text-white">
+                        <h1 class="font-satoshi text-3xl font-black text-white mb-2">
                             {% if assistant %}Edit Assistant: {{ assistant.name }}{% else %}Create New Assistant{% endif %}
                         </h1>
-                        <p class="mt-2 text-blue-100">
+                        <p class="text-white/80 text-base font-inter">
                             {% if assistant %}Update assistant details and AI configuration.{% else %}Configure your voice AI assistant with advanced settings.{% endif %}
                         </p>
                     </div>
                     <div class="mt-4 lg:mt-0">
-                        <a href="/assistants" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-colors">
+                        <a href="/assistants" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-white/20 hover:bg-white/30 rounded-lg border border-white/20 transition-colors">
                             <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
@@ -35,44 +35,44 @@
         </div>
 
         <!-- Progress Indicator -->
-        <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+        <div class="auth-card p-6 rounded-xl">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-white">Configuration Progress</h2>
+                <h2 class="font-satoshi text-lg font-semibold" style="color: #E6EDF3">Configuration Progress</h2>
                 <div class="flex items-center space-x-2">
-                    <div class="w-3 h-3 rounded-full bg-green-400"></div>
-                    <span class="text-green-400 text-sm">Ready to Configure</span>
+                    <div class="w-3 h-3 rounded-full bg-[#10B981] animate-pulse"></div>
+                    <span class="text-[#10B981] text-sm font-inter">Ready to Configure</span>
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
                         <span class="text-white text-sm font-bold">1</span>
                     </div>
-                    <span class="text-gray-300 text-sm">Basic Info</span>
+                    <span class="text-white/90 text-sm font-inter">Basic Info</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
-                        <span class="text-gray-400 text-sm font-bold">2</span>
+                    <div class="w-8 h-8 rounded-lg bg-[#30363D] flex items-center justify-center">
+                        <span class="text-white/60 text-sm font-bold">2</span>
                     </div>
-                    <span class="text-gray-400 text-sm">AI Models</span>
+                    <span class="text-white/60 text-sm font-inter">AI Models</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
-                        <span class="text-gray-400 text-sm font-bold">3</span>
+                    <div class="w-8 h-8 rounded-lg bg-[#30363D] flex items-center justify-center">
+                        <span class="text-white/60 text-sm font-bold">3</span>
                     </div>
-                    <span class="text-gray-400 text-sm">Call Settings</span>
+                    <span class="text-white/60 text-sm font-inter">Call Settings</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
-                        <span class="text-gray-400 text-sm font-bold">4</span>
+                    <div class="w-8 h-8 rounded-lg bg-[#30363D] flex items-center justify-center">
+                        <span class="text-white/60 text-sm font-bold">4</span>
                     </div>
-                    <span class="text-gray-400 text-sm">Integration</span>
+                    <span class="text-white/60 text-sm font-inter">Integration</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center">
-                        <span class="text-gray-400 text-sm font-bold">5</span>
+                    <div class="w-8 h-8 rounded-lg bg-[#30363D] flex items-center justify-center">
+                        <span class="text-white/60 text-sm font-bold">5</span>
                     </div>
-                    <span class="text-gray-400 text-sm">Advanced</span>
+                    <span class="text-white/60 text-sm font-inter">Advanced</span>
                 </div>
             </div>
         </div>
@@ -91,30 +91,7 @@
             {% include "assistants/call_management.html" %}
 
             <!-- Section 4.5: Tools Configuration -->
-            <div class="bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
-                <div class="px-6 py-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-b border-gray-700/50">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
-                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold text-white">Tools Configuration</h3>
-                                <p class="text-gray-400 text-sm">Enable assistant tools for enhanced call handling</p>
-                            </div>
-                        </div>
-                        <button type="button" onclick="toggleTools()" class="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition-colors">
-                            <span id="tools-toggle-text">Configure</span>
-                        </button>
-                    </div>
-                </div>
-                <div id="tools-configuration" class="hidden p-6">
-                    {% include "assistants/tools_section.html" %}
-                </div>
-            </div>
+            {% include "assistants/tools_section.html" %}
 
             <!-- Section 5: Integration Settings -->
             {% include "assistants/integration_settings.html" %}
@@ -122,14 +99,28 @@
             <!-- Section 6: Advanced Settings -->
             {% include "assistants/advanced_settings.html" %}
 
-            <!-- Form Actions -->
-            <div class="flex items-center justify-between">
-                <a href="/assistants" class="px-6 py-3 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg border border-gray-600 transition-colors">
-                    Cancel
-                </a>
-                <button type="submit" class="px-8 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all transform hover:scale-105 shadow-lg">
-                    {% if assistant %}Update Assistant{% else %}Create Assistant{% endif %}
-                </button>
+            <!-- Submit Buttons -->
+            <div class="auth-card p-6 rounded-xl">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <button type="button" onclick="window.history.back()" class="px-6 py-3 text-sm font-medium text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-colors font-inter">
+                            Cancel
+                        </button>
+                        <button type="button" onclick="saveDraft()" class="px-6 py-3 text-sm font-medium text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-colors font-inter">
+                            Save as Draft
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        {% if assistant %}
+                        <button type="button" onclick="testAssistant()" class="px-6 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-inter">
+                            Test Assistant
+                        </button>
+                        {% endif %}
+                        <button type="submit" class="px-6 py-3 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors font-inter">
+                            {% if assistant %}Update Assistant{% else %}Create Assistant{% endif %}
+                        </button>
+                    </div>
+                </div>
             </div>
         </form>
     </div>
@@ -711,7 +702,7 @@ const ASSISTANT_DATA = {
     baseUrl: "{{ assistant.llm_provider_config.base_url if assistant and assistant.llm_provider_config and assistant.llm_provider_config.get('base_url') else '' }}",
     ttsProvider: "{{ assistant.tts_settings.provider if assistant and assistant.tts_settings and assistant.tts_settings.get('provider') else 'elevenlabs' }}",
     ttsVoice: "{{ assistant.tts_settings.voice_id if assistant and assistant.tts_settings and assistant.tts_settings.voice_id else 'rachel' }}",
-    ttsModel: "{{ assistant.tts_settings.model_id if assistant and assistant.tts_settings and assistant.tts_settings.model_id else 'turbo' }}",
+    ttsModel: "{{ assistant.tts_settings.model_id if assistant and assistant.tts_settings and assistant.tts_settings.model_id else 'eleven_flash_v2_5' }}",
     ttsLanguage: "{{ assistant.tts_settings.provider_config.language if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config') and assistant.tts_settings.provider_config.get('language') else 'en' }}",
     fallbacks: {% if assistant and assistant.llm_fallback_providers and assistant.llm_fallback_providers.get('fallbacks') %}{{ assistant.llm_fallback_providers.fallbacks | tojson | safe }}{% else %}[]{% endif %}
 };
@@ -761,9 +752,13 @@ function updateTTSProviderOptions() {
     const ttsProviderConfigs = {
         elevenlabs: {
             models: [
-                { value: 'eleven_multilingual_v2', label: '🎭 Multilingual v2 (Best Quality)' },
-                { value: 'eleven_flash_v2_5', label: '⚡ Flash v2.5 (Ultra Fast - Recommended)' },
-                { value: 'eleven_turbo_v2_5', label: '🚀 Turbo v2.5 (Balanced)' }
+                { value: 'eleven_v3', label: '🌟 Eleven v3 (Most Expressive - 70+ Languages)' },
+                { value: 'eleven_ttv_v3', label: '🎨 TTV v3 (Voice Design - 70+ Languages)' },
+                { value: 'eleven_multilingual_v2', label: '🎭 Multilingual v2 (Rich Emotions)' },
+                { value: 'eleven_flash_v2_5', label: '⚡ Flash v2.5 (Ultra Fast ~75ms - Recommended)' },
+                { value: 'eleven_flash_v2', label: '🚀 Flash v2 (Ultra Fast English Only)' },
+                { value: 'eleven_turbo_v2_5', label: '⚖️ Turbo v2.5 (Balanced ~250ms)' },
+                { value: 'eleven_turbo_v2', label: '🔧 Turbo v2 (Legacy)' }
             ],
             voices: [
                 { value: 'rachel', label: '👩 Rachel (Professional Female)' },
@@ -775,11 +770,15 @@ function updateTTSProviderOptions() {
                 { value: 'custom', label: '🔧 Custom Voice ID' }
             ],
             modelHelp: [
-                '<div><strong>Multilingual v2:</strong> Highest quality, most natural emotions (slower)</div>',
-                '<div><strong>Flash v2.5:</strong> Ultra-fast (~75ms), great for real-time conversations</div>',
-                '<div><strong>Turbo v2.5:</strong> Good balance of speed and quality</div>'
+                '<div><strong>Eleven v3:</strong> Most expressive model with dramatic delivery and performance (70+ languages)</div>',
+                '<div><strong>TTV v3:</strong> Text-to-Voice model optimized for voice design (70+ languages)</div>',
+                '<div><strong>Multilingual v2:</strong> Lifelike model with rich emotional expression</div>',
+                '<div><strong>Flash v2.5:</strong> Ultra-fast (~75ms), 32 languages, 40K character limit</div>',
+                '<div><strong>Flash v2:</strong> Ultra-fast (~75ms), English only</div>',
+                '<div><strong>Turbo v2.5:</strong> High quality, low-latency (~250-300ms), 32 languages</div>',
+                '<div><strong>Turbo v2:</strong> Legacy high-quality model</div>'
             ],
-            recommendation: '<p class="text-xs text-blue-200"><strong>💡 For Phone Calls:</strong> Flash v2.5 is recommended for natural conversations. Multilingual v2 if you prioritize voice quality over speed.</p>',
+            recommendation: '<p class="text-xs text-blue-200"><strong>💡 For Phone Calls:</strong> Flash v2.5 is recommended for natural conversations with ultra-low latency. Use v3 models for maximum expressiveness and emotional range.</p>',
             customVoiceHelp: 'Enter your custom ElevenLabs voice ID from your dashboard'
         },
         deepgram: {

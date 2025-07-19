@@ -24,3 +24,9 @@ rnnoise
 
 # Other files
 .env
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+SEO_README.md

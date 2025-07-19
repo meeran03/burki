@@ -28,13 +28,18 @@ from app.api.schemas import (
     AssistantUpdate,
     AssistantResponse,
     APIResponse,
+    PhoneNumberAssignRequest,
+    PhoneNumberUnassignRequest,
+    SyncPhoneNumbersResponse,
+    OrganizationPhoneNumberResponse,
+    OrganizationAssistantInfo
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/assistants", tags=["assistants"])
 
 
-@router.post("/", response_model=AssistantResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AssistantResponse, status_code=status.HTTP_201_CREATED)
 async def create_assistant(
     assistant: AssistantCreate, current_user: User = Depends(get_current_user_flexible)
 ):
@@ -73,7 +78,7 @@ async def create_assistant(
     return new_assistant
 
 
-@router.get("/", response_model=List[AssistantResponse])
+@router.get("", response_model=List[AssistantResponse])
 async def get_assistants(
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(
@@ -811,8 +816,7 @@ async def get_document_status(
 @router.post("/{assistant_id}/phone-numbers/assign-by-number", response_model=APIResponse)
 async def assign_phone_number_by_string(
     assistant_id: int,
-    phone_number: str = Form(..., description="Phone number in E.164 format (e.g., +1234567890)"),
-    auto_sync: bool = Form(True, description="Automatically sync from Twilio if number not found locally"),
+    request: PhoneNumberAssignRequest,
     current_user: User = Depends(get_current_user_flexible)
 ):
     """
@@ -820,6 +824,10 @@ async def assign_phone_number_by_string(
     
     Auto-syncs from Twilio if the number doesn't exist locally and auto_sync is True.
     This is the recommended way to assign newly purchased Twilio numbers.
+    
+    Args:
+        assistant_id: ID of the assistant to assign the phone number to
+        request: JSON request containing phone_number, friendly_name (optional), and auto_sync
     """
     # Verify assistant exists and belongs to organization
     assistant = await AssistantService.get_assistant_by_id(
@@ -832,6 +840,11 @@ async def assign_phone_number_by_string(
         )
 
     try:
+        # Extract values from request
+        phone_number = request.phone_number
+        friendly_name = request.friendly_name
+        auto_sync = request.auto_sync
+        
         # Normalize phone number format (remove spaces, ensure + prefix)
         normalized_number = phone_number.strip()
         if not normalized_number.startswith('+'):
@@ -902,14 +915,23 @@ async def assign_phone_number_by_string(
             )
             other_name = other_assistant.name if other_assistant else f"Assistant ID {existing_phone.assistant_id}"
             
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Phone number {normalized_number} is already assigned to {other_name}"
+            return APIResponse(
+                success=False,
+                message=f"Phone number {normalized_number} is already assigned to {other_name}",
+                data={
+                    "phone_number": normalized_number,
+                    "phone_number_id": existing_phone.id,
+                    "assistant_id": assistant_id,
+                    "assistant_name": assistant.name,
+                    "friendly_name": friendly_name,
+                    "was_synced": not existing_phone or auto_sync
+                }
             )
+
 
         # Assign the phone number
         result = await PhoneNumberService.assign_phone_to_assistant(
-            existing_phone.id, assistant_id, current_user.organization_id
+            existing_phone.id, assistant_id, current_user.organization_id, friendly_name
         )
 
         if not result["success"]:
@@ -929,6 +951,7 @@ async def assign_phone_number_by_string(
                 "phone_number_id": existing_phone.id,
                 "assistant_id": assistant_id,
                 "assistant_name": assistant.name,
+                "friendly_name": friendly_name,
                 "was_synced": not existing_phone or auto_sync
             }
         )
@@ -945,7 +968,7 @@ async def assign_phone_number_by_string(
 @router.post("/{assistant_id}/phone-numbers/unassign-by-number", response_model=APIResponse)
 async def unassign_phone_number_by_string(
     assistant_id: int,
-    phone_number: str = Form(..., description="Phone number to unassign"),
+    request: PhoneNumberUnassignRequest,
     current_user: User = Depends(get_current_user_flexible)
 ):
     """
@@ -962,6 +985,9 @@ async def unassign_phone_number_by_string(
         )
 
     try:
+        # Extract phone number from request
+        phone_number = request.phone_number
+        
         # Normalize phone number format
         normalized_number = phone_number.strip()
         if not normalized_number.startswith('+'):
@@ -1037,7 +1063,7 @@ async def unassign_phone_number_by_string(
 
 # ========== Organization Phone Number Management ==========
 
-@router.post("/organization/phone-numbers/sync", response_model=APIResponse)
+@router.post("/organization/phone-numbers/sync", response_model=SyncPhoneNumbersResponse)
 async def sync_organization_phone_numbers(
     current_user: User = Depends(get_current_user_flexible)
 ):
@@ -1055,10 +1081,10 @@ async def sync_organization_phone_numbers(
         )
 
         if result["success"]:
-            return APIResponse(
+            return SyncPhoneNumbersResponse(
                 success=True,
                 message=f"Successfully synced {result.get('synced_count', 0)} phone numbers from Twilio",
-                data=result
+                synced_count=result.get('synced_count', 0)
             )
         else:
             raise HTTPException(
@@ -1075,7 +1101,7 @@ async def sync_organization_phone_numbers(
         )
 
 
-@router.get("/organization/phone-numbers", response_model=List[dict])
+@router.get("/organization/phone-numbers", response_model=List[OrganizationPhoneNumberResponse])
 async def list_organization_phone_numbers(
     include_assigned: bool = Query(True, description="Include phone numbers assigned to assistants"),
     include_unassigned: bool = Query(True, description="Include unassigned phone numbers"),
@@ -1107,23 +1133,23 @@ async def list_organization_phone_numbers(
                         pn.assistant_id, current_user.organization_id
                     )
                     if assistant:
-                        assistant_info = {
-                            "id": assistant.id,
-                            "name": assistant.name,
-                            "is_active": assistant.is_active
-                        }
+                        assistant_info = OrganizationAssistantInfo(
+                            id=assistant.id,
+                            name=assistant.name,
+                            is_active=assistant.is_active
+                        )
 
-                filtered_numbers.append({
-                    "id": pn.id,
-                    "phone_number": pn.phone_number,
-                    "friendly_name": pn.friendly_name,
-                    "twilio_sid": pn.twilio_sid,
-                    "is_active": pn.is_active,
-                    "capabilities": pn.capabilities,
-                    "assistant": assistant_info,
-                    "created_at": pn.created_at.isoformat(),
-                    "updated_at": pn.updated_at.isoformat() if pn.updated_at else None
-                })
+                filtered_numbers.append(OrganizationPhoneNumberResponse(
+                    id=pn.id,
+                    phone_number=pn.phone_number,
+                    friendly_name=pn.friendly_name,
+                    twilio_sid=pn.twilio_sid,
+                    is_active=pn.is_active,
+                    capabilities=pn.capabilities,
+                    assistant=assistant_info,
+                    created_at=pn.created_at,
+                    updated_at=pn.updated_at
+                ))
 
         return filtered_numbers
 
@@ -1134,7 +1160,7 @@ async def list_organization_phone_numbers(
         )
 
 
-@router.get("/organization/phone-numbers/available", response_model=List[dict])
+@router.get("/organization/phone-numbers/available", response_model=List[OrganizationPhoneNumberResponse])
 async def list_available_phone_numbers(
     current_user: User = Depends(get_current_user_flexible)
 ):
@@ -1149,16 +1175,17 @@ async def list_available_phone_numbers(
         )
 
         return [
-            {
-                "id": pn.id,
-                "phone_number": pn.phone_number,
-                "friendly_name": pn.friendly_name,
-                "twilio_sid": pn.twilio_sid,
-                "is_active": pn.is_active,
-                "capabilities": pn.capabilities,
-                "created_at": pn.created_at.isoformat(),
-                "updated_at": pn.updated_at.isoformat() if pn.updated_at else None
-            }
+            OrganizationPhoneNumberResponse(
+                id=pn.id,
+                phone_number=pn.phone_number,
+                friendly_name=pn.friendly_name,
+                twilio_sid=pn.twilio_sid,
+                is_active=pn.is_active,
+                capabilities=pn.capabilities,
+                assistant=None,
+                created_at=pn.created_at,
+                updated_at=pn.updated_at
+            )
             for pn in available_numbers
         ]
 

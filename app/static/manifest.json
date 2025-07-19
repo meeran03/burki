@@ -1,0 +1,156 @@
+{
+  "name": "Burki Voice AI - Open Source vapi.ai Alternative",
+  "short_name": "Burki",
+  "description": "The open-source voice AI platform that actually works. 5x faster than vapi.ai with 0.8-1.2s response times, transparent pricing, and a UI that works.",
+  "version": "1.0.0",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#10b981",
+  "background_color": "#111827",
+  "lang": "en-US",
+  "dir": "ltr",
+  
+  "icons": [
+    {
+      "src": "/static/logo/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/logo/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/logo/icon-512.png", 
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/logo/icon-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  
+  "categories": [
+    "developer",
+    "productivity",
+    "business",
+    "utilities"
+  ],
+  
+  "shortcuts": [
+    {
+      "name": "Create Assistant",
+      "short_name": "New Assistant",
+      "description": "Create a new voice AI assistant",
+      "url": "/assistants/create",
+      "icons": [
+        {
+          "src": "/static/logo/favicon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "View Calls",
+      "short_name": "Calls",
+      "description": "View call analytics and recordings",
+      "url": "/calls",
+      "icons": [
+        {
+          "src": "/static/logo/favicon.svg",
+          "sizes": "any", 
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "API Documentation",
+      "short_name": "API Docs",
+      "description": "View API documentation and guides",
+      "url": "/docs",
+      "icons": [
+        {
+          "src": "/static/logo/favicon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Live Demo",
+      "short_name": "Demo", 
+      "description": "Try Burki Voice AI live demo",
+      "url": "https://burki.dev",
+      "icons": [
+        {
+          "src": "/static/logo/favicon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  
+  "screenshots": [
+    {
+      "src": "/static/screenshots/dashboard-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Burki Voice AI Dashboard - Manage assistants and calls"
+    },
+    {
+      "src": "/static/screenshots/mobile-dashboard.png", 
+      "sizes": "360x640",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile dashboard view"
+    }
+  ],
+  
+  "related_applications": [
+    {
+      "platform": "web",
+      "url": "https://burki.dev",
+      "id": "burki-voice-ai"
+    },
+    {
+      "platform": "web",
+      "url": "https://docs.burki.dev",
+      "id": "burki-docs"
+    }
+  ],
+  
+  "prefer_related_applications": false,
+  
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  
+  "protocol_handlers": [
+    {
+      "protocol": "web+burki",
+      "url": "/assistant?id=%s"
+    }
+  ],
+  
+  "handle_links": "preferred",
+  
+  "id": "burki-voice-ai",
+  
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7"
+} 
