@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Burki - Account Created Successfully</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='logo/favicon.svg') }}">
+    
+    <!-- Electric Slate Design System -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/electric-slate.css') }}">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Fonts: Satoshi + Inter from Fontshare (as per design guide) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&f[]=inter@400,500,600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            font-family: "Inter", sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .success-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-lg);
+            position: relative;
+        }
+        
+        .success-content {
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+            z-index: 10;
+            text-align: center;
+        }
+        
+        .success-icon {
+            width: 5rem;
+            height: 5rem;
+            background: var(--accent-gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: var(--bg-color);
+            margin: 0 auto var(--spacing-xl);
+            animation: successBounce 1.5s ease-out;
+            position: relative;
+        }
+        
+        .success-icon::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border: 2px solid var(--accent-color);
+            border-radius: 50%;
+            opacity: 0;
+            animation: successRing 2s ease-out 0.5s infinite;
+        }
+        
+        @keyframes successBounce {
+            0% { 
+                transform: scale(0) rotate(-180deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.1) rotate(-90deg);
+            }
+            100% { 
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes successRing {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(1.3);
+                opacity: 0;
+            }
+        }
+        
+        .success-title {
+            font-family: "Satoshi", sans-serif;
+            font-weight: 900;
+            font-size: 2.5rem;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-md);
+            animation: fadeInUp 0.8s ease-out 0.3s both;
+        }
+        
+        .success-subtitle {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xl);
+            line-height: 1.6;
+            animation: fadeInUp 0.8s ease-out 0.6s both;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .welcome-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-xl);
+            margin: var(--spacing-xl) 0;
+            animation: fadeInUp 0.8s ease-out 0.9s both;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: var(--spacing-lg) 0;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            padding: var(--spacing-sm) 0;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .feature-item i {
+            color: var(--accent-color);
+            margin-right: var(--spacing-md);
+            width: 1rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-xl);
+            animation: fadeInUp 0.8s ease-out 1.2s both;
+        }
+        
+        .countdown {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: var(--spacing-md);
+        }
+        
+        @media (min-width: 640px) {
+            .action-buttons {
+                flex-direction: row;
+            }
+            
+            .success-title {
+                font-size: 3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Electric Slate Background -->
+    <div class="electric-bg"></div>
+
+    <div class="success-container">
+        <div class="success-content">
+            <!-- Success Icon -->
+            <div class="success-icon">
+                <i class="fas fa-check"></i>
+            </div>
+            
+            <!-- Success Message -->
+            <h1 class="success-title">Welcome to Burki!</h1>
+            <p class="success-subtitle">
+                Your account has been created successfully. You're now ready to build the future of Voice AI infrastructure.
+            </p>
+            
+            <!-- Welcome Card -->
+            <div class="welcome-card">
+                <h2 style="font-family: 'Satoshi', sans-serif; font-weight: 700; color: var(--text-primary); margin-bottom: var(--spacing-lg);">
+                    🚀 What's Next?
+                </h2>
+                
+                <ul class="feature-list">
+                    <li class="feature-item">
+                        <i class="fas fa-robot"></i>
+                        <span>Create your first AI voice assistant</span>
+                    </li>
+                    <li class="feature-item">
+                        <i class="fas fa-phone"></i>
+                        <span>Get your phone number and start receiving calls</span>
+                    </li>
+                    <li class="feature-item">
+                        <i class="fas fa-cog"></i>
+                        <span>Configure your organization settings</span>
+                    </li>
+                    <li class="feature-item">
+                        <i class="fas fa-key"></i>
+                        <span>Generate API keys for integration</span>
+                    </li>
+                    <li class="feature-item">
+                        <i class="fas fa-book"></i>
+                        <span>Explore our comprehensive documentation</span>
+                    </li>
+                </ul>
+                
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: var(--spacing-md); margin-top: var(--spacing-lg);">
+                    <div style="display: flex; align-items: center; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+                        <i class="fas fa-gift" style="color: var(--accent-color);"></i>
+                        <strong style="color: var(--accent-color);">Free Tier Includes:</strong>
+                    </div>
+                    <p style="margin: 0; font-size: 0.875rem; color: var(--text-secondary);">
+                        1,000 free API calls per month • 1 phone number • Unlimited assistants • Community support
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="/dashboard" class="btn btn-primary" style="flex: 1;">
+                    <i class="fas fa-tachometer-alt" style="margin-right: var(--spacing-sm);"></i>
+                    Go to Dashboard
+                </a>
+                <a href="/assistants/new" class="btn btn-secondary" style="flex: 1;">
+                    <i class="fas fa-plus" style="margin-right: var(--spacing-sm);"></i>
+                    Create Assistant
+                </a>
+            </div>
+            
+            <!-- Auto-redirect countdown -->
+            <div class="countdown">
+                <p id="countdownText">Redirecting to dashboard in <span id="countdown">10</span> seconds...</p>
+                <button type="button" class="link" onclick="cancelRedirect()" style="background: none; border: none; cursor: pointer;">
+                    Cancel auto-redirect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let redirectTimer = null;
+        let countdown = 10;
+
+        function startRedirectCountdown() {
+            const countdownElement = document.getElementById('countdown');
+            const countdownText = document.getElementById('countdownText');
+            
+            redirectTimer = setInterval(() => {
+                countdown--;
+                countdownElement.textContent = countdown;
+                
+                if (countdown <= 0) {
+                    clearInterval(redirectTimer);
+                    window.location.href = '/dashboard';
+                }
+            }, 1000);
+        }
+
+        function cancelRedirect() {
+            if (redirectTimer) {
+                clearInterval(redirectTimer);
+                redirectTimer = null;
+                
+                const countdownDiv = document.querySelector('.countdown');
+                countdownDiv.innerHTML = '<p style="color: var(--text-secondary);">Auto-redirect cancelled. Take your time exploring!</p>';
+            }
+        }
+
+        // Start countdown when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Delay start to let animations finish
+            setTimeout(startRedirectCountdown, 2000);
+            
+            // Track successful registration event
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'sign_up', {
+                    method: 'email'
+                });
+            }
+        });
+
+        // Prevent accidental navigation away
+        window.addEventListener('beforeunload', function(e) {
+            if (redirectTimer) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html> 

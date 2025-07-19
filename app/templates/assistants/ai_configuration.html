@@ -601,6 +601,45 @@
                         ElevenLabs Voice Controls
                     </h5>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Language Selection (only for multilingual models) -->
+                        <div id="elevenlabs-language-container" class="md:col-span-2 hidden">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+                                </svg>
+                                <label for="elevenlabs_language" class="block text-sm font-medium text-gray-300">Language</label>
+                                <div class="group relative">
+                                    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <div class="hidden group-hover:block absolute z-20 w-80 p-4 mt-1 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-xl -left-1/2">
+                                        <div class="font-semibold mb-2">Language Selection 🌍</div>
+                                        <div class="text-xs">
+                                            Select the language for multilingual models. Available for: Eleven v3, TTV v3, Multilingual v2, Flash v2.5, and Turbo v2.5.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <select name="elevenlabs_language" id="elevenlabs_language"
+                                class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                                <option value="en" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'en' %}selected{% endif %}>🇺🇸 English</option>
+                                <option value="es" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'es' %}selected{% endif %}>🇪🇸 Spanish</option>
+                                <option value="fr" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'fr' %}selected{% endif %}>🇫🇷 French</option>
+                                <option value="de" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'de' %}selected{% endif %}>🇩🇪 German</option>
+                                <option value="it" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'it' %}selected{% endif %}>🇮🇹 Italian</option>
+                                <option value="pt" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'pt' %}selected{% endif %}>🇵🇹 Portuguese</option>
+                                <option value="pl" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'pl' %}selected{% endif %}>🇵🇱 Polish</option>
+                                <option value="tr" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'tr' %}selected{% endif %}>🇹🇷 Turkish</option>
+                                <option value="ru" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'ru' %}selected{% endif %}>🇷🇺 Russian</option>
+                                <option value="nl" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'nl' %}selected{% endif %}>🇳🇱 Dutch</option>
+                                <option value="cs" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'cs' %}selected{% endif %}>🇨🇿 Czech</option>
+                                <option value="ar" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'ar' %}selected{% endif %}>🇸🇦 Arabic</option>
+                                <option value="zh" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'zh' %}selected{% endif %}>🇨🇳 Chinese</option>
+                                <option value="ja" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'ja' %}selected{% endif %}>🇯🇵 Japanese</option>
+                                <option value="hu" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'hu' %}selected{% endif %}>🇭🇺 Hungarian</option>
+                                <option value="ko" {% if assistant and assistant.tts_settings and assistant.tts_settings.get('provider_config', {}).get('language') == 'ko' %}selected{% endif %}>🇰🇷 Korean</option>
+                            </select>
+                        </div>
                         <div>
                             <div class="flex items-center space-x-2 mb-2">
                                 <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1085,3 +1124,91 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize TTS provider options
+    updateTTSProviderOptions();
+    
+    // Add model change listener to control language visibility
+    const ttsModelSelect = document.getElementById('tts_model_id');
+    if (ttsModelSelect) {
+        ttsModelSelect.addEventListener('change', function() {
+            const provider = document.getElementById('tts_provider').value;
+            if (provider === 'elevenlabs') {
+                updateElevenLabsLanguageVisibility();
+            }
+        });
+    }
+    
+    // Add provider change listener
+    const ttsProviderSelect = document.getElementById('tts_provider');
+    if (ttsProviderSelect) {
+        ttsProviderSelect.addEventListener('change', function() {
+            updateTTSProviderOptions();
+        });
+    }
+});
+
+function updateTTSProviderOptions() {
+    const provider = document.getElementById('tts_provider').value;
+    const modelSelect = document.getElementById('tts_model_id');
+    const voiceSelect = document.getElementById('tts_voice_id');
+    
+    if (!modelSelect || !voiceSelect) return;
+    
+    // Show/hide provider-specific settings
+    const elevenlabsSettings = document.getElementById('elevenlabs-settings');
+    const deepgramSettings = document.getElementById('deepgram-settings');
+    const inworldSettings = document.getElementById('inworld-settings');
+    const resembleSettings = document.getElementById('resemble-settings');
+
+    if (provider === 'elevenlabs') {
+        elevenlabsSettings.classList.remove('hidden');
+        deepgramSettings.classList.add('hidden');
+        inworldSettings.classList.add('hidden');
+        if (resembleSettings) resembleSettings.classList.add('hidden');
+        // Update language visibility based on model
+        setTimeout(() => updateElevenLabsLanguageVisibility(), 100);
+    } else if (provider === 'deepgram') {
+        elevenlabsSettings.classList.add('hidden');
+        deepgramSettings.classList.remove('hidden');
+        inworldSettings.classList.add('hidden');
+        if (resembleSettings) resembleSettings.classList.add('hidden');
+    } else if (provider === 'inworld') {
+        elevenlabsSettings.classList.add('hidden');
+        deepgramSettings.classList.add('hidden');
+        inworldSettings.classList.remove('hidden');
+        if (resembleSettings) resembleSettings.classList.add('hidden');
+    } else if (provider === 'resemble') {
+        elevenlabsSettings.classList.add('hidden');
+        deepgramSettings.classList.add('hidden');
+        inworldSettings.classList.add('hidden');
+        if (resembleSettings) resembleSettings.classList.remove('hidden');
+    }
+}
+
+function updateElevenLabsLanguageVisibility() {
+    const modelSelect = document.getElementById('tts_model_id');
+    const languageContainer = document.getElementById('elevenlabs-language-container');
+    
+    if (!modelSelect || !languageContainer) return;
+    
+    const selectedModel = modelSelect.value;
+    
+    // Models that support multiple languages
+    const multilingualModels = [
+        'eleven_v3',
+        'eleven_ttv_v3', 
+        'eleven_multilingual_v2',
+        'eleven_flash_v2_5',
+        'eleven_turbo_v2_5'
+    ];
+    
+    if (multilingualModels.includes(selectedModel)) {
+        languageContainer.classList.remove('hidden');
+    } else {
+        languageContainer.classList.add('hidden');
+    }
+}
+</script>

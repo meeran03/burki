@@ -1,0 +1,159 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: burki_postgres
+    environment:
+      POSTGRES_DB: burki
+      POSTGRES_USER: burki_user
+      POSTGRES_PASSWORD: burki_password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U burki_user -d burki"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - burki_network
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: burki_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - burki_network
+
+  # Burki Voice AI Application
+  burki:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: burki_app
+    ports:
+      - "8000:8000"
+    environment:
+      # Database Configuration
+      - DATABASE_URL=postgresql://burki_user:burki_password@postgres:5432/burki
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=burki_user
+      - DB_PASSWORD=burki_password
+      - DB_NAME=burki
+      
+      # Redis Configuration
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Application Configuration
+      - PORT=8000
+      - HOST=0.0.0.0
+      - DEBUG=false
+      - APP_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-this-in-production}
+      
+      # Twilio Configuration (Required)
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      
+      # Speech-to-Text Configuration
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      
+      # Language Model Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-500}
+      
+      # Optional LLM Providers
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      
+      # Text-to-Speech Configuration
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
+      
+      # Optional TTS Providers
+      - INWORLD_BEARER_TOKEN=${INWORLD_BEARER_TOKEN}
+      - RESEMBLE_API_KEY=${RESEMBLE_API_KEY}
+      - RESEMBLE_PROJECT_UUID=${RESEMBLE_PROJECT_UUID}
+      
+      # Storage Configuration (Optional)
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      
+      # Authentication Configuration (Optional)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      
+      # Audio Processing Configuration
+      - AUDIO_DENOISING_METHOD=${AUDIO_DENOISING_METHOD:-rnnoise}
+      - AUDIO_DENOISING_DEFAULT=${AUDIO_DENOISING_DEFAULT:-false}
+      
+      # Server Performance Settings
+      - WORKERS=${WORKERS:-2}
+      - WORKER_CONNECTIONS=${WORKER_CONNECTIONS:-1000}
+      - TIMEOUT=${TIMEOUT:-300}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - MAX_REQUESTS=${MAX_REQUESTS:-1000}
+      - MAX_REQUESTS_JITTER=${MAX_REQUESTS_JITTER:-100}
+      - KEEP_ALIVE=${KEEP_ALIVE:-2}
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    volumes:
+      - app_data:/app/data
+      - recordings:/app/recordings
+      - logs:/app/logs
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    restart: unless-stopped
+    networks:
+      - burki_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_data:
+    driver: local
+  recordings:
+    driver: local
+  logs:
+    driver: local
+
+networks:
+  burki_network:
+    driver: bridge 

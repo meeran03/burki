@@ -37,7 +37,11 @@ class Config:
         # Call control settings
         self.idle_timeout = int(os.getenv("IDLE_TIMEOUT", "30"))  # Time in seconds before considering the call idle
         self.max_idle_messages = int(os.getenv("MAX_IDLE_MESSAGES", "3"))  # Maximum number of idle messages to send before ending the call
-        self.end_call_message = os.getenv("END_CALL_MESSAGE", "Thank you for calling. Goodbye!")
+        self.end_call_message = os.getenv("END_CALL_MESSAGE", "Thank you for calling. Goodbye!")    
+
+        # Google Analytics
+        self.GOOGLE_ANALYTICS_ID = os.getenv("GOOGLE_ANALYTICS_ID")
+        self.GOOGLE_SITE_VERIFICATION = os.getenv("GOOGLE_SITE_VERIFICATION")
         
         # Validate required config
         self._validate()

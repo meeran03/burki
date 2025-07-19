@@ -1,163 +1,494 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In - Burki Voice AI</title>
     
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='logo/favicon.svg') }}">
+    
+    <!-- Electric Slate Design System -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/electric-slate.css') }}">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Inter Font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Fonts: Satoshi + Inter from Fontshare -->
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,900&f[]=inter@400,500,600&display=swap" rel="stylesheet">
     
     <!-- Google Sign-In -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        'inter': ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
-    
     <style>
         * {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
-        .floating {
-            animation: floating 3s ease-in-out infinite;
+        body {
+            font-family: "Inter", sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg-color);
         }
         
-        @keyframes floating {
+        .auth-layout {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        /* Left Hero Section - 60% */
+        .hero-section {
+            flex: 0 0 60%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 70%, rgba(76, 255, 133, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(76, 255, 133, 0.15) 0%, transparent 50%);
+            z-index: 1;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            max-width: 500px;
+            padding: 2rem;
+        }
+        
+        .hero-logo {
+            width: 250px;
+            height: 250px;
+            margin: 0 auto 0;
+        }
+        
+        .hero-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 20px 40px rgba(76, 255, 133, 0.3));
+        }
+        
+        @keyframes float {
             0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-6px); }
+            50% { transform: translateY(-10px); }
         }
         
-        .glow-hover {
-            transition: all 0.3s ease;
+        .hero-title {
+            font-family: "Satoshi", sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: white;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
         }
         
-        .glow-hover:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+            margin-bottom: 3rem;
+        }
+        
+        .hero-features {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            text-align: left;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1rem;
+        }
+        
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(76, 255, 133, 0.2);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #4CFF85;
+        }
+        
+        /* Right Form Section - 40% */
+        .form-section {
+            flex: 0 0 40%;
+            background: var(--surface-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            position: relative;
+        }
+        
+        .form-container {
+            width: 100%;
+            max-width: 350px;
+        }
+        
+        .form-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.375rem;
+        }
+        
+        .form-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .input-label {
+            display: block;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .input-field {
+            width: 100%;
+            padding: 0.75rem 0.875rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(76, 255, 133, 0.1);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 0.75rem 0.875rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: var(--accent-color);
+            color: var(--bg-color);
+        }
+        
+        .btn-primary:hover {
+            background: #A3FFAE;
+            transform: translateY(-1px);
+        }
+        
+        .btn-google {
+            background: white;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            margin-bottom: 1.25rem;
+        }
+        
+        .btn-google:hover {
+            background: #f9fafb;
+            transform: translateY(-1px);
+        }
+        
+        .divider {
+            position: relative;
+            text-align: center;
+            margin: 1.25rem 0;
+        }
+        
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--border-color);
+        }
+        
+        .divider-text {
+            background: var(--surface-color);
+            padding: 0 1rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 1rem;
+            height: 1rem;
+            accent-color: var(--accent-color);
+        }
+        
+        .checkbox-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .help-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        
+        .link {
+            color: var(--accent-color);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s ease;
+        }
+        
+        .link:hover {
+            color: #A3FFAE;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .alert {
+            padding: 0.875rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .separator {
+            border-top: 1px solid var(--border-color);
+            margin-top: 1.5rem;
+            padding-top: 1.25rem;
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .auth-layout {
+                flex-direction: column;
+            }
+            
+            .hero-section {
+                flex: 0 0 40%;
+                padding: 1rem;
+            }
+            
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            
+            .hero-logo {
+                width: 80px;
+                height: 80px;
+                font-size: 2rem;
+            }
+            
+            .hero-features {
+                display: none;
+            }
+            
+            .form-section {
+                flex: 0 0 60%;
+                padding: 1rem;
+            }
+            
+            .form-container {
+                max-width: 320px;
+            }
+            
+            body {
+                overflow: auto;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen font-inter overflow-hidden">
-    <!-- Background -->
-    <div class="fixed inset-0 bg-gradient-to-br from-gray-900 via-blue-900/20 to-purple-900/30">
-        <div class="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.1)_0%,transparent_50%)] animate-pulse"></div>
-        <div class="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(139,92,246,0.1)_0%,transparent_50%)] animate-pulse"></div>
-    </div>
-
-    <!-- Main Container -->
-    <div class="relative min-h-screen flex items-center justify-center p-4">
-        <div class="w-full max-w-md">
-            <!-- Auth Card -->
-            <div class="bg-gray-800/40 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-8 shadow-2xl">
-                <!-- Brand Header -->
-                <div class="text-center mb-8">
-                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center font-bold text-2xl text-white floating mx-auto mb-4">
-                        ب
-                    </div>
-                    <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
-                        Burki
-                    </h1>
-                    <p class="text-gray-400 text-sm">Sign in to your Voice AI platform</p>
+<body>
+    <div class="auth-layout">
+        <!-- Left Hero Section (60%) -->
+        <div class="hero-section">
+            <div class="hero-content">
+                <div class="hero-logo">
+                    <img src="{{ url_for('static', path='logo/dark.svg') }}" alt="Burki Logo">
                 </div>
-
-                {% if error %}
-                <div class="bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg p-3 mb-6 text-sm">
-                    <div class="flex items-center">
-                        <i class="fas fa-exclamation-circle mr-2"></i>
-                        <span>{{ error }}</span>
+                <p class="hero-subtitle">
+                    Transform your business with AI-powered voice technology. 
+                    Create intelligent voice assistants that understand and engage naturally.
+                </p>
+                
+                <div class="hero-features">
+                    <div class="feature-item">
+                        <div class="feature-icon">
+                            <i class="fas fa-microphone"></i>
+                        </div>
+                        <span>Advanced voice recognition & synthesis</span>
                     </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <span>AI-powered conversation management</span>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">
+                            <i class="fas fa-rocket"></i>
+                        </div>
+                        <span>Deploy in minutes, scale infinitely</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Form Section (40%) -->
+        <div class="form-section">
+            <div class="form-container">
+                <div class="form-header">
+                    <h2 class="form-title">Welcome back</h2>
+                    <p class="form-subtitle">Sign in to your account to continue</p>
+                </div>
+                
+                <!-- Error Alert -->
+                {% if error %}
+                <div class="alert alert-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>{{ error }}</span>
                 </div>
                 {% endif %}
-
+                
+                <!-- Organization Field - Required for all sign-in methods -->
+                <div class="form-group">
+                    <label for="organization" class="input-label">Organization</label>
+                    <input 
+                        type="text" 
+                        id="organization" 
+                        name="organization" 
+                        required
+                        class="input-field"
+                        placeholder="your-organization-slug"
+                        autocomplete="organization"
+                    >
+                    <p class="help-text">Your organization's unique identifier</p>
+                </div>
+                
                 <!-- Google Sign In -->
-                <button type="button" onclick="signInWithGoogle()" class="w-full flex items-center justify-center px-4 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all duration-200 glow-hover mb-6">
-                    <i class="fab fa-google mr-3"></i>
+                <button type="button" id="google-signin-btn" onclick="signInWithGoogle()" class="btn btn-google">
+                    <i class="fab fa-google"></i>
                     Continue with Google
                 </button>
-
-                <div class="relative mb-6">
-                    <div class="absolute inset-0 flex items-center">
-                        <div class="w-full border-t border-gray-700"></div>
-                    </div>
-                    <div class="relative flex justify-center text-sm">
-                        <span class="px-2 bg-gray-800/40 text-gray-400">or continue with email</span>
-                    </div>
+                
+                <!-- Divider -->
+                <div class="divider">
+                    <span class="divider-text">or continue with email</span>
                 </div>
-
-                <!-- Manual Login Form -->
-                <form method="post" action="/auth/login" class="space-y-4">
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-gray-300 mb-2">
-                            Email Address
-                        </label>
-                        <input type="email" id="email" name="email" required
-                               class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                               placeholder="Enter your email">
+                
+                <!-- Login Form -->
+                <form method="post" action="/auth/login">
+                    <!-- Hidden organization field for form submission -->
+                    <input type="hidden" id="organization-hidden" name="organization">
+                    
+                    <!-- Email Field -->
+                    <div class="form-group">
+                        <label for="email" class="input-label">Email</label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            required
+                            class="input-field"
+                            placeholder="Enter your email"
+                            autocomplete="email"
+                        >
                     </div>
 
-                    <div>
-                        <label for="password" class="block text-sm font-medium text-gray-300 mb-2">
-                            Password
-                        </label>
-                        <input type="password" id="password" name="password" required
-                               class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                               placeholder="Enter your password">
+                    <!-- Password Field -->
+                    <div class="form-group">
+                        <label for="password" class="input-label">Password</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            class="input-field"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                        >
                     </div>
 
-                    <div>
-                        <label for="organization" class="block text-sm font-medium text-gray-300 mb-2">
-                            Organization
-                        </label>
-                        <input type="text" id="organization" name="organization" required
-                               class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                               placeholder="your-organization-slug">
-                        <p class="mt-1 text-xs text-gray-500">Your organization's unique identifier</p>
+                    <!-- Remember Me -->
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="remember_me" name="remember_me">
+                        <label for="remember_me" class="checkbox-label">Remember me for 30 days</label>
                     </div>
 
-                    <div class="flex items-center">
-                        <input type="checkbox" id="remember_me" name="remember_me" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 rounded bg-gray-700">
-                        <label for="remember_me" class="ml-2 text-sm text-gray-300">
-                            Remember me for 30 days
-                        </label>
-                    </div>
-
-                    <button type="submit" class="w-full flex items-center justify-center px-4 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all duration-200 glow-hover">
-                        <i class="fas fa-sign-in-alt mr-2"></i>
+                    <!-- Sign In Button -->
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i>
                         Sign In
                     </button>
                 </form>
 
-                <div class="text-center mt-6">
-                    <a href="/auth/forgot-password" class="text-blue-400 hover:text-blue-300 text-sm transition-colors">
-                        <i class="fas fa-question-circle mr-1"></i>Forgot your password?
-                    </a>
-                </div>
+                                 <!-- Links -->
+                 <div class="text-center" style="margin-top: 1.25rem;">
+                     <a href="/auth/forgot-password" class="link">Forgot your password?</a>
+                 </div>
 
-                <div class="text-center mt-6 pt-6 border-t border-gray-700/50">
-                    <p class="text-gray-400 text-sm mb-3">Don't have an account?</p>
-                    <a href="/auth/register" class="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-400 hover:text-white border border-blue-400 hover:bg-blue-600 rounded-lg transition-colors">
-                        <i class="fas fa-user-plus mr-2"></i>
-                        Create Account
-                    </a>
+                 <!-- Sign Up Link -->
+                 <div class="separator text-center">
+                     <p style="color: var(--text-secondary); margin-bottom: 0.75rem; font-size: 0.875rem;">
+                         Don't have an account?
+                     </p>
+                    <a href="/auth/register" class="link" style="font-weight: 600;">Create Account →</a>
                 </div>
             </div>
         </div>
@@ -166,31 +497,51 @@
     <script>
         let googleSignInInitialized = false;
 
+        // Debug logging function
+        function debugLog(message) {
+            console.log('[Google Auth Debug]:', message);
+        }
+
         function initializeGoogleSignIn() {
             if (googleSignInInitialized) return;
             
-            window.google.accounts.id.initialize({
-                client_id: "{{ google_client_id }}",
-                callback: handleCredentialResponse,
-                auto_select: false,
-                cancel_on_tap_outside: false
-            });
+            debugLog('Initializing Google Sign-In...');
+            debugLog('Client ID: {{ google_client_id }}');
             
-            googleSignInInitialized = true;
+            try {
+                window.google.accounts.id.initialize({
+                    client_id: "{{ google_client_id }}",
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: false
+                });
+                
+                googleSignInInitialized = true;
+                debugLog('Google Sign-In initialized successfully');
+            } catch (error) {
+                debugLog('Error initializing Google Sign-In: ' + error.message);
+                alert('Failed to initialize Google Sign-In. Please check the console for details.');
+            }
         }
 
         function signInWithGoogle() {
+            debugLog('Sign in with Google clicked');
+            
             if (!window.google) {
-                console.error('Google Sign-In library not loaded');
+                debugLog('Google Sign-In library not loaded');
+                alert('Google Sign-In library not loaded. Please refresh the page and try again.');
                 return;
             }
             
             if (!googleSignInInitialized) {
+                debugLog('Google Sign-In not initialized, initializing now...');
                 initializeGoogleSignIn();
             }
             
             // Get organization slug from form
             const organization = document.getElementById('organization').value;
+            debugLog('Organization entered: ' + organization);
+            
             if (!organization) {
                 alert('Please enter your organization slug first');
                 document.getElementById('organization').focus();
@@ -198,19 +549,32 @@
             }
             
             // Store organization in sessionStorage for the callback
-            sessionStorage.setItem('auth_organization', organization);
+            sessionStorage.setItem('pending_organization', organization);
+            debugLog('Organization stored in session storage');
             
-            window.google.accounts.id.prompt();
+            try {
+                window.google.accounts.id.prompt();
+                debugLog('Google Sign-In prompt initiated');
+            } catch (error) {
+                debugLog('Error prompting Google Sign-In: ' + error.message);
+                alert('Failed to show Google Sign-In popup. Please try again.');
+            }
         }
 
         function handleCredentialResponse(response) {
-            const organization = sessionStorage.getItem('auth_organization');
+            debugLog('Google credential response received');
+            debugLog('Credential length: ' + response.credential.length);
+            
+            // Get the stored organization
+            const organization = sessionStorage.getItem('pending_organization');
+            debugLog('Retrieved organization from storage: ' + organization);
+            
             if (!organization) {
-                alert('Organization slug is required');
+                alert('Organization not found. Please refresh and try again.');
                 return;
             }
             
-            // Create a form and submit the credential
+            // Create a form to submit the credential with organization
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = '/auth/google';
@@ -220,30 +584,75 @@
             credentialInput.name = 'credential';
             credentialInput.value = response.credential;
             
-            const orgInput = document.createElement('input');
-            orgInput.type = 'hidden';
-            orgInput.name = 'organization';
-            orgInput.value = organization;
+            const organizationInput = document.createElement('input');
+            organizationInput.type = 'hidden';
+            organizationInput.name = 'organization';
+            organizationInput.value = organization;
             
             form.appendChild(credentialInput);
-            form.appendChild(orgInput);
+            form.appendChild(organizationInput);
             document.body.appendChild(form);
+            
+            debugLog('Submitting form to /auth/google');
             form.submit();
+            
+            // Clean up
+            sessionStorage.removeItem('pending_organization');
         }
 
-        // Initialize when the page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            if (window.google && window.google.accounts) {
+        // Initialize Google Sign-In when page loads
+        window.addEventListener('load', function() {
+            debugLog('Page loaded');
+            
+            if (window.google) {
+                debugLog('Google library detected');
                 initializeGoogleSignIn();
             } else {
-                // Wait for Google library to load
-                const checkGoogle = setInterval(() => {
-                    if (window.google && window.google.accounts) {
-                        clearInterval(checkGoogle);
+                debugLog('Google library not detected on page load');
+                
+                // Try again after a short delay
+                setTimeout(function() {
+                    if (window.google) {
+                        debugLog('Google library detected after delay');
                         initializeGoogleSignIn();
+                    } else {
+                        debugLog('Google library still not available after delay');
                     }
-                }, 100);
+                }, 1000);
             }
+        });
+
+        // Enhanced form validation and UX
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+
+            // Sync organization field between standalone and hidden form field
+            const orgInput = document.getElementById('organization');
+            const orgHiddenInput = document.getElementById('organization-hidden');
+            
+            orgInput.addEventListener('input', function(e) {
+                // Format organization slug
+                let value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/--+/g, '-');
+                if (value !== e.target.value) {
+                    e.target.value = value;
+                }
+                // Sync to hidden field
+                orgHiddenInput.value = value;
+            });
+
+            // Form submission with loading state
+            form.addEventListener('submit', function(e) {
+                // Ensure organization is synced before submission
+                orgHiddenInput.value = orgInput.value;
+                
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Signing in...';
+                submitBtn.disabled = true;
+            });
+
+            // Auto-focus organization field first
+            orgInput.focus();
         });
     </script>
 </body>

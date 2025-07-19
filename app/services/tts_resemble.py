@@ -350,9 +350,10 @@ class ResembleTTSService(BaseTTSService):
                 "binary_response": metadata.get(
                     "binary_response", self.binary_response
                 ),
-                "output_format": metadata.get("output_format", self.output_format),
+                # "output_format": metadata.get("output_format", self.output_format),
                 "sample_rate": metadata.get("sample_rate", self.sample_rate),
                 "precision": metadata.get("precision", self.precision),
+                "no_audio_header": True,
             }
 
             # Send the text to Resemble

@@ -1,0 +1,60 @@
+version: '3.8'
+
+# Development overrides for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  burki:
+    # Override environment variables for development
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - APP_ENV=development
+      - WORKERS=1  # Single worker for easier debugging
+    
+    # Mount source code for hot reload (if supported)
+    volumes:
+      - ./app:/app/app:ro  # Read-only mount of source code
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./migrations:/app/migrations:ro
+      - app_data:/app/data
+      - recordings:/app/recordings
+      - logs:/app/logs
+    
+    # Override command for development (optional)
+    # command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    
+    # Development-specific ports (if needed)
+    ports:
+      - "8000:8000"
+      - "8001:8001"  # Additional debug port if needed
+    
+    # Development health check (more lenient)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    # Development database settings
+    environment:
+      - POSTGRES_DB=burki_dev
+      - POSTGRES_USER=burki_user
+      - POSTGRES_PASSWORD=burki_password
+    
+    # Expose PostgreSQL port for direct access
+    ports:
+      - "5432:5432"
+    
+    # Development-specific PostgreSQL configuration
+    command: postgres -c log_statement=all -c log_destination=stderr
+
+  redis:
+    # Expose Redis port for direct access
+    ports:
+      - "6379:6379"
+    
+    # Development Redis configuration
+    command: redis-server --loglevel verbose 

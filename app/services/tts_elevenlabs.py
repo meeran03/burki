@@ -38,9 +38,13 @@ class ElevenLabsTTSService(BaseTTSService):
 
     # Available models
     _available_models = {
-        "turbo": ModelInfo(id="eleven_turbo_v2", name="turbo", description="Fastest model with good quality"),
-        "enhanced": ModelInfo(id="eleven_enhanced_v2", name="enhanced", description="Enhanced quality model"),
-        "multilingual": ModelInfo(id="eleven_multilingual_v2", name="multilingual", description="Multilingual support model"),
+        "eleven_v3": ModelInfo(id="eleven_v3", name="v3", description="Human-like and expressive speech generation (70+ languages)"),
+        "eleven_ttv_v3": ModelInfo(id="eleven_ttv_v3", name="ttv_v3", description="Human-like and expressive voice design model (70+ languages)"),
+        "eleven_multilingual_v2": ModelInfo(id="eleven_multilingual_v2", name="multilingual_v2", description="Our most lifelike model with rich emotional expression"),
+        "eleven_flash_v2_5": ModelInfo(id="eleven_flash_v2_5", name="flash_v2_5", description="Ultra-fast model optimized for real-time use (~75ms)"),
+        "eleven_flash_v2": ModelInfo(id="eleven_flash_v2", name="flash_v2", description="Ultra-fast model optimized for real-time use (~75ms, English only)"),
+        "eleven_turbo_v2_5": ModelInfo(id="eleven_turbo_v2_5", name="turbo_v2_5", description="High quality, low-latency model with good balance (~250ms-300ms)"),
+        "eleven_turbo_v2": ModelInfo(id="eleven_turbo_v2", name="turbo_v2", description="High quality, low-latency model (legacy)"),
     }
 
     def __init__(
@@ -54,6 +58,7 @@ class ElevenLabsTTSService(BaseTTSService):
         style: float = 0.0,
         use_speaker_boost: bool = True,
         latency: int = 1,
+        language: Optional[str] = None,
     ):
         """
         Initialize the ElevenLabs TTS service.
@@ -68,6 +73,7 @@ class ElevenLabsTTSService(BaseTTSService):
             style: Speaking style (0.0-1.0)
             use_speaker_boost: Enhance speech clarity and fidelity
             latency: 1-4, where 1 is lowest latency
+            language: The language to use for the TTS (default is English)
         """
         # Get API key from parameter or environment variable
         api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
@@ -96,7 +102,7 @@ class ElevenLabsTTSService(BaseTTSService):
         self.style = style
         self.use_speaker_boost = use_speaker_boost
         self.latency = latency
-
+        self.language = language
         logger.info(f"ElevenLabsTTSService initialized for call {call_sid}")
 
     @property
@@ -135,6 +141,7 @@ class ElevenLabsTTSService(BaseTTSService):
                 style=self.style,
                 use_speaker_boost=self.use_speaker_boost,
                 latency=self.latency,
+                language=self.language,
             )
 
             # Validate voice ID before using it
@@ -334,8 +341,8 @@ class ElevenLabsTTSService(BaseTTSService):
         if voice_id.lower() in self._available_voices:
             return True
         
-        # Check if it looks like a valid ElevenLabs voice ID (28 character alphanumeric)
-        if len(voice_id) == 28 and voice_id.isalnum():
+        # Check if it looks like a valid ElevenLabs voice ID (20 character alphanumeric)
+        if len(voice_id) == 20 and voice_id.isalnum():
             return True
         
         # Check if it's already a mapped voice ID
@@ -550,11 +557,12 @@ class ElevenLabsTTSService(BaseTTSService):
         Returns:
             str: The voice ID
         """
+        original_voice_name = voice_name
         voice_name = voice_name.lower()
         if voice_name in cls._available_voices:
             return cls._available_voices[voice_name].id
         else:
-            return voice_name
+            return original_voice_name
 
     @classmethod
     def get_model_id(cls, model_name: str) -> str:

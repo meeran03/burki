@@ -1,0 +1,25 @@
+User-agent: *
+Allow: /
+
+# Important pages for search engines
+Allow: /docs
+Allow: /static/
+Allow: /auth/register
+Allow: /auth/login
+
+# Block admin and API endpoints from indexing
+Disallow: /admin/
+Disallow: /api/
+Disallow: /auth/logout
+Disallow: /webhooks/
+
+# Allow all static assets
+Allow: /static/css/
+Allow: /static/logo/
+Allow: /static/js/
+
+# Sitemap location
+Sitemap: https://burki.dev/sitemap.xml
+
+# Crawl delay (optional - helps with server load)
+Crawl-delay: 1 

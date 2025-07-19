@@ -2,12 +2,14 @@
 from typing import Optional
 import time
 from datetime import timedelta
+import datetime
 import os
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.db.database import get_db
 from app.db.models import (
     Call,
@@ -16,6 +18,7 @@ from app.db.models import (
     User,
 )
 from app.services.auth_service import AuthService
+from app.utils.config import config
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])
@@ -42,6 +45,7 @@ def get_template_context(request: Request, **extra_context) -> dict:
     """Get template context with session data and any extra context."""
     context = {
         "request": request,
+        "config": config,
         "session": {
             "user_id": request.session.get("user_id"),
             "organization_id": request.session.get("organization_id"),
@@ -86,7 +90,15 @@ async def require_auth(request: Request, db: Session = Depends(get_db)) -> User:
 @router.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Landing page showcasing Burki Voice AI."""
-    return templates.TemplateResponse("landing.html", get_template_context(request))
+    return templates.TemplateResponse(
+        "landing.html", 
+        get_template_context(
+            request,
+            page_title="Burki - Open-Source Alternative to vapi.ai | 5x Faster Voice AI",
+            page_description="The vapi.ai alternative that actually works. 0.8-1.2s latency vs 4-5s, transparent pricing, and a UI that works. Build voice AI assistants without the frustrations.",
+            title="Burki - Open-Source Alternative to vapi.ai | 5x Faster Voice AI"
+        )
+    )
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -95,7 +107,7 @@ async def dashboard(
     current_user: User = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
-    """Dashboard page with advanced analytics."""
+    """Dashboard page with essential analytics."""
     # Get active assistants for this organization
     active_assistants = (
         db.query(Assistant)
@@ -115,6 +127,7 @@ async def dashboard(
     assistant_ids = [a.id for a in org_assistants]
 
     if assistant_ids:
+        # Basic call stats
         total_calls = (
             db.query(Call).filter(Call.assistant_id.in_(assistant_ids)).count()
         )
@@ -128,64 +141,16 @@ async def dashboard(
             .filter(Call.assistant_id.in_(assistant_ids), Call.status == "completed")
             .count()
         )
-        failed_calls = (
-            db.query(Call)
-            .filter(
-                Call.assistant_id.in_(assistant_ids),
-                Call.status.in_(["failed", "no-answer", "busy"]),
-            )
-            .count()
-        )
-    else:
-        total_calls = active_calls = completed_calls = failed_calls = 0
 
-    # Calculate success rate
-    success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
+        # Calculate success rate
+        success_rate = (completed_calls / total_calls * 100) if total_calls > 0 else 0
 
-    # Calculate average call duration for completed calls
-    if assistant_ids:
-        completed_calls_with_duration = (
-            db.query(Call)
-            .filter(
-                Call.assistant_id.in_(assistant_ids),
-                Call.status == "completed",
-                Call.duration.isnot(None),
-            )
-            .all()
-        )
-    else:
-        completed_calls_with_duration = []
+        # Calculate assistant availability
+        total_assistants = len(org_assistants)
+        active_assistants_count = len(active_assistants)
+        assistant_availability = (active_assistants_count / total_assistants * 100) if total_assistants > 0 else 0
 
-    avg_duration = 0
-    if completed_calls_with_duration:
-        total_duration = sum(call.duration for call in completed_calls_with_duration)
-        avg_duration = total_duration / len(completed_calls_with_duration)
-
-    # Get transcript quality metrics (average confidence)
-    if assistant_ids:
-        transcript_confidence = (
-            db.query(Transcript.confidence)
-            .filter(
-                Transcript.call_id.in_(
-                    db.query(Call.id).filter(Call.assistant_id.in_(assistant_ids))
-                ),
-                Transcript.confidence.isnot(None),
-            )
-            .all()
-        )
-    else:
-        transcript_confidence = []
-
-    avg_quality = 0
-    if transcript_confidence:
-        avg_quality = (
-            sum(conf[0] for conf in transcript_confidence)
-            / len(transcript_confidence)
-            * 100
-        )
-
-    # Get recent calls with enhanced data
-    if assistant_ids:
+        # Get recent calls for the table
         recent_calls = (
             db.query(Call)
             .filter(Call.assistant_id.in_(assistant_ids))
@@ -193,32 +158,41 @@ async def dashboard(
             .limit(10)
             .all()
         )
+
+        # Simple daily call volume for the chart (last 7 days)
+        now = datetime.datetime.utcnow()
+        week_ago = now - datetime.timedelta(days=7)
+        daily_calls = (
+            db.query(
+                func.date(Call.started_at).label('date'),
+                func.count().label('count')
+            )
+            .filter(
+                Call.assistant_id.in_(assistant_ids),
+                Call.started_at >= week_ago
+            )
+            .group_by(func.date(Call.started_at))
+            .order_by(func.date(Call.started_at))
+            .all()
+        )
+
+        # Format daily call data
+        daily_call_data = []
+        current = week_ago.date()
+        while current <= now.date():
+            count = next((c.count for c in daily_calls if c.date == current), 0)
+            daily_call_data.append({
+                "date": current.strftime("%a"),
+                "count": count
+            })
+            current += datetime.timedelta(days=1)
+
     else:
+        # Set default values when no assistants exist
+        total_calls = active_calls = completed_calls = 0
+        success_rate = assistant_availability = 0
+        daily_call_data = []
         recent_calls = []
-
-    # Calculate assistant performance metrics
-    assistant_metrics = []
-    for assistant in active_assistants:
-        assistant_calls = (
-            db.query(Call).filter(Call.assistant_id == assistant.id).count()
-        )
-        assistant_metrics.append(
-            {
-                "assistant": assistant,
-                "call_count": assistant_calls,
-                "success_rate": 95 + (assistant.id % 10),  # Simulated for demo
-            }
-        )
-
-    # Sort assistants by performance
-    assistant_metrics.sort(key=lambda x: x["call_count"], reverse=True)
-
-    # Calculate hourly call distribution for chart
-    hourly_data = {}
-    for call in recent_calls:
-        if call.started_at:
-            hour = call.started_at.hour
-            hourly_data[hour] = hourly_data.get(hour, 0) + 1
 
     # Calculate uptime
     uptime_seconds = time.time() - start_time
@@ -234,13 +208,10 @@ async def dashboard(
             total_calls=total_calls,
             active_calls=active_calls,
             completed_calls=completed_calls,
-            failed_calls=failed_calls,
             success_rate=round(success_rate, 1),
-            avg_duration=round(avg_duration),
-            avg_quality=round(avg_quality, 1),
+            assistant_availability=round(assistant_availability, 1),
             recent_calls=recent_calls,
-            assistant_metrics=assistant_metrics,
-            hourly_data=hourly_data,
+            daily_call_data=daily_call_data,
             uptime=uptime,
         ),
     )

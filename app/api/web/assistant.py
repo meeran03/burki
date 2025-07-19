@@ -32,6 +32,7 @@ from app.services.auth_service import AuthService
 from app.twilio.twilio_service import TwilioService
 from app.core.assistant_manager import assistant_manager
 from app.utils.url_utils import get_twiml_webhook_url
+from app.utils.config import config
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])
@@ -70,6 +71,7 @@ def get_template_context(request: Request, **extra_context) -> dict:
             "organization_name": request.session.get("organization_name", ""),
             "organization_slug": request.session.get("organization_slug", ""),
             "api_key_count": request.session.get("api_key_count", 0),
+            "config": config,
         },
     }
     context.update(extra_context)
@@ -440,6 +442,7 @@ async def create_assistant(
     # Inworld TTS Settings
     tts_language: Optional[str] = Form("en"),
     custom_voice_id: Optional[str] = Form(None),
+    elevenlabs_language: Optional[str] = Form("en"),
 ):
     """Create a new assistant."""
 
@@ -482,7 +485,9 @@ async def create_assistant(
         }
     elif tts_provider == "elevenlabs":
         # ElevenLabs doesn't need additional config for now, but can be extended
-        tts_settings["provider_config"] = {}
+        tts_settings["provider_config"] = {
+            "language": elevenlabs_language or "en",
+        }
 
     # Create assistant data with JSON settings
     assistant_data = {
@@ -997,6 +1002,7 @@ async def update_assistant(
     # Inworld TTS Settings
     tts_language: Optional[str] = Form("en"),
     custom_voice_id: Optional[str] = Form(None),
+    elevenlabs_language: Optional[str] = Form("en"),
 ):
     """Update an assistant."""
     assistant = await AssistantService.get_assistant_by_id(assistant_id, current_user.organization_id)
@@ -1044,7 +1050,9 @@ async def update_assistant(
         }
     elif tts_provider == "elevenlabs":
         # ElevenLabs doesn't need additional config for now, but can be extended
-        tts_settings["provider_config"] = {}
+        tts_settings["provider_config"] = {
+            "language": elevenlabs_language or "en",
+        }
 
     # Create update data with JSON settings
     update_data = {

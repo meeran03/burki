@@ -24,6 +24,7 @@ from app.db.models import (
     User,
 )
 from app.services.auth_service import AuthService, APIKeyService
+from app.utils.config import config
 
 # Create router without a prefix - web routes will be at the root level
 router = APIRouter(tags=["web"])
