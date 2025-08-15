@@ -29,9 +29,8 @@ from app.db.models import (
 )
 from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
-from app.twilio.twilio_service import TwilioService
+from app.core.telephony_provider import TwilioTelephonyService
 from app.core.assistant_manager import assistant_manager
-from app.utils.url_utils import get_twiml_webhook_url
 from app.utils.config import config
 
 # Create router without a prefix - web routes will be at the root level
@@ -361,8 +360,7 @@ async def create_assistant(
     elevenlabs_api_key: Optional[str] = Form(None),
     inworld_bearer_token: Optional[str] = Form(None),
     resemble_api_key: Optional[str] = Form(None),
-    twilio_account_sid: Optional[str] = Form(None),
-    twilio_auth_token: Optional[str] = Form(None),
+    # Telephony provider configuration removed - now handled at organization level
     # LLM Settings
     llm_temperature: Optional[float] = Form(None),
     llm_max_tokens: Optional[int] = Form(None),
@@ -509,8 +507,7 @@ async def create_assistant(
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
         "inworld_bearer_token": empty_to_none(inworld_bearer_token),
         "resemble_api_key": empty_to_none(resemble_api_key),
-        "twilio_account_sid": empty_to_none(twilio_account_sid),
-        "twilio_auth_token": empty_to_none(twilio_auth_token),
+        # Telephony provider configuration removed - now handled at organization level
         # JSON Settings
         "llm_settings": (
             {
@@ -624,7 +621,16 @@ async def create_assistant(
             schema_data = json.loads(structured_data_schema)
             custom_settings["structured_data_schema"] = schema_data
         except json.JSONDecodeError:
-            phone_numbers = TwilioService.get_available_phone_numbers()
+            # Use organization-level Twilio service
+            try:
+                organization = current_user.organization
+                twilio_service = TwilioTelephonyService(
+                    account_sid=organization.twilio_account_sid,
+                    auth_token=organization.twilio_auth_token
+                )
+                phone_numbers = twilio_service.get_available_phone_numbers()
+            except Exception:
+                phone_numbers = []
             default_schema = json.dumps(
                 {
                     "type": "object",
@@ -678,7 +684,12 @@ async def create_assistant(
                         keywords_list.append({"keyword": keyword, "intensifier": 1.0})
                 assistant_data["stt_settings"]["keywords"] = keywords_list
             except (ValueError, AttributeError) as e:
-                phone_numbers = TwilioService.get_available_phone_numbers()
+                # For backward compatibility, use default Twilio service
+                try:
+                    twilio_service = TwilioTelephonyService()
+                    phone_numbers = twilio_service.get_available_phone_numbers()
+                except Exception:
+                    phone_numbers = []
                 return templates.TemplateResponse(
                     "assistants/form.html",
                     {
@@ -700,7 +711,12 @@ async def create_assistant(
                 ]
                 assistant_data["stt_settings"]["keyterms"] = keyterms_list
             except AttributeError as e:
-                phone_numbers = TwilioService.get_available_phone_numbers()
+                # For backward compatibility, use default Twilio service
+                try:
+                    twilio_service = TwilioTelephonyService()
+                    phone_numbers = twilio_service.get_available_phone_numbers()
+                except Exception:
+                    phone_numbers = []
                 return templates.TemplateResponse(
                     "assistants/form.html",
                     {
@@ -776,7 +792,16 @@ async def create_assistant(
         await assistant_manager.load_assistants()
         return RedirectResponse(url=f"/assistants/{new_assistant.id}", status_code=302)
     except Exception as e:
-        phone_numbers = TwilioService.get_available_phone_numbers()
+        # Use organization-level Twilio service
+        try:
+            organization = current_user.organization
+            twilio_service = TwilioTelephonyService(
+                account_sid=organization.twilio_account_sid,
+                auth_token=organization.twilio_auth_token
+            )
+            phone_numbers = twilio_service.get_available_phone_numbers()
+        except Exception:
+            phone_numbers = []
         default_schema = json.dumps(
             {
                 "type": "object",
@@ -921,8 +946,7 @@ async def update_assistant(
     elevenlabs_api_key: Optional[str] = Form(None),
     inworld_bearer_token: Optional[str] = Form(None),
     resemble_api_key: Optional[str] = Form(None),
-    twilio_account_sid: Optional[str] = Form(None),
-    twilio_auth_token: Optional[str] = Form(None),
+    # Telephony provider configuration removed - now handled at organization level
     # LLM Settings
     llm_temperature: Optional[float] = Form(None),
     llm_max_tokens: Optional[int] = Form(None),
@@ -1073,8 +1097,7 @@ async def update_assistant(
         "elevenlabs_api_key": empty_to_none(elevenlabs_api_key),
         "resemble_api_key": empty_to_none(resemble_api_key),
         "inworld_bearer_token": empty_to_none(inworld_bearer_token),
-        "twilio_account_sid": empty_to_none(twilio_account_sid),
-        "twilio_auth_token": empty_to_none(twilio_auth_token),
+        # Telephony provider configuration removed - now handled at organization level
         # JSON Settings
         "llm_settings": (
             {
@@ -1546,19 +1569,29 @@ async def bulk_action_assistants(
 async def fetch_phone_numbers(
     request: Request,
     current_user: User = Depends(require_auth),
-    twilio_account_sid: str = Form(...),
-    twilio_auth_token: str = Form(...),
 ):
     """
-    Fetch available phone numbers from user's Twilio account.
-    This endpoint allows users to test their Twilio credentials and see available numbers.
+    Fetch available phone numbers from organization's Twilio account.
+    Uses organization-level Twilio credentials.
     """
     try:
-        # Validate credentials and fetch phone numbers
-        phone_numbers = TwilioService.get_available_phone_numbers(
-            account_sid=twilio_account_sid,
-            auth_token=twilio_auth_token
+        # Get organization's Twilio credentials
+        organization = current_user.organization
+        if not organization.twilio_account_sid or not organization.twilio_auth_token:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "Organization Twilio credentials not configured. Please configure them in organization settings."
+                }
+            )
+        
+        # Validate credentials and fetch phone numbers using Twilio service
+        twilio_service = TwilioTelephonyService(
+            account_sid=organization.twilio_account_sid,
+            auth_token=organization.twilio_auth_token
         )
+        phone_numbers = twilio_service.get_available_phone_numbers()
         
         if not phone_numbers:
             return JSONResponse(

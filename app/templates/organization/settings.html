@@ -64,14 +64,14 @@
         </div>
     </div>
 
-    <!-- Twilio Integration Settings -->
+    <!-- Telephony Integration Settings -->
     <div class="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
         <div class="flex items-start justify-between mb-6">
             <div>
-                <h2 class="text-xl font-semibold text-white mb-2">Twilio Integration</h2>
+                <h2 class="text-xl font-semibold text-white mb-2">Telephony Integration</h2>
                 <p class="text-gray-400 text-sm">
-                    Configure your organization's Twilio credentials to manage phone numbers and calls.
-                    Your credentials are encrypted and securely stored.
+                    Configure your organization's telephony provider credentials (Twilio or Telnyx) to manage phone numbers and calls.
+                    Your credentials are encrypted and securely stored. You can configure both providers simultaneously.
                 </p>
             </div>
             <div class="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center">
@@ -79,7 +79,25 @@
             </div>
         </div>
 
-        <form method="POST" action="/organization/settings/twilio" class="space-y-6">
+        <!-- Provider Tabs -->
+        <div class="mb-6">
+            <div class="flex border-b border-gray-700">
+                <button onclick="switchTab('twilio')" id="twilio-tab" 
+                    class="px-4 py-2 text-sm font-medium border-b-2 transition-colors tab-button active">
+                    <i class="fas fa-phone mr-2"></i>
+                    Twilio
+                </button>
+                <button onclick="switchTab('telnyx')" id="telnyx-tab"
+                    class="px-4 py-2 text-sm font-medium border-b-2 transition-colors tab-button">
+                    <i class="fas fa-satellite mr-2"></i>
+                    Telnyx
+                </button>
+            </div>
+        </div>
+
+        <!-- Twilio Tab Content -->
+        <div id="twilio-content" class="tab-content">
+            <form method="POST" action="/organization/settings/twilio" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label for="twilio_account_sid" class="block text-sm font-medium text-gray-300 mb-2">
@@ -167,7 +185,102 @@
                     </button>
                 </div>
             </div>
-        </form>
+            </form>
+        </div>
+
+        <!-- Telnyx Tab Content -->
+        <div id="telnyx-content" class="tab-content hidden">
+            <form method="POST" action="/organization/settings/telnyx" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="telnyx_api_key" class="block text-sm font-medium text-gray-300 mb-2">
+                        Telnyx API Key
+                        <span class="text-red-400">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="password" name="telnyx_api_key" id="telnyx_api_key" required
+                            value="{{ organization.telnyx_api_key if organization.telnyx_api_key else '' }}"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors pr-12"
+                            placeholder="KEY...">
+                        <button type="button" onclick="togglePassword('telnyx_api_key')" 
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                            <i class="fas fa-eye" id="telnyx_api_key_icon"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Your Telnyx API Key (starts with KEY...)
+                    </p>
+                </div>
+
+                <div>
+                    <label for="telnyx_connection_id" class="block text-sm font-medium text-gray-300 mb-2">
+                        Telnyx Connection ID
+                        <span class="text-red-400">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="password" name="telnyx_connection_id" id="telnyx_connection_id" required
+                            value="{{ organization.telnyx_connection_id if organization.telnyx_connection_id else '' }}"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors pr-12"
+                            placeholder="Your connection ID">
+                        <button type="button" onclick="togglePassword('telnyx_connection_id')" 
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                            <i class="fas fa-eye" id="telnyx_connection_id_icon"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Your Telnyx Connection ID (found in your Telnyx Portal)
+                    </p>
+                </div>
+            </div>
+
+            <div class="bg-purple-600/10 border border-purple-600/20 rounded-lg p-4">
+                <div class="flex items-start space-x-3">
+                    <i class="fas fa-info-circle text-purple-400 mt-0.5"></i>
+                    <div class="text-sm">
+                        <p class="text-purple-300 font-medium mb-1">How to get your Telnyx credentials:</p>
+                        <ol class="text-purple-200 space-y-1 list-decimal list-inside">
+                            <li>Log in to your <a href="https://portal.telnyx.com/" target="_blank" class="text-purple-400 hover:text-purple-300 underline">Telnyx Portal</a></li>
+                            <li>Navigate to API Keys section and create a new API key</li>
+                            <li>Go to Call Control Applications and note your Connection ID</li>
+                            <li>Copy and paste them into the fields above</li>
+                            <li>Click "Save Telnyx Settings" to test and save your credentials</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-gray-700">
+                <div class="flex items-center space-x-2">
+                    {% if organization.telnyx_api_key and organization.telnyx_connection_id %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-600/20 text-green-400">
+                        <i class="fas fa-check-circle mr-1"></i>
+                        Configured
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-600/20 text-red-400">
+                        <i class="fas fa-exclamation-circle mr-1"></i>
+                        Not Configured
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    {% if organization.telnyx_api_key and organization.telnyx_connection_id %}
+                    <a href="/organization/phone-numbers" 
+                       class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        <i class="fas fa-phone mr-2"></i>
+                        Manage Phone Numbers
+                    </a>
+                    {% endif %}
+                    <button type="submit" 
+                        class="inline-flex items-center px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                        <i class="fas fa-save mr-2"></i>
+                        Save Telnyx Settings
+                    </button>
+                </div>
+            </div>
+            </form>
+        </div>
     </div>
 
     <!-- Quick Actions -->
@@ -213,6 +326,30 @@
     </div>
 </div>
 
+<style>
+.tab-button {
+    color: #9CA3AF;
+    border-bottom-color: transparent;
+}
+
+.tab-button.active {
+    color: #FFFFFF;
+    border-bottom-color: #3B82F6;
+}
+
+.tab-button:hover {
+    color: #FFFFFF;
+}
+
+.tab-content {
+    display: block;
+}
+
+.tab-content.hidden {
+    display: none;
+}
+</style>
+
 <script>
 function togglePassword(fieldId) {
     const field = document.getElementById(fieldId);
@@ -228,5 +365,36 @@ function togglePassword(fieldId) {
         icon.classList.add('fa-eye');
     }
 }
+
+function switchTab(provider) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Remove active class from all tabs
+    document.querySelectorAll('.tab-button').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    document.getElementById(provider + '-content').classList.remove('hidden');
+    
+    // Add active class to selected tab
+    document.getElementById(provider + '-tab').classList.add('active');
+    
+    // Update border color based on provider
+    const activeTab = document.getElementById(provider + '-tab');
+    if (provider === 'telnyx') {
+        activeTab.style.borderBottomColor = '#9333EA'; // purple-600
+    } else {
+        activeTab.style.borderBottomColor = '#3B82F6'; // blue-600
+    }
+}
+
+// Initialize with Twilio tab active
+document.addEventListener('DOMContentLoaded', function() {
+    switchTab('twilio');
+});
 </script>
 {% endblock %} 

@@ -84,6 +84,10 @@ async def phone_numbers_page(
                     current_user.organization.twilio_account_sid and 
                     current_user.organization.twilio_auth_token
                 ),
+                has_telnyx_creds=bool(
+                    current_user.organization.telnyx_api_key and 
+                    current_user.organization.telnyx_connection_id
+                ),
             ),
         )
     except Exception as e:
@@ -95,11 +99,33 @@ async def phone_numbers_page(
 async def sync_phone_numbers(
     request: Request,
     current_user: User = Depends(require_auth),
+    provider: str = "twilio"
 ):
-    """Sync phone numbers from Twilio account."""
+    """Sync phone numbers from specified provider (twilio or telnyx)."""
     try:
-        result = await PhoneNumberService.sync_twilio_phone_numbers(
-            current_user.organization_id
+        # Validate provider
+        if provider not in ["twilio", "telnyx"]:
+            return JSONResponse(
+                content={"success": False, "error": "Invalid provider. Must be 'twilio' or 'telnyx'"},
+                status_code=400
+            )
+        
+        # Check if organization has credentials for the selected provider
+        if provider == "twilio":
+            if not (current_user.organization.twilio_account_sid and current_user.organization.twilio_auth_token):
+                return JSONResponse(
+                    content={"success": False, "error": "Twilio credentials not configured"},
+                    status_code=400
+                )
+        elif provider == "telnyx":
+            if not (current_user.organization.telnyx_api_key and current_user.organization.telnyx_connection_id):
+                return JSONResponse(
+                    content={"success": False, "error": "Telnyx credentials not configured"},
+                    status_code=400
+                )
+        
+        result = await PhoneNumberService.sync_organization_phone_numbers(
+            current_user.organization_id, provider=provider
         )
         
         if result["success"]:
@@ -285,10 +311,13 @@ async def update_twilio_settings(
 ):
     """Update organization's Twilio credentials."""
     try:
-        result = await PhoneNumberService.update_organization_twilio_credentials(
+        result = await PhoneNumberService.update_organization_telephony_credentials(
             organization_id=current_user.organization_id,
-            account_sid=twilio_account_sid.strip(),
-            auth_token=twilio_auth_token.strip()
+            provider="twilio",
+            credentials={
+                "account_sid": twilio_account_sid.strip(),
+                "auth_token": twilio_auth_token.strip()
+            }
         )
         
         if result["success"]:
@@ -306,5 +335,42 @@ async def update_twilio_settings(
         logger.error(f"Error updating Twilio credentials: {e}")
         return RedirectResponse(
             url="/organization/settings?error=Failed to update Twilio credentials",
+            status_code=303
+        )
+
+
+@router.post("/organization/settings/telnyx")
+async def update_telnyx_settings(
+    request: Request,
+    current_user: User = Depends(require_auth),
+    telnyx_api_key: str = Form(...),
+    telnyx_connection_id: str = Form(...),
+):
+    """Update organization's Telnyx credentials."""
+    try:
+        result = await PhoneNumberService.update_organization_telephony_credentials(
+            organization_id=current_user.organization_id,
+            provider="telnyx",
+            credentials={
+                "api_key": telnyx_api_key.strip(),
+                "connection_id": telnyx_connection_id.strip()
+            }
+        )
+        
+        if result["success"]:
+            return RedirectResponse(
+                url="/organization/settings?success=Telnyx credentials updated successfully",
+                status_code=303
+            )
+        else:
+            return RedirectResponse(
+                url=f"/organization/settings?error={result['error']}",
+                status_code=303
+            )
+            
+    except Exception as e:
+        logger.error(f"Error updating Telnyx credentials: {e}")
+        return RedirectResponse(
+            url="/organization/settings?error=Failed to update Telnyx credentials",
             status_code=303
         ) 

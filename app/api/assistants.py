@@ -57,15 +57,8 @@ async def create_assistant(
     # This allows for multiple phone numbers per assistant and better management
 
     assistant_data = assistant.dict(exclude_unset=True)
-    if assistant_data["phone_number"]:
-        assistant = await AssistantService.get_assistant_by_phone_number(
-            phone_number=assistant_data["phone_number"], organization_id=organization_id
-        )
-        if assistant:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Assistant with phone number {assistant_data['phone_number']} already exists",
-            )
+    # Note: Phone numbers are now managed separately through the PhoneNumber table
+    # Phone number validation and assignment is handled through the phone number endpoints
 
     # Create the assistant
     new_assistant = await AssistantService.create_assistant(
@@ -874,7 +867,7 @@ async def assign_phone_number_by_string(
         # If not found locally and auto_sync is enabled, sync from Twilio
         if not existing_phone and auto_sync:
             # Sync all phone numbers from Twilio
-            sync_result = await PhoneNumberService.sync_twilio_phone_numbers(
+            sync_result = await PhoneNumberService.sync_organization_phone_numbers(
                 current_user.organization_id
             )
             
@@ -1076,7 +1069,7 @@ async def sync_organization_phone_numbers(
     try:
         from app.services.phone_number_service import PhoneNumberService
         
-        result = await PhoneNumberService.sync_twilio_phone_numbers(
+        result = await PhoneNumberService.sync_organization_phone_numbers(
             current_user.organization_id
         )
 
