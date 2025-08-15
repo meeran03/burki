@@ -6,14 +6,42 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.db.models import PhoneNumber, Organization, Assistant
-from app.twilio.twilio_service import TwilioService
+from app.core.telephony_provider import UnifiedTelephonyService
 from app.db.database import get_async_db_session
 
 logger = logging.getLogger(__name__)
 
 
 class PhoneNumberService:
-    """Service for managing phone numbers and Twilio integration."""
+    """Service for managing phone numbers and telephony provider integration."""
+
+    @staticmethod
+    async def get_phone_number_by_number(phone_number_str: str) -> Optional[PhoneNumber]:
+        """
+        Get a PhoneNumber model instance by its phone number string.
+        
+        Args:
+            phone_number_str: The phone number string (e.g., "+1234567890")
+            
+        Returns:
+            PhoneNumber model instance if found, None otherwise
+        """
+        try:
+            async with await get_async_db_session() as db:
+                query = (
+                    select(PhoneNumber)
+                    .options(selectinload(PhoneNumber.organization))
+                    .where(
+                        PhoneNumber.phone_number == phone_number_str,
+                        PhoneNumber.is_active == True,
+                    )
+                )
+                
+                result = await db.execute(query)
+                return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error looking up phone number {phone_number_str}: {e}")
+            return None
 
     @staticmethod
     async def get_organization_phone_numbers(organization_id: int) -> List[PhoneNumber]:
@@ -34,10 +62,14 @@ class PhoneNumberService:
             return list(result.scalars().all())
 
     @staticmethod
-    async def sync_twilio_phone_numbers(organization_id: int) -> Dict[str, Any]:
+    async def sync_organization_phone_numbers(organization_id: int, provider: str = "twilio") -> Dict[str, Any]:
         """
-        Sync phone numbers from Twilio account to our database.
-        This will fetch available phone numbers from the organization's Twilio account.
+        Sync phone numbers from telephony provider account to our database.
+        This will fetch available phone numbers from the organization's telephony provider account.
+        
+        Args:
+            organization_id: Organization ID
+            provider: Provider to sync from ("auto", "twilio", "telnyx")
         """
         try:
             async with await get_async_db_session() as db:
@@ -51,60 +83,97 @@ class PhoneNumberService:
                 if not organization:
                     return {"success": False, "error": "Organization not found"}
 
-                if (
-                    not organization.twilio_account_sid
-                    or not organization.twilio_auth_token
-                ):
+                # Create unified telephony service for this organization
+                # This will auto-detect the provider based on configured credentials
+                telephony_service = UnifiedTelephonyService()
+                
+                # Check if organization has credentials for requested provider
+                has_twilio = organization.twilio_account_sid and organization.twilio_auth_token
+                has_telnyx = getattr(organization, 'telnyx_api_key', None) and getattr(organization, 'telnyx_connection_id', None)
+                
+                # Validate provider and credentials
+                if provider == "telnyx":
+                    if not has_telnyx:
+                        return {
+                            "success": False,
+                            "error": "Telnyx credentials not configured for this organization",
+                        }
+                elif provider == "twilio":
+                    if not has_twilio:
+                        return {
+                            "success": False,
+                            "error": "Twilio credentials not configured for this organization",
+                        }
+                else:
                     return {
                         "success": False,
-                        "error": "Twilio credentials not configured",
+                        "error": f"Invalid provider '{provider}'. Must be 'twilio' or 'telnyx'",
                     }
 
-                # Fetch phone numbers from Twilio
-                twilio_numbers = TwilioService.get_available_phone_numbers(
-                    account_sid=organization.twilio_account_sid,
-                    auth_token=organization.twilio_auth_token,
-                )
+                # Set organization credentials on the service based on requested provider
+                if provider == "telnyx":
+                    # Create Telnyx service with org credentials
+                    from app.core.telephony_provider import TelnyxTelephonyService
+                    telephony_service.provider_service = TelnyxTelephonyService(
+                        api_key=organization.telnyx_api_key,
+                        connection_id=organization.telnyx_connection_id
+                    )
+                elif provider == "twilio":
+                    # Create Twilio service with org credentials
+                    from app.core.telephony_provider import TwilioTelephonyService
+                    telephony_service.provider_service = TwilioTelephonyService(
+                        account_sid=organization.twilio_account_sid,
+                        auth_token=organization.twilio_auth_token
+                    )
 
-                if not twilio_numbers:
+                # Fetch phone numbers from telephony provider
+                provider_numbers = telephony_service.get_available_phone_numbers()
+
+                if not provider_numbers:
+                    provider_type = telephony_service.get_provider_type()
                     return {
                         "success": False,
-                        "error": "No phone numbers found in Twilio account",
+                        "error": f"No phone numbers found in {provider_type} account",
                     }
 
                 # Process and sync phone numbers
                 synced_count = 0
                 errors = []
 
-                for twilio_number in twilio_numbers:
+                for provider_number in provider_numbers:
                     try:
                         # Check if phone number already exists
                         existing_query = select(PhoneNumber).where(
-                            PhoneNumber.phone_number == twilio_number["phone_number"]
+                            PhoneNumber.phone_number == provider_number["phone_number"]
                         )
                         existing_result = await db.execute(existing_query)
                         existing_number = existing_result.scalar_one_or_none()
 
+                        # Determine provider type
+                        provider_type = telephony_service.get_provider_type().lower()
+                        
                         if existing_number:
                             # Update existing phone number
-                            existing_number.friendly_name = twilio_number.get(
+                            existing_number.friendly_name = provider_number.get(
                                 "friendly_name"
                             )
-                            existing_number.twilio_sid = twilio_number.get("sid")
-                            existing_number.capabilities = twilio_number.get(
+                            existing_number.provider = provider_type
+                            existing_number.provider_phone_id = provider_number.get("sid") or provider_number.get("id")
+                            existing_number.capabilities = provider_number.get(
                                 "capabilities", {}
                             )
-                            existing_number.phone_metadata = twilio_number
+                            existing_number.phone_metadata = provider_number
                             existing_number.is_active = True
                         else:
                             # Create new phone number
                             new_number = PhoneNumber(
                                 organization_id=organization_id,
-                                phone_number=twilio_number["phone_number"],
-                                friendly_name=twilio_number.get("friendly_name"),
-                                twilio_sid=twilio_number.get("sid"),
-                                capabilities=twilio_number.get("capabilities", {}),
-                                phone_metadata=twilio_number,
+                                phone_number=provider_number["phone_number"],
+                                friendly_name=provider_number.get("friendly_name"),
+                                provider=provider_type,
+                                provider_phone_id=provider_number.get("sid") or provider_number.get("id"),
+                                capabilities=provider_number.get("capabilities", {}),
+                                phone_metadata=provider_number,
                                 is_active=True,
                             )
                             db.add(new_number)
@@ -113,10 +182,10 @@ class PhoneNumberService:
 
                     except Exception as e:
                         logger.error(
-                            f"Error syncing phone number {twilio_number.get('phone_number')}: {e}"
+                            f"Error syncing phone number {provider_number.get('phone_number')}: {e}"
                         )
                         errors.append(
-                            f"Failed to sync {twilio_number.get('phone_number')}: {str(e)}"
+                            f"Failed to sync {provider_number.get('phone_number')}: {str(e)}"
                         )
 
                 await db.commit()
@@ -124,7 +193,7 @@ class PhoneNumberService:
 
         except Exception as e:
             logger.error(
-                f"Error syncing Twilio phone numbers for organization {organization_id}: {e}"
+                f"Error syncing telephony provider phone numbers for organization {organization_id}: {e}"
             )
             return {"success": False, "error": str(e)}
 
@@ -167,45 +236,63 @@ class PhoneNumberService:
                 
                 await db.commit()
 
-                # Configure Twilio webhook for the phone number if assigning to an assistant
+                # Configure telephony provider webhook for the phone number if assigning to an assistant
                 if assistant_id and assistant:
                     try:
                         from app.utils.url_utils import get_twiml_webhook_url
-                        from app.twilio.twilio_service import TwilioService
 
-                        # Get organization's Twilio credentials
+                        # Get organization's credentials
                         org_query = select(Organization).where(
                             Organization.id == organization_id
                         )
                         org_result = await db.execute(org_query)
                         organization = org_result.scalar_one_or_none()
 
-                        if (
-                            organization
-                            and organization.twilio_account_sid
-                            and organization.twilio_auth_token
-                        ):
-                            webhook_url = get_twiml_webhook_url()
+                        if organization:
+                            # Create unified telephony service based on phone number's provider
+                            if phone_number.provider == "telnyx":
+                                from app.core.telephony_provider import TelnyxTelephonyService
+                                provider_service = TelnyxTelephonyService(
+                                    api_key=organization.telnyx_api_key,
+                                    connection_id=organization.telnyx_connection_id
+                                )
+                            else:  # Default to Twilio
+                                from app.core.telephony_provider import TwilioTelephonyService
+                                provider_service = TwilioTelephonyService(
+                                    account_sid=organization.twilio_account_sid,
+                                    auth_token=organization.twilio_auth_token
+                                )
+                            
+                            telephony_service = UnifiedTelephonyService(provider_service=provider_service)
+                            
+                            # Get appropriate webhook URL based on phone number's provider
+                            if phone_number.provider == "telnyx":
+                                from app.utils.url_utils import get_server_base_url
+                                webhook_url = f"{get_server_base_url()}/telnyx-webhook"
+                            else:  # Twilio
+                                webhook_url = get_twiml_webhook_url()
 
                             # Configure webhook for this phone number
-                            webhook_success = TwilioService.update_phone_webhook(
-                                phone_number=phone_number.phone_number,
-                                webhook_url=webhook_url,
-                                account_sid=organization.twilio_account_sid,
-                                auth_token=organization.twilio_auth_token,
-                            )
+                            try:
+                                webhook_success = telephony_service.update_phone_webhook(
+                                    phone_number=phone_number.phone_number,
+                                    webhook_url=webhook_url
+                                )
+                            except Exception as webhook_error:
+                                logger.error(f"Failed to update webhook for {phone_number.phone_number}: {webhook_error}")
+                                webhook_success = False
 
                             if webhook_success:
                                 logger.info(
-                                    f"Configured webhook for {phone_number.phone_number} assigned to assistant {assistant_id}"
+                                    f"Configured {phone_number.provider} webhook for {phone_number.phone_number} assigned to assistant {assistant_id}"
                                 )
                             else:
                                 logger.warning(
-                                    f"Failed to configure webhook for {phone_number.phone_number}"
+                                    f"Failed to configure {phone_number.provider} webhook for {phone_number.phone_number}"
                                 )
                         else:
                             logger.warning(
-                                f"No Twilio credentials found for organization {organization_id}"
+                                f"Organization {organization_id} not found for webhook configuration"
                             )
 
                     except Exception as webhook_error:
@@ -278,10 +365,12 @@ class PhoneNumberService:
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    async def update_organization_twilio_credentials(
-        organization_id: int, account_sid: str, auth_token: str
+    async def update_organization_telephony_credentials(
+        organization_id: int, 
+        provider: str, 
+        credentials: Dict[str, str]
     ) -> Dict[str, Any]:
-        """Update organization's Twilio credentials."""
+        """Update organization's telephony provider credentials."""
         try:
             async with await get_async_db_session() as db:
                 # Get organization
@@ -294,27 +383,45 @@ class PhoneNumberService:
                 if not organization:
                     return {"success": False, "error": "Organization not found"}
 
-                # Test credentials first
+                # Test credentials first by trying to fetch phone numbers
                 try:
-                    test_numbers = TwilioService.get_available_phone_numbers(
-                        account_sid=account_sid, auth_token=auth_token
-                    )
+                    if provider == "twilio":
+                        from app.core.telephony_provider import TwilioTelephonyService
+                        test_service = TwilioTelephonyService(
+                            account_sid=credentials.get("account_sid"),
+                            auth_token=credentials.get("auth_token")
+                        )
+                    elif provider == "telnyx":
+                        from app.core.telephony_provider import TelnyxTelephonyService
+                        test_service = TelnyxTelephonyService(
+                            api_key=credentials.get("api_key"),
+                            connection_id=credentials.get("connection_id")
+                        )
+                    else:
+                        return {"success": False, "error": f"Unsupported provider: {provider}"}
+                    
+                    # Test by attempting to get phone numbers
+                    test_numbers = test_service.get_available_phone_numbers()
                 except Exception as e:
                     return {
                         "success": False,
-                        "error": f"Invalid Twilio credentials: {str(e)}",
+                        "error": f"Invalid {provider} credentials: {str(e)}",
                     }
 
-                # Update credentials
-                organization.twilio_account_sid = account_sid
-                organization.twilio_auth_token = auth_token
+                # Update credentials based on provider
+                if provider == "twilio":
+                    organization.twilio_account_sid = credentials.get("account_sid")
+                    organization.twilio_auth_token = credentials.get("auth_token")
+                elif provider == "telnyx":
+                    organization.telnyx_api_key = credentials.get("api_key")
+                    organization.telnyx_connection_id = credentials.get("connection_id")
+                
                 await db.commit()
-
                 return {"success": True}
 
         except Exception as e:
             logger.error(
-                f"Error updating Twilio credentials for organization {organization_id}: {e}"
+                f"Error updating {provider} credentials for organization {organization_id}: {e}"
             )
             return {"success": False, "error": str(e)}
 

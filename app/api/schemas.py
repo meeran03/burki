@@ -110,10 +110,7 @@ class LLMFallbackSettings(BaseModel):
     enabled: bool = False
     fallbacks: List[LLMFallbackProvider] = Field(default_factory=list)
 
-class TwilioConfig(BaseModel):
-    """Twilio account configuration."""
-    account_sid: Optional[str] = None
-    auth_token: Optional[str] = None
+# Telephony configuration classes removed - now handled at organization level
 
 
 # Assistant schemas
@@ -141,12 +138,8 @@ class AssistantBase(BaseModel):
     deepgram_api_key: Optional[str] = Field(None, deprecated=True, description="Legacy field. Use tts_settings.provider_config or stt_settings for provider-specific keys.")
     elevenlabs_api_key: Optional[str] = Field(None, deprecated=True, description="Legacy field. Use tts_settings.provider_config for provider-specific keys.")
     
-    # Twilio Configuration
-    twilio_config: TwilioConfig = Field(default_factory=TwilioConfig)
-    
-    # Deprecated Twilio fields
-    twilio_account_sid: Optional[str] = Field(None, deprecated=True, description="Legacy field. Use twilio_config.account_sid instead.")
-    twilio_auth_token: Optional[str] = Field(None, deprecated=True, description="Legacy field. Use twilio_config.auth_token instead.")
+    # Telephony Provider Configuration removed - now handled at organization level
+    # Phone numbers specify their provider and use organization-level credentials
     
     # LLM Settings
     llm_settings: LLMSettings = Field(default_factory=LLMSettings)
@@ -358,6 +351,8 @@ class AssistantCreate(AssistantBase):
     elevenlabs_api_key: Optional[str] = Field(None, exclude=True)
     twilio_account_sid: Optional[str] = Field(None, exclude=True)
     twilio_auth_token: Optional[str] = Field(None, exclude=True)
+    telnyx_api_key: Optional[str] = Field(None, exclude=True)
+    telnyx_connection_id: Optional[str] = Field(None, exclude=True)
     
     # organization_id and user_id will be set from the authenticated user
     pass
@@ -374,8 +369,7 @@ class AssistantUpdate(AssistantBase):
     llm_provider: Optional[str] = None
     llm_provider_config: Optional[LLMProviderConfig] = None
     
-    # Twilio Configuration
-    twilio_config: Optional[TwilioConfig] = None
+    # Telephony Provider Configuration removed - now handled at organization level
     
     # LLM Settings
     llm_settings: Optional[LLMSettings] = None
@@ -419,6 +413,8 @@ class AssistantUpdate(AssistantBase):
     elevenlabs_api_key: Optional[str] = Field(None, exclude=True)
     twilio_account_sid: Optional[str] = Field(None, exclude=True)
     twilio_auth_token: Optional[str] = Field(None, exclude=True)
+    telnyx_api_key: Optional[str] = Field(None, exclude=True)
+    telnyx_connection_id: Optional[str] = Field(None, exclude=True)
 
 class AssistantResponse(AssistantBase):
     """Schema for assistant response."""
@@ -673,6 +669,121 @@ class InitiateCallResponse(BaseModel):
     """Response model for initiating an outbound call."""
     message: str
     call_sid: str
+
+
+class SendSMSRequest(BaseModel):
+    """Request model for sending SMS through an assistant."""
+    from_phone_number: str = Field(..., description="Sender phone number (must be assigned to an assistant)")
+    to_phone_number: str = Field(..., description="Recipient phone number in E.164 format (e.g., +1234567890)")
+    message: str = Field(..., description="SMS message content", max_length=1600)
+    media_urls: Optional[List[str]] = Field(None, description="Optional list of media URLs for MMS")
+
+
+class SendSMSResponse(BaseModel):
+    """Response model for send SMS endpoint."""
+    success: bool
+    message_id: Optional[str] = None
+    message: str
+    provider: Optional[str] = None
+
+
+# Phone Number Management Schemas
+class SearchPhoneNumbersRequest(BaseModel):
+    """Request model for searching available phone numbers."""
+    country_code: str = Field(default="US", description="Country code (e.g., US, GB)")
+    area_code: Optional[str] = Field(None, description="Area code to search in")
+    contains: Optional[str] = Field(None, description="Pattern the number should contain")
+    locality: Optional[str] = Field(None, description="City/locality to search in")
+    region: Optional[str] = Field(None, description="State/region to search in")
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum number of results")
+    provider: str = Field(default="telnyx", description="Provider to search ('twilio' or 'telnyx')")
+
+
+class AvailablePhoneNumber(BaseModel):
+    """Model for an available phone number."""
+    phone_number: str
+    friendly_name: Optional[str] = None
+    locality: Optional[str] = None
+    region: Optional[str] = None
+    country_code: str
+    capabilities: Dict[str, bool]
+    cost: Optional[str] = None
+    setup_cost: Optional[str] = None
+    provider: str
+
+
+class SearchPhoneNumbersResponse(BaseModel):
+    """Response model for phone number search."""
+    success: bool
+    numbers: List[AvailablePhoneNumber]
+    total_found: int
+    provider: str
+
+
+class PurchasePhoneNumberRequest(BaseModel):
+    """Request model for purchasing a phone number."""
+    phone_number: str = Field(..., description="Phone number to purchase in E.164 format")
+    provider: str = Field(..., description="Provider to use ('twilio' or 'telnyx')")
+    assistant_id: Optional[int] = Field(None, description="Assistant to assign the number to")
+    friendly_name: Optional[str] = Field(None, description="Friendly name for the number")
+
+
+class PurchasePhoneNumberResponse(BaseModel):
+    """Response model for phone number purchase."""
+    success: bool
+    phone_number: Optional[str] = None
+    provider: str
+    purchase_details: Optional[Dict[str, Any]] = None
+    message: str
+
+
+class ReleasePhoneNumberRequest(BaseModel):
+    """Request model for releasing a phone number."""
+    phone_number: str = Field(..., description="Phone number to release")
+    provider: Optional[str] = Field(None, description="Provider ('twilio' or 'telnyx'). Auto-detected if not provided")
+
+
+class ReleasePhoneNumberResponse(BaseModel):
+    """Response model for phone number release."""
+    success: bool
+    phone_number: str
+    provider: str
+    message: str
+
+
+class CountryCodesResponse(BaseModel):
+    """Response model for listing country codes."""
+    success: bool
+    country_codes: List[str]
+    provider: str
+
+
+# Webhook Management Schemas
+class UpdateWebhookRequest(BaseModel):
+    """Request model for updating phone number webhooks."""
+    phone_number: str = Field(..., description="Phone number to update webhooks for")
+    voice_webhook_url: Optional[str] = Field(None, description="URL for voice call webhooks")
+    sms_webhook_url: Optional[str] = Field(None, description="URL for SMS message webhooks")
+    provider: Optional[str] = Field(None, description="Provider ('twilio' or 'telnyx'). Auto-detected if not provided")
+
+
+class UpdateWebhookResponse(BaseModel):
+    """Response model for webhook update."""
+    success: bool
+    phone_number: str
+    provider: str
+    updated_webhooks: Dict[str, str]
+    message: str
+
+
+class GetWebhookResponse(BaseModel):
+    """Response model for getting current webhook URLs."""
+    success: bool
+    phone_number: str
+    provider: str
+    voice_webhook_url: Optional[str] = None
+    sms_webhook_url: Optional[str] = None
+    configuration: Dict[str, Any]
 
 
 # Schemas for Call Analytics

@@ -53,3 +53,13 @@ def get_twiml_webhook_url() -> str:
     """
     base_url = get_server_base_url()
     return f"{base_url}/twiml" 
+
+def get_telnyx_webhook_url() -> str:
+    """
+    Get the full Telnyx webhook URL.
+    
+    Returns:
+        str: Full URL for the Telnyx webhook endpoint
+    """
+    base_url = get_server_base_url()
+    return f"{base_url}/telnyx-webhook"
