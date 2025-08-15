@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 from fastapi import WebSocket
+from starlette.websockets import WebSocketDisconnect
 
 from app.services.deepgram_service import DeepgramService
 from app.services.llm_service import LLMService
@@ -18,7 +19,7 @@ from app.services.call_service import CallService
 from app.services.webhook_service import WebhookService
 from app.services.audio_denoising_service import AudioDenoisingService
 
-from app.twilio.twilio_service import TwilioService
+from app.core.telephony_provider import UnifiedTelephonyService
 from app.utils.url_utils import get_server_base_url
 
 # Configure logging
@@ -56,6 +57,7 @@ class CallState:
     deepgram_service: Optional[Any] = None  # Deepgram service for this call
     tts_service: Optional[Any] = None  # TTS service for this call
     audio_denoising_service: Optional[Any] = None  # Audio denoising service for this call
+    telephony_service: Optional[Any] = None  # Unified telephony service for this call
 
     assistant: Optional[Any] = None  # Assistant to use for this call
     
@@ -94,6 +96,20 @@ class CallHandler:
         """
         # Track active calls
         self.active_calls: Dict[str, CallState] = {}
+    
+    def _is_websocket_connected(self, websocket) -> bool:
+        """Check if WebSocket is connected and ready for sending."""
+        try:
+            from starlette.websockets import WebSocketState
+            # Check both application state and client state
+            return (
+                hasattr(websocket, 'application_state') and
+                websocket.application_state == WebSocketState.CONNECTED and
+                hasattr(websocket, 'client_state') and
+                websocket.client_state == WebSocketState.CONNECTED
+            )
+        except Exception:
+            return False
 
     async def _create_and_broadcast_transcript(
         self,
@@ -210,6 +226,11 @@ class CallHandler:
             metadata=metadata or {},
             assistant=assistant,
         )
+
+        # Create unified telephony service for this call
+        # Use phone number to determine provider rather than assistant to avoid SQLAlchemy session issues
+        phone_number_for_provider = to_number if to_number else from_number
+        self.active_calls[call_sid].telephony_service = await UnifiedTelephonyService.create_from_phone_number(phone_number_for_provider)
 
         # Set interruption settings from assistant if available
         if assistant and assistant.interruption_settings:
@@ -441,22 +462,18 @@ class CallHandler:
             websocket: The WebSocket connection to get host info
         """
         try:
-            # Get Twilio credentials from assistant or environment
-            account_sid = assistant.twilio_account_sid if assistant else None
-            auth_token = assistant.twilio_auth_token if assistant else None
-
             # Build recording status callback URL
             # Get host from WebSocket headers
             host = get_server_base_url()
             recording_callback_url = f"{host}/recording-status"
 
-            # Start recording via Twilio API
-            recording_sid = TwilioService.start_call_recording(
-                call_sid=call_sid,
+            # Start recording via unified telephony service
+            telephony_service = self.active_calls[call_sid].telephony_service
+            recording_sid = telephony_service.start_call_recording(
+                call_id=call_sid,
                 recording_channels="dual",
+                channels="dual",  # For Telnyx compatibility
                 recording_status_callback=recording_callback_url,
-                account_sid=account_sid,
-                auth_token=auth_token,
             )
 
             # Create recording record immediately (status: "processing")
@@ -616,7 +633,14 @@ class CallHandler:
                 )
 
                 # Send the audio data through the WebSocket
-                await websocket.send_json(message)
+                if self._is_websocket_connected(websocket):
+                    try:
+                        await websocket.send_json(message)
+                    except (WebSocketDisconnect, RuntimeError, ConnectionError) as e:
+                        logger.debug(f"WebSocket disconnected during audio send for call {call_sid}: {e}")
+                        return  # Stop processing if WebSocket is closed
+                else:
+                    logger.debug(f"WebSocket not connected, skipping audio send for call {call_sid}")
 
 
         except Exception as e:
@@ -660,7 +684,13 @@ class CallHandler:
                 "event": "clear",
                 "streamSid": self.active_calls[call_sid].metadata.get("stream_sid"),
             }
-            await self.active_calls[call_sid].websocket.send_json(clear_message)
+            if self._is_websocket_connected(self.active_calls[call_sid].websocket):
+                try:
+                    await self.active_calls[call_sid].websocket.send_json(clear_message)
+                except (WebSocketDisconnect, RuntimeError, ConnectionError) as e:
+                    logger.debug(f"WebSocket disconnected during clear message send for call {call_sid}: {e}")
+            else:
+                logger.debug(f"WebSocket not connected, skipping clear message for call {call_sid}")
 
             # Stop TTS synthesis
             await self.active_calls[call_sid].tts_service.stop_synthesis()
@@ -738,9 +768,10 @@ class CallHandler:
                     if destination:
                         logger.info(f"Transferring call {call_sid} to {destination}")
 
-                        # Attempt to transfer the call using TwilioService
-                        transfer_success = TwilioService.transfer_call(
-                            call_sid=call_sid, destination=destination
+                        # Attempt to transfer the call using unified telephony service
+                        telephony_service = self.active_calls[call_sid].telephony_service
+                        transfer_success = telephony_service.transfer_call(
+                            call_id=call_sid, destination=destination
                         )
 
                         if transfer_success:
@@ -1277,26 +1308,41 @@ class CallHandler:
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass  # Expected when task is cancelled
 
-            # If we need to end the call with Twilio, use TwilioService
+            # If we need to end the call with the telephony provider
             if with_twilio:
-                end_success = TwilioService.end_call(call_sid=call_sid)
+                telephony_service = self.active_calls[call_sid].telephony_service
+                provider_type = telephony_service.get_provider_type()
+                end_success = telephony_service.end_call(call_id=call_sid)
 
                 if end_success:
-                    logger.info(f"Successfully ended call {call_sid} via Twilio API")
+                    logger.info(f"Successfully ended call {call_sid} via {provider_type} API")
                 else:
-                    logger.error(f"Failed to end call {call_sid} via Twilio API")
+                    logger.error(f"Failed to end call {call_sid} via {provider_type} API")
 
                 # Don't return early - continue with cleanup to save recordings
 
-            # Stop transcription first
-            await self.active_calls[call_sid].deepgram_service.stop_transcription()
+            # Stop services with error handling
+            try:
+                # Stop transcription first
+                await self.active_calls[call_sid].deepgram_service.stop_transcription()
+            except Exception as e:
+                logger.warning(f"Error stopping transcription for call {call_sid}: {e}")
 
-            # End TTS session
-            await self.active_calls[call_sid].tts_service.end_session()
+            try:
+                # End TTS session
+                await self.active_calls[call_sid].tts_service.end_session()
+            except Exception as e:
+                logger.warning(f"Error ending TTS session for call {call_sid}: {e}")
 
-            # Clean up audio denoising service
-            if self.active_calls[call_sid].audio_denoising_service:
-                await self.active_calls[call_sid].audio_denoising_service.cleanup()
+            try:
+                # Clean up audio denoising service
+                if self.active_calls[call_sid].audio_denoising_service:
+                    await self.active_calls[call_sid].audio_denoising_service.cleanup()
+            except Exception as e:
+                logger.warning(f"Error cleaning up audio denoising for call {call_sid}: {e}")
+            
+            # Give a brief moment for background tasks to finish
+            await asyncio.sleep(0.1)
 
 
 

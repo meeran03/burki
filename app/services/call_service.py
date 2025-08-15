@@ -71,6 +71,15 @@ class CallService:
                     "status": "ongoing",
                 }
 
+                # Check if call already exists (for duplicate webhook handling)
+                existing_call_query = select(Call).where(Call.call_sid == call_sid)
+                existing_result = await db.execute(existing_call_query)
+                existing_call = existing_result.scalar_one_or_none()
+                
+                if existing_call:
+                    logger.info(f"Call record already exists for SID: {call_sid}, returning existing record")
+                    return existing_call
+
                 call = Call(**call_data)
                 db.add(call)
                 await db.commit()
@@ -357,6 +366,46 @@ class CallService:
             return None
 
     @staticmethod
+    async def create_telnyx_recording(
+        call_sid: str,
+        recording_id: str,
+        status: str = "processing",
+    ) -> Optional[Recording]:
+        """
+        Create a Telnyx recording record.
+
+        Args:
+            call_sid: Call SID (call_control_id for Telnyx)
+            recording_id: Telnyx Recording ID
+            status: Recording status
+
+        Returns:
+            Optional[Recording]: Created recording record or None
+        """
+        try:
+            result = await CallService.create_recording(
+                call_sid=call_sid,
+                format="mp3",  # Telnyx default format
+                recording_type="mixed",
+                recording_source="s3",  # Telnyx recordings will be stored in S3
+                recording_sid=recording_id,  # Store Telnyx recording ID
+                status=status,
+            )
+            
+            # Check if result is None (call not found)
+            if result is None:
+                logger.error(f"Failed to create recording: call {call_sid} not found in database")
+                return None
+            
+            # Unpack the tuple safely
+            recording, _ = result
+            return recording
+            
+        except Exception as e:
+            logger.error(f"Error creating Telnyx recording record: {e}")
+            return None
+
+    @staticmethod
     async def update_recording_status(
         recording_sid: str,
         status: str,
@@ -368,7 +417,7 @@ class CallService:
         Update recording status and metadata.
 
         Args:
-            recording_sid: Twilio Recording SID
+            recording_sid: Twilio/Telnyx Recording SID/ID
             status: New status (completed, failed)
             s3_url: S3 URL for the recording
             duration: Recording duration in seconds
@@ -404,6 +453,37 @@ class CallService:
                 return recording
         except SQLAlchemyError as e:
             logger.error(f"Error updating recording status: {e}")
+            return None
+
+    @staticmethod
+    async def get_recording_by_call_and_status(
+        call_sid: str,
+        status: str = "processing"
+    ) -> Optional[Recording]:
+        """
+        Get a recording by call SID and status.
+
+        Args:
+            call_sid: Call SID
+            status: Recording status to filter by
+
+        Returns:
+            Optional[Recording]: Found recording or None
+        """
+        try:
+            call = await CallService.get_call_by_sid(call_sid)
+            if not call:
+                return None
+
+            async with await get_async_db_session() as db:
+                query = select(Recording).where(
+                    Recording.call_id == call.id,
+                    Recording.status == status
+                )
+                result = await db.execute(query)
+                return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting recording by call and status: {e}")
             return None
 
     @staticmethod

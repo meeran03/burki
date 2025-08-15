@@ -106,9 +106,8 @@ class AssistantManager(metaclass=Singleton):
         # Not found in cache, check the database
         assistant = await AssistantService.get_assistant_by_id(assistant_id)
 
-        # If found and active, add to cache by the phone number that was looked up
+        # If found and active, add to ID cache (phone numbers will be cached when looked up by phone)
         if assistant and assistant.is_active:
-            self.assistant_cache[phone_number] = assistant
             self.assistant_id_cache[assistant.id] = assistant
 
         return assistant

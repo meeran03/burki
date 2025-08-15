@@ -45,9 +45,11 @@ class Organization(Base):
     domain = Column(String(100), nullable=True)  # For domain-based signup restrictions
     is_active = Column(Boolean, nullable=False, default=True)
     
-    # Twilio BYOK credentials
+    # Telephony Provider Credentials (organization-level)
     twilio_account_sid = Column(String(255), nullable=True)
     twilio_auth_token = Column(String(255), nullable=True)
+    telnyx_api_key = Column(String(255), nullable=True)
+    telnyx_connection_id = Column(String(255), nullable=True)
     
     # Organization settings
     settings = Column(JSON, nullable=True, default=lambda: {
@@ -55,9 +57,15 @@ class Organization(Base):
         "require_email_verification": False,
         "max_users": 100,
         "max_assistants": 10,
-        "twilio": {
-            "webhook_url": None,
-            "auto_configure_webhooks": True,
+        "telephony": {
+            "twilio": {
+                "webhook_url": None,
+                "auto_configure_webhooks": True,
+            },
+            "telnyx": {
+                "webhook_url": None,
+                "auto_configure_webhooks": True,
+            }
         }
     })
 
@@ -252,7 +260,10 @@ class PhoneNumber(Base):
     # Phone number details
     phone_number = Column(String(20), unique=True, nullable=False, index=True)
     friendly_name = Column(String(100), nullable=True)
-    twilio_sid = Column(String(100), nullable=True)  # Twilio Phone Number SID
+    
+    # Provider information
+    provider = Column(String(20), nullable=False, default="twilio")  # "twilio" or "telnyx"
+    provider_phone_id = Column(String(100), nullable=True)  # Twilio SID or Telnyx phone number ID
     
     # Current assignment
     assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=True, index=True)
@@ -260,7 +271,7 @@ class PhoneNumber(Base):
     # Status
     is_active = Column(Boolean, nullable=False, default=True)
     
-    # Capabilities from Twilio
+    # Provider capabilities (both Twilio and Telnyx support these)
     capabilities = Column(JSON, nullable=True, default=lambda: {
         "voice": True,
         "sms": False,
@@ -307,7 +318,6 @@ class Assistant(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
-    phone_number = Column(String(20), unique=True, nullable=False)
     description = Column(Text, nullable=True)
 
     # LLM Provider Configuration
@@ -335,8 +345,9 @@ class Assistant(Base):
     inworld_workspace_id = Column(String(255), nullable=True)
     resemble_api_key = Column(String(255), nullable=True)
     elevenlabs_api_key = Column(String(255), nullable=True)
-    twilio_account_sid = Column(String(255), nullable=True)
-    twilio_auth_token = Column(String(255), nullable=True)
+    
+    # Telephony Provider Configuration removed - now handled at organization level
+    # Phone numbers specify their provider and use organization-level credentials
 
     llm_settings = Column(JSON, nullable=True, default=lambda: {
         "temperature": 0.5,
