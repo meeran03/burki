@@ -7,6 +7,7 @@ import os
 import logging
 import asyncio
 import traceback
+import time
 from typing import Callable, Dict, Optional
 
 from deepgram import (
@@ -31,6 +32,8 @@ class DeepgramService:
 
     # Constants
     MAX_RECONNECTS = 3
+    RATE_LIMIT_BACKOFF_BASE = 2  # Base for exponential backoff (seconds)
+    RATE_LIMIT_MAX_BACKOFF = 60  # Maximum backoff time (seconds)
 
     # Class-level client (shared across instances)
     _client = None
@@ -141,6 +144,8 @@ class DeepgramService:
         self.transcript_callback = None
         self.is_connected = False
         self.reconnect_attempts = 0
+        self.last_rate_limit_time = 0  # Track last rate limit error
+        self.rate_limit_backoff = 0  # Current backoff time for rate limiting
         self.sample_rate = 8000
         self.channels = 1
 
@@ -251,6 +256,13 @@ class DeepgramService:
             logger.error(f"Max reconnection attempts reached for call {self.call_sid}")
             return False
 
+        # Check if we're in a rate limit backoff period
+        if not self._can_attempt_connection():
+            current_time = time.time()
+            remaining_backoff = self.rate_limit_backoff - (current_time - self.last_rate_limit_time)
+            logger.warning(f"Rate limit backoff active for call {self.call_sid}, {remaining_backoff:.1f}s remaining")
+            return False
+
         try:
             # Create a connection to Deepgram using listen API v1
             connection = self.deepgram.listen.asyncwebsocket.v("1")
@@ -317,8 +329,14 @@ class DeepgramService:
                 # Connection start was successful if we get here
                 self.is_connected = True
                 self.reconnect_attempts = 0
+                self.rate_limit_backoff = 0  # Reset backoff on success
                 return True
             except Exception as e:
+                # Check if this is a rate limiting error (429)
+                if "HTTP 429" in str(e) or "429" in str(e):
+                    self._handle_rate_limit_error(e)
+                    return False
+                
                 logger.error(
                     f"Failed to start with model {self.model}, trying fallback: {e}"
                 )
@@ -352,8 +370,14 @@ class DeepgramService:
                     # Connection start was successful if we get here
                     self.is_connected = True
                     self.reconnect_attempts = 0
+                    self.rate_limit_backoff = 0  # Reset backoff on success
                     return True
                 except Exception as e2:
+                    # Check if fallback also hit rate limit
+                    if "HTTP 429" in str(e2) or "429" in str(e2):
+                        self._handle_rate_limit_error(e2)
+                        return False
+                    
                     logger.error(f"Failed with Nova-2 model: {e2}")
                     self.reconnect_attempts += 1
                     return False
@@ -362,6 +386,46 @@ class DeepgramService:
             logger.error(f"Error establishing Deepgram connection: {e}", exc_info=True)
             self.reconnect_attempts += 1
             return False
+
+    def _handle_rate_limit_error(self, error):
+        """
+        Handle rate limiting errors (HTTP 429) with exponential backoff.
+        
+        Args:
+            error: The error that occurred
+        """
+        current_time = time.time()
+        self.last_rate_limit_time = current_time
+        
+        # Calculate exponential backoff
+        if self.rate_limit_backoff == 0:
+            self.rate_limit_backoff = self.RATE_LIMIT_BACKOFF_BASE
+        else:
+            self.rate_limit_backoff = min(
+                self.rate_limit_backoff * 2, 
+                self.RATE_LIMIT_MAX_BACKOFF
+            )
+        
+        logger.warning(
+            f"Rate limit error (429) for call {self.call_sid}. "
+            f"Backing off for {self.rate_limit_backoff}s. Error: {error}"
+        )
+        
+        # Don't increment reconnect attempts for rate limiting
+        # as this is a server-side limitation, not a connection failure
+
+    def _can_attempt_connection(self) -> bool:
+        """
+        Check if we can attempt a connection (not in rate limit backoff).
+        
+        Returns:
+            bool: True if connection can be attempted, False if in backoff period
+        """
+        if self.rate_limit_backoff == 0:
+            return True
+            
+        current_time = time.time()
+        return (current_time - self.last_rate_limit_time) >= self.rate_limit_backoff
 
     async def _on_open_async(self, ws, open_event):
         """Handle WebSocket open event."""
@@ -497,7 +561,13 @@ class DeepgramService:
         # Mark connection as closed
         self.is_connected = False
 
-        # Try to reconnect
+        # Check if this is a rate limiting error
+        if "HTTP 429" in str(error) or "429" in str(error):
+            self._handle_rate_limit_error(error)
+            # Don't attempt to reconnect immediately on rate limit errors
+            return
+
+        # Try to reconnect for other types of errors
         if self.reconnect_attempts < self.MAX_RECONNECTS:
             logger.info(
                 f"Attempting to reconnect for call {self.call_sid}, attempt {self.reconnect_attempts + 1}/{self.MAX_RECONNECTS}"
@@ -525,6 +595,11 @@ class DeepgramService:
         """
         # First ensure there's a connection
         if not self.is_connected:
+            # Check if we're in a rate limit backoff period before trying to reconnect
+            if not self._can_attempt_connection():
+                # Silently drop audio during rate limit backoff to avoid spam
+                return False
+            
             logger.warning(
                 f"No active connection for call: {self.call_sid}, attempting to reconnect"
             )

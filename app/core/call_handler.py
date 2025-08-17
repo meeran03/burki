@@ -3,6 +3,7 @@ This file contains the CallHandler class for managing call state and conversatio
 """
 
 # pylint: disable=too-many-ancestors,logging-fstring-interpolation,broad-exception-caught
+import os
 import logging
 import base64
 import asyncio
@@ -272,7 +273,7 @@ class CallHandler:
         stt_settings = {}
 
         if assistant:
-            deepgram_api_key = assistant.deepgram_api_key
+            deepgram_api_key = os.getenv("DEEPGRAM_API_KEY")
             if assistant.stt_settings:
                 stt_settings = assistant.stt_settings
 
