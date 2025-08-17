@@ -11,6 +11,7 @@ import asyncio
 from typing import Optional, Dict, Set, Any
 from datetime import datetime
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.responses import Response, FileResponse
 from fastapi import APIRouter
@@ -1903,6 +1904,8 @@ async def update_phone_webhooks(webhook_data: UpdateWebhookRequest):
             
             # Only override voice webhook if it wasn't provided in the request
             final_voice_webhook_url = voice_webhook_url if voice_webhook_url else get_twiml_webhook_url()
+            if "twiml" in final_voice_webhook_url:
+                final_voice_webhook_url = get_twiml_webhook_url()
             
             # Handle messaging feature enable/disable when SMS webhook changes
             if sms_webhook_url:
@@ -1941,10 +1944,30 @@ async def update_phone_webhooks(webhook_data: UpdateWebhookRequest):
             # Only override voice webhook if it wasn't provided in the request
             final_voice_webhook_url = voice_webhook_url if voice_webhook_url else get_telnyx_webhook_url()
             
+            # Get organization's Telnyx credentials for webhook configuration
+            api_key = None
+            fallback_connection_id = None
+            
+            # Always fetch organization credentials for Telnyx numbers
+            async with await get_async_db_session() as db:
+                from app.db.models import PhoneNumber
+                
+                phone_record = await db.execute(
+                    select(PhoneNumber).options(selectinload(PhoneNumber.organization))
+                    .where(PhoneNumber.phone_number == phone_number)
+                )
+                phone_obj = phone_record.scalar_one_or_none()
+                
+                if phone_obj and phone_obj.organization:
+                    api_key = phone_obj.organization.telnyx_api_key
+                    fallback_connection_id = phone_obj.organization.telnyx_connection_id
+            
             results = TelnyxService.update_phone_webhooks(
                 phone_number=phone_number,
                 voice_webhook_url=final_voice_webhook_url if voice_webhook_url else None,
-                sms_webhook_url=sms_webhook_url
+                sms_webhook_url=sms_webhook_url,
+                api_key=api_key,
+                fallback_connection_id=fallback_connection_id
             )
         
         # Check if any updates were successful

@@ -176,7 +176,7 @@ class TelnyxService:
                     
                     # Find the application specifically for this phone number
                     target_app = None
-                    expected_app_name = f"Diwaar-{phone_number.replace('+', '')}"
+                    expected_app_name = f"Burki-{phone_number.replace('+', '')}"
                     
                     for app in applications.get('data', []):
                         # Look for application named for this specific phone number
@@ -228,7 +228,7 @@ class TelnyxService:
                             results["voice"] = False
                     else:
                         # Create a new Call Control Application for this specific phone number
-                        app_name = f"Diwaar-{phone_number.replace('+', '')}"
+                        app_name = f"Burki-{phone_number.replace('+', '')}"
                         
                         try:
                             # Create Call Control Application linked to the connection
@@ -323,7 +323,7 @@ class TelnyxService:
                     
                     # Find the messaging profile specifically for this phone number
                     target_profile = None
-                    expected_profile_name = f"Diwaar-SMS-{phone_number.replace('+', '')}"
+                    expected_profile_name = f"Burki-SMS-{phone_number.replace('+', '')}"
                     
                     for profile in profiles.get('data', []):
                         if profile.get('name') == expected_profile_name:
@@ -341,7 +341,7 @@ class TelnyxService:
                         logger.info(f"Updated SMS webhook for {phone_number} to {sms_webhook_url}")
                     else:
                         # Create new messaging profile for this specific phone number
-                        profile_name = f"Diwaar-SMS-{phone_number.replace('+', '')}"
+                        profile_name = f"Burki-SMS-{phone_number.replace('+', '')}"
                         
                         # Get whitelisted destinations from environment or use defaults
                         default_destinations = ["US", "CA", "GB", "AU", "DE", "FR", "IT", "ES", "NL", "BR", "MX"]

@@ -232,7 +232,20 @@ class TelnyxWebhookHandler:
                 return False
 
             if command == "answer":
-                result = telnyx.Call.create_answer(call_control_id)
+                # Include streaming parameters if provided
+                answer_params = {}
+                if params:
+                    if params.get("stream_url"):
+                        answer_params.update({
+                            "stream_url": params.get("stream_url"),
+                            "stream_track": params.get("stream_track", "both_tracks"),
+                            "stream_bidirectional_mode": params.get("stream_bidirectional_mode", "rtp"),
+                        })
+                        # Add codec if specified
+                        if params.get("stream_bidirectional_codec"):
+                            answer_params["stream_bidirectional_codec"] = params.get("stream_bidirectional_codec")
+                
+                result = telnyx.Call.create_answer(call_control_id, **answer_params)
 
             elif command == "hangup":
                 result = telnyx.Call.create_hangup(call_control_id)
