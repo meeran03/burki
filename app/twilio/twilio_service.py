@@ -638,7 +638,7 @@ class TwilioService:
         auth_token: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Search for available phone numbers for purchase.
+        Search for available phone numbers for purchase with fallback logic.
         
         Args:
             country_code: Country code (e.g., "US", "GB")
@@ -660,20 +660,65 @@ class TwilioService:
             return []
         
         try:
-            # Build search parameters
-            search_params = {"limit": limit}
+            # Try multiple search strategies with fallback logic
+            search_strategies = []
             
-            if area_code:
-                search_params["area_code"] = area_code
-            if contains:
-                search_params["contains"] = contains
-            if locality:
-                search_params["in_locality"] = locality
+            # Strategy 1: Search with all provided parameters
+            if locality or region or area_code or contains:
+                search_params = {"limit": limit}
+                if area_code:
+                    search_params["area_code"] = area_code
+                if contains:
+                    search_params["contains"] = contains
+                if locality:
+                    search_params["in_locality"] = locality
+                if region:
+                    search_params["in_region"] = region
+                search_strategies.append(search_params)
+            
+            # Strategy 2: Search by locality and region only (if provided)
+            if locality and region:
+                search_strategies.append({
+                    "limit": limit,
+                    "in_locality": locality,
+                    "in_region": region
+                })
+            
+            # Strategy 3: Search by region only (if provided)
             if region:
-                search_params["in_region"] = region
+                search_strategies.append({
+                    "limit": limit,
+                    "in_region": region
+                })
             
-            # Search for available phone numbers
-            available_numbers = client.available_phone_numbers(country_code).local.list(**search_params)
+            # Strategy 4: Search by area code only (if provided)
+            if area_code:
+                search_strategies.append({
+                    "limit": limit,
+                    "area_code": area_code
+                })
+            
+            # Strategy 5: Broad search with minimal constraints
+            search_strategies.append({"limit": limit})
+            
+            available_numbers = []
+            
+            # Try each strategy until we find numbers
+            for i, search_params in enumerate(search_strategies):
+                try:
+                    logger.info(f"Trying search strategy {i+1}: {search_params}")
+                    numbers = client.available_phone_numbers(country_code).local.list(**search_params)
+                    
+                    if numbers:
+                        available_numbers = numbers
+                        logger.info(f"Found {len(numbers)} numbers with strategy {i+1}")
+                        break
+                    else:
+                        logger.info(f"No numbers found with strategy {i+1}")
+                        
+                except TwilioRestException as e:
+                    logger.warning(f"Search strategy {i+1} failed: {e}")
+                    continue
             
             # Format the response
             formatted_numbers = []
@@ -693,7 +738,7 @@ class TwilioService:
                     "provider": "twilio"
                 })
             
-            logger.info(f"Found {len(formatted_numbers)} available phone numbers")
+            logger.info(f"Final result: Found {len(formatted_numbers)} available phone numbers")
             return formatted_numbers
             
         except TwilioRestException as e:
@@ -702,6 +747,125 @@ class TwilioService:
         except Exception as e:
             logger.error(f"Unexpected error searching phone numbers: {e}")
             return []
+
+    @staticmethod
+    def search_phone_numbers_by_address(
+        locality: Optional[str] = None, 
+        region: Optional[str] = None,
+        country_code: str = "US",
+        limit: int = 1,
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> List:
+        """
+        Search phone numbers by address with fallback logic.
+        Similar to the working implementation provided by the user.
+        
+        Args:
+            locality: City/locality to search in
+            region: State/region to search in  
+            country_code: Country code (default "US")
+            limit: Maximum number of results (default 1)
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            List: List of available phone numbers from Twilio
+        """
+        client = TwilioService.get_twilio_client(account_sid, auth_token)
+        
+        if not client:
+            logger.error("Could not get Twilio client to search phone numbers by address")
+            return []
+        
+        try:
+            # Use Twilio API to search for phone numbers by locality and region
+            search_params = {"limit": limit}
+            
+            if locality:
+                search_params["in_locality"] = locality
+            if region:
+                search_params["in_region"] = region
+                
+            numbers = client.available_phone_numbers(country_code).local.list(**search_params)
+            return numbers
+            
+        except TwilioRestException as e:
+            logger.error(f"Twilio API error searching phone numbers by address: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error searching phone numbers by address: {e}")
+            return []
+
+    @staticmethod
+    def get_area_code_by_address(
+        locality: Optional[str] = None,
+        region: Optional[str] = None,
+        country_code: str = "US",
+        account_sid: Optional[str] = None,
+        auth_token: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Get area code by address with fallback logic.
+        Similar to the working implementation provided by the user.
+        
+        Args:
+            locality: City/locality to search in
+            region: State/region to search in
+            country_code: Country code (default "US")
+            account_sid: Optional Twilio Account SID
+            auth_token: Optional Twilio Auth Token
+            
+        Returns:
+            Optional[str]: Area code if found, None otherwise
+        """
+        try:
+            # Try with both locality and region
+            numbers = TwilioService.search_phone_numbers_by_address(
+                locality=locality, 
+                region=region, 
+                country_code=country_code,
+                account_sid=account_sid,
+                auth_token=auth_token
+            )
+            
+            # Fallback to region only
+            if not numbers and locality:
+                numbers = TwilioService.search_phone_numbers_by_address(
+                    locality=None, 
+                    region=region, 
+                    country_code=country_code,
+                    account_sid=account_sid,
+                    auth_token=auth_token
+                )
+            
+            # Fallback to no geographic constraints
+            if not numbers:
+                numbers = TwilioService.search_phone_numbers_by_address(
+                    locality=None, 
+                    region=None, 
+                    country_code=country_code,
+                    account_sid=account_sid,
+                    auth_token=auth_token
+                )
+            
+            if not numbers:
+                logger.error("No phone numbers found for the given address")
+                return None
+                
+            # Extract area code from the first phone number
+            # Phone number format is typically +1AAANNNXXXX for US numbers
+            phone_number = numbers[0].phone_number
+            if phone_number.startswith('+1') and len(phone_number) >= 5:
+                area_code = phone_number[2:5]  # Extract digits 2-4 (area code)
+                return area_code
+            else:
+                logger.warning(f"Unexpected phone number format: {phone_number}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting area code by address: {e}")
+            return None
 
     @staticmethod
     def purchase_phone_number(
