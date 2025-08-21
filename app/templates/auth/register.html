@@ -568,11 +568,11 @@
                     <div class="form-step active" id="step1">
                         <!-- Organization Field - Required for all sign-in methods -->
                         <div class="form-group">
-                            <label for="organization" class="input-label">Organization Name</label>
+                            <label for="organization_name" class="input-label">Organization Name</label>
                             <input 
                                 type="text" 
-                                id="organization" 
-                                name="organization" 
+                                id="organization_name" 
+                                name="organization_name" 
                                 required
                                 class="input-field"
                                 placeholder="Your Company Name"
@@ -586,7 +586,7 @@
                             <input 
                                 type="text" 
                                 id="organization_slug" 
-                                name="organization_slug" 
+                                name="organization" 
                                 required
                                 class="input-field"
                                 placeholder="your-company-slug"
@@ -705,8 +705,8 @@
                         
                         <!-- Terms and Privacy -->
                         <div class="checkbox-group">
-                            <input type="checkbox" id="terms" name="terms" required>
-                            <label for="terms" class="checkbox-label">
+                            <input type="checkbox" id="agree_terms" name="agree_terms" required>
+                            <label for="agree_terms" class="checkbox-label">
                                 I agree to the <a href="/terms" class="link">Terms of Service</a> 
                                 and <a href="/privacy" class="link">Privacy Policy</a>
                             </label>
@@ -771,16 +771,16 @@
             }
             
             // Validate organization fields first
-            const organization = document.getElementById('organization').value;
+            const organizationName = document.getElementById('organization_name').value;
             const organizationSlug = document.getElementById('organization_slug').value;
             
-            if (!organization || !organizationSlug) {
+            if (!organizationName || !organizationSlug) {
                 alert('Please fill out organization details first');
                 return;
             }
             
             // Store organization data for the callback
-            sessionStorage.setItem('pending_organization', organization);
+            sessionStorage.setItem('pending_organization_name', organizationName);
             sessionStorage.setItem('pending_organization_slug', organizationSlug);
             
             window.google.accounts.id.prompt();
@@ -788,10 +788,10 @@
 
         function handleCredentialResponse(response) {
             // Get stored organization data
-            const organization = sessionStorage.getItem('pending_organization');
+            const organizationName = sessionStorage.getItem('pending_organization_name');
             const organizationSlug = sessionStorage.getItem('pending_organization_slug');
             
-            if (!organization || !organizationSlug) {
+            if (!organizationName || !organizationSlug) {
                 alert('Organization data not found. Please refresh and try again.');
                 return;
             }
@@ -804,8 +804,8 @@
             // Add all necessary fields
             const fields = {
                 'credential': response.credential,
-                'organization': organization,
-                'organization_slug': organizationSlug
+                'organization_name': organizationName,
+                'organization': organizationSlug
             };
             
             Object.entries(fields).forEach(([name, value]) => {
@@ -820,7 +820,7 @@
             form.submit();
             
             // Clean up
-            sessionStorage.removeItem('pending_organization');
+            sessionStorage.removeItem('pending_organization_name');
             sessionStorage.removeItem('pending_organization_slug');
         }
 
@@ -941,7 +941,7 @@
             }
             
             // Organization name to slug auto-generation
-            const orgNameInput = document.getElementById('organization');
+            const orgNameInput = document.getElementById('organization_name');
             const orgSlugInput = document.getElementById('organization_slug');
             const slugPreview = document.getElementById('slugPreview');
             
@@ -1042,12 +1042,16 @@
                     // Submit to registration endpoint
                     fetch('/auth/register', {
                         method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
                         body: formData
                     })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            window.location.href = data.redirect || '/auth/verify-email';
+                            window.location.href = data.redirect || '/auth/login';
                         } else {
                             alert(data.error || 'Registration failed');
                             submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import (
     HTMLResponse,
     RedirectResponse,
+    JSONResponse,
 )
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer
@@ -291,7 +292,7 @@ async def register_page(request: Request, error: str = None, success: str = None
     )
 
 
-@router.post("/auth/register", response_class=HTMLResponse)
+@router.post("/auth/register")
 async def register(
     request: Request,
     first_name: str = Form(...),
@@ -304,25 +305,37 @@ async def register(
     agree_terms: bool = Form(...),
 ):
     """Handle manual registration."""
+    
+    # Check if this is an AJAX request (expects JSON response)
+    is_ajax = request.headers.get("content-type", "").startswith("application/x-www-form-urlencoded") and \
+              "XMLHttpRequest" in request.headers.get("x-requested-with", "") or \
+              request.headers.get("accept", "").find("application/json") != -1
+    
     try:
         # Validate passwords match
         if password != confirm_password:
+            error_msg = "Passwords do not match"
+            if is_ajax:
+                return JSONResponse({"success": False, "error": error_msg}, status_code=400)
             return templates.TemplateResponse(
                 "auth/register.html",
                 get_template_context(
                     request,
-                    error="Passwords do not match",
+                    error=error_msg,
                     google_client_id=GOOGLE_CLIENT_ID,
                 ),
                 status_code=400,
             )
 
         if not agree_terms:
+            error_msg = "You must agree to the terms of service"
+            if is_ajax:
+                return JSONResponse({"success": False, "error": error_msg}, status_code=400)
             return templates.TemplateResponse(
                 "auth/register.html",
                 get_template_context(
                     request,
-                    error="You must agree to the terms of service",
+                    error=error_msg,
                     google_client_id=GOOGLE_CLIENT_ID,
                 ),
                 status_code=400,
@@ -343,16 +356,26 @@ async def register(
             role="admin",  # First user in org becomes admin
         )
 
+        success_msg = "Account created successfully! You can now sign in."
+        if is_ajax:
+            return JSONResponse({
+                "success": True, 
+                "message": success_msg,
+                "redirect": "/auth/login"
+            })
+        
         return templates.TemplateResponse(
             "auth/register.html",
             get_template_context(
                 request,
-                success="Account created successfully! You can now sign in.",
+                success=success_msg,
                 google_client_id=GOOGLE_CLIENT_ID,
             ),
         )
 
     except HTTPException as e:
+        if is_ajax:
+            return JSONResponse({"success": False, "error": e.detail}, status_code=400)
         return templates.TemplateResponse(
             "auth/register.html",
             get_template_context(
@@ -362,11 +385,14 @@ async def register(
         )
     except Exception as e:
         logging.error(f"Registration error: {e}")
+        error_msg = "An error occurred during registration"
+        if is_ajax:
+            return JSONResponse({"success": False, "error": error_msg}, status_code=500)
         return templates.TemplateResponse(
             "auth/register.html",
             get_template_context(
                 request,
-                error="An error occurred during registration",
+                error=error_msg,
                 google_client_id=GOOGLE_CLIENT_ID,
             ),
             status_code=500,
