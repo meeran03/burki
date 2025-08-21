@@ -30,3 +30,5 @@ rnnoise
 .pytest_cache/
 
 SEO_README.md
+
+.env

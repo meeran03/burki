@@ -6,8 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.models import Assistant
 from app.db.database import get_async_db_session
-from app.twilio.twilio_service import TwilioService
-from app.utils.url_utils import get_twiml_webhook_url
+# Removed unused import: get_twiml_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,8 @@ class AssistantService:
                 # Add user_id and organization_id to the assistant data
                 assistant_data["user_id"] = user_id
                 assistant_data["organization_id"] = organization_id
-                
+                if 'phone_number' in assistant_data:
+                    del assistant_data['phone_number']
                 assistant = Assistant(**assistant_data)
                 db.add(assistant)
                 await db.commit()

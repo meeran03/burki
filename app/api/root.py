@@ -8,10 +8,11 @@ import json
 import base64
 import os
 import asyncio
-from typing import Optional, Dict, Set
+from typing import Optional, Dict, Set, Any
 from datetime import datetime
+from sqlalchemy import select
 from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response
 from fastapi import APIRouter
 from twilio.twiml.voice_response import VoiceResponse, Connect
 
@@ -19,10 +20,21 @@ from app.core.call_handler import CallHandler
 from app.core.assistant_manager import AssistantManager
 from app.services.call_service import CallService
 from app.services.webhook_service import WebhookService
-from app.twilio.twilio_service import TwilioService
-from app.utils.url_utils import get_twiml_webhook_url
+from app.services.sms_webhook_service import SMSWebhookService
 from app.db.database import get_async_db_session
-from app.api.schemas import InitiateCallRequest, InitiateCallResponse
+
+from app.core.telephony_provider import UnifiedTelephonyService
+from app.telnyx.telnyx_webhook_handler import TelnyxWebhookHandler, validate_telnyx_webhook
+from app.utils.url_utils import get_twiml_webhook_url
+
+# Global mapping to store stream_id -> call_control_id relationships for Telnyx
+telnyx_stream_mappings = {}
+
+# Simple webhook deduplication cache (call_control_id -> last_processed_time)
+telnyx_webhook_cache = {}
+from app.api.schemas import (
+    InitiateCallRequest, InitiateCallResponse, SendSMSRequest, SendSMSResponse,
+)
 
 
 router = APIRouter()
@@ -33,15 +45,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize call handler with default system prompt
-DEFAULT_SYSTEM_PROMPT = """You are a helpful AI assistant for a customer service call center. 
-Your role is to assist customers professionally and efficiently. 
-Keep responses concise, clear, and focused on resolving customer needs."""
-
-# Get custom LLM URL from environment variable if available
-CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "http://localhost:8001/ai/chat/completions")
-
-# Initialize call handler - configuration is now handled per-call through assistant objects
 call_handler = CallHandler()
 assistant_manager = AssistantManager()
 
@@ -604,11 +607,433 @@ async def get_twiml(request: Request):
     return Response(content=twiml_response, media_type="application/xml")
 
 
+async def process_telnyx_recording_saved(
+    call_control_id: str,
+    recording_id: str,
+    call_data: Dict[str, Any]
+) -> None:
+    """
+    Process Telnyx recording_saved webhook by downloading the recording
+    from Telnyx and uploading it to S3, similar to Twilio recording processing.
+    """
+    try:
+        # Get the call from database using call_control_id as call_sid
+        call = await CallService.get_call_by_sid(call_control_id)
+        if not call:
+            logger.error(f"No call found for Telnyx call_control_id {call_control_id}")
+            return
+
+        # Get the assistant
+        assistant = call.assistant
+        if not assistant:
+            logger.error(f"No assistant found for call {call_control_id}")
+            return
+
+        # Get recording information from Telnyx
+        from app.telnyx.telnyx_service import TelnyxService  # pylint: disable=import-outside-toplevel
+        recording_info = TelnyxService.get_recording_info(
+            recording_id=recording_id,
+            api_key=os.getenv("TELNYX_API_KEY")
+        )
+        
+        if not recording_info:
+            logger.error(f"Could not fetch recording info for Telnyx recording {recording_id}")
+            return
+
+        # Extract recording details from Telnyx response
+        download_url = recording_info.get("uri")  # Telnyx provides download URL
+        duration = recording_info.get("duration", 0)
+        channels_raw = recording_info.get("channels", 2)
+        
+        # Convert channels to integer if it's a string
+        if isinstance(channels_raw, str):
+            # Handle Telnyx channel formats: "dual" -> 2, "single" -> 1
+            if channels_raw.lower() == "dual":
+                channels = 2
+            elif channels_raw.lower() == "single":
+                channels = 1
+            else:
+                # Try to convert to int, fallback to 2
+                try:
+                    channels = int(channels_raw)
+                except (ValueError, TypeError):
+                    channels = 2
+        else:
+            channels = int(channels_raw) if channels_raw else 2
+        
+        if not download_url:
+            logger.error(f"No download URL provided for Telnyx recording {recording_id}")
+            return
+
+        # Download the recording content from Telnyx
+        recording_content = None
+        filename = None
+        
+        try:
+            recording_content_result = TelnyxService.download_recording_content(
+                recording_id=recording_id,
+                api_key=os.getenv("TELNYX_API_KEY")
+            )
+            
+            if recording_content_result:
+                filename, recording_content = recording_content_result
+            else:
+                # Fallback: download directly from URL if TelnyxService doesn't work
+                import requests
+                response = requests.get(download_url, timeout=30)
+                response.raise_for_status()
+                recording_content = response.content
+                filename = f"telnyx_recording_{recording_id}.mp3"
+                
+        except Exception as e:
+            logger.error(f"Error downloading Telnyx recording {recording_id}: {e}")
+            return
+
+        if not recording_content:
+            logger.error(f"No recording content downloaded for Telnyx recording {recording_id}")
+            return
+
+        # Upload to S3
+        try:
+            from app.services.s3_service import S3Service  # pylint: disable=import-outside-toplevel
+            s3_service = S3Service.create_default_instance()
+            
+            # Upload to S3 using the correct method signature
+            s3_key, s3_url = await s3_service.upload_audio_file(
+                audio_data=recording_content,
+                call_sid=call.call_sid,
+                recording_type="mixed",  # Telnyx provides mixed recordings
+                format="mp3",
+                metadata={
+                    "provider": "telnyx",
+                    "recording_id": recording_id,
+                    "download_url": download_url
+                }
+            )
+            
+            if not s3_url:
+                logger.error(f"Failed to upload Telnyx recording {recording_id} to S3")
+                return
+            
+            logger.info(f"Successfully uploaded Telnyx recording {recording_id} to S3: {s3_key}")
+            
+        except Exception as e:
+            logger.error(f"Error uploading Telnyx recording to S3: {e}")
+            return
+
+        # Update the existing recording record in database
+        # Look for existing recording with "processing" status for this call
+        async with await get_async_db_session() as db:
+            from app.db.models import Recording  # pylint: disable=import-outside-toplevel
+            
+            # Find the processing recording for this call
+            query = select(Recording).where(
+                Recording.call_id == call.id,
+                Recording.status == "processing"
+            )
+            result = await db.execute(query)
+            recording = result.scalar_one_or_none()
+            
+            if recording:
+                # Update the existing recording with Telnyx data
+                recording.recording_sid = recording_id  # Store Telnyx recording ID
+                recording.s3_key = s3_key
+                recording.s3_url = s3_url
+                recording.duration = duration
+                recording.file_size = len(recording_content)
+                recording.status = "completed"
+                recording.channels = channels
+                recording.recording_metadata = {
+                    "provider": "telnyx",
+                    "recording_id": recording_id,
+                    "download_url": download_url,
+                    **call_data  # Include all webhook data
+                }
+                recording.uploaded_at = datetime.utcnow()
+                
+                db.add(recording)
+                await db.commit()
+                await db.refresh(recording)
+                
+                logger.info(
+                    f"Updated recording {recording.id} with Telnyx recording data for call {call_control_id}"
+                )
+            else:
+                # Create new recording if none exists (fallback)
+                logger.warning(f"No processing recording found for call {call_control_id}, creating new one")
+                
+                new_recording = await CallService.create_s3_recording(
+                    call_sid=call_control_id,
+                    s3_key=s3_key,
+                    s3_url=s3_url,
+                    duration=duration,
+                    file_size=len(recording_content),
+                    format="mp3",
+                    sample_rate=22050,  # Default for Telnyx
+                    channels=channels,
+                    recording_type="mixed",
+                    metadata={
+                        "provider": "telnyx",
+                        "recording_id": recording_id,
+                        "download_url": download_url,
+                        **call_data
+                    }
+                )
+                
+                if new_recording:
+                    logger.info(f"Created new S3 recording {new_recording.id} for Telnyx call {call_control_id}")
+
+    except Exception as e:
+        logger.error(f"Error processing Telnyx recording_saved webhook: {e}", exc_info=True)
+
+
+@router.post("/telnyx-webhook")
+async def telnyx_webhook(request: Request):
+    """
+    Handle Telnyx Call Control webhooks.
+    This endpoint is called by Telnyx for various call events.
+    """
+    try:
+        # Get raw body for signature verification
+        body = await request.body()
+        
+        # Validate webhook signature with body
+        if not validate_telnyx_webhook(request, body):
+            logger.warning("Invalid Telnyx webhook signature")
+            return Response(content="Invalid signature", status_code=401)
+        
+        # Parse JSON data from Telnyx
+        webhook_data = json.loads(body.decode('utf-8'))
+        
+        # Process the webhook
+        call_data = TelnyxWebhookHandler.process_webhook(webhook_data)
+        
+        if not call_data:
+            logger.debug("Webhook processed but no action required")
+            return Response(content="", status_code=200)
+        
+        event_type = call_data.get('event_type')
+        call_control_id = call_data.get('call_control_id')
+        
+        logger.info(f"Processing Telnyx webhook: {event_type} for call {call_control_id}")
+        
+        # Validate required fields
+        if not call_control_id:
+            logger.error(f"Missing call_control_id in Telnyx webhook data: {call_data}")
+            return Response(content="Missing call_control_id", status_code=400)
+        
+        if event_type == 'call_initiated':
+            # Simple deduplication for call_initiated events
+            import time
+            current_time = time.time()
+            last_processed = telnyx_webhook_cache.get(call_control_id)
+            
+            if last_processed and (current_time - last_processed) < 30:  # 30 seconds dedup window
+                logger.info(f"Ignoring duplicate call_initiated webhook for {call_control_id} (processed {current_time - last_processed:.1f}s ago)")
+                return Response(content="", status_code=200)
+            
+            telnyx_webhook_cache[call_control_id] = current_time
+            
+            # Clean up old entries from cache (older than 5 minutes)
+            cutoff_time = current_time - 300
+            expired_keys = [k for k, v in telnyx_webhook_cache.items() if v <= cutoff_time]
+            for key in expired_keys:
+                del telnyx_webhook_cache[key]
+            
+            # Handle incoming call - similar to Twilio TwiML
+            to_phone = call_data.get('to')
+            from_phone = call_data.get('from')
+            
+            # Get assistant by phone number
+            assistant = await assistant_manager.get_assistant_by_phone(to_phone)
+            if not assistant:
+                logger.error(f"No assistant found for Telnyx call to {to_phone}")
+                # Hang up the call
+                TelnyxWebhookHandler.send_call_control_command(
+                    call_control_id=call_control_id,
+                    command="hangup",
+                    api_key=None  # Will use environment variable
+                )
+                return Response(content="", status_code=200)
+            
+            # Answer the call with streaming parameters
+            # Construct stream URL 
+            host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+            forwarded_proto = request.headers.get("x-forwarded-proto")
+            
+            if forwarded_proto == "https":
+                protocol = "wss"
+            elif request.url.scheme == "https":
+                protocol = "wss"
+            else:
+                protocol = "ws"
+            
+            # For testing, use your ngrok URL
+            # stream_url = "wss://echo.websocket.org"
+            stream_url = f"{protocol}://{host}/streams"  # Use this for your ngrok URL
+            
+            logger.info(f"Answering Telnyx call with streaming to: {stream_url}")
+            
+            success = TelnyxWebhookHandler.send_call_control_command(
+                call_control_id=call_control_id,
+                command="answer",
+                params={
+                    "stream_url": stream_url,
+                    "stream_track": "both_tracks",
+                    "stream_bidirectional_mode": "rtp",
+                    "stream_bidirectional_codec": "PCMU"
+                },
+                api_key=os.getenv("TELNYX_API_KEY")
+            )
+            
+            if success:
+                logger.info(f"Answered Telnyx call {call_control_id}")
+                
+                # Just create the call record on answer - streaming will be handled on call_answered event
+                try:
+                    call = await CallService.create_call(
+                        assistant_id=assistant.id,
+                        call_sid=call_control_id,  # Use call_control_id as call_sid
+                        to_phone_number=to_phone,
+                        customer_phone_number=from_phone,
+                        metadata={
+                            "provider": "telnyx", 
+                            "call_session_id": call_data.get('call_session_id'),
+                            "streaming_enabled": False  # Will be updated when streaming starts
+                        },
+                    )
+                    logger.info(f"Created call record for Telnyx call {call_control_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Error creating call record for Telnyx call {call_control_id}: {e}")
+                    
+        elif event_type == 'call_answered':
+            # Handle call answered - streaming was set up during answer command
+            to_phone = call_data.get('to')
+            from_phone = call_data.get('from')
+            
+            logger.info(f"Telnyx call {call_control_id} answered - streaming should already be active")
+            
+            # Get assistant for webhook sending
+            assistant = await assistant_manager.get_assistant_by_phone(to_phone)
+            if assistant:
+                # Send initial webhook status update now that call is answered
+                try:
+                    call = await CallService.get_call_by_sid(call_control_id)
+                    if call and assistant.webhook_url:
+                        asyncio.create_task(
+                            WebhookService.send_status_update_webhook(
+                                assistant=assistant,
+                                call=call,
+                                status="in-progress",
+                                messages=[]
+                            )
+                        )
+                        logger.info(f"Sent webhook status update for Telnyx call {call_control_id}")
+                except Exception as e:
+                    logger.error(f"Error sending webhook for answered call {call_control_id}: {e}")
+            else:
+                logger.error(f"No assistant found for answered Telnyx call to {to_phone}")
+            
+        elif event_type == 'streaming_started':
+            # Handle streaming started event
+            logger.info(f"Telnyx streaming started for call {call_control_id}")
+            stream_url = call_data.get('stream_url')
+            stream_id = call_data.get('stream_id')
+            
+            # Store the mapping for WebSocket use
+            if stream_id:
+                telnyx_stream_mappings[stream_id] = call_control_id
+                logger.info(f"Stored Telnyx stream mapping: {stream_id} -> {call_control_id}")
+            
+            logger.info(f"Streaming URL confirmed: {stream_url}")
+            
+        elif event_type == 'streaming_stopped':
+            # Handle streaming stopped event  
+            logger.info(f"Telnyx streaming stopped for call {call_control_id}")
+            stream_id = call_data.get('stream_id')
+            
+            # Clean up stream mapping
+            if stream_id and stream_id in telnyx_stream_mappings:
+                del telnyx_stream_mappings[stream_id]
+                logger.info(f"Cleaned up Telnyx stream mapping for stopped stream: {stream_id}")
+            
+        elif event_type == 'call_hangup':
+            # Handle call end
+            logger.info(f"Telnyx call {call_control_id} ended")
+            
+        elif event_type == 'recording_saved':
+            # Handle recording completion - similar to Twilio recording callback
+            recording_id = call_data.get('recording_id')
+            logger.info(f"Telnyx recording {recording_id} saved for call {call_control_id}")
+            
+            # Process recording similar to Twilio recording callback
+            await process_telnyx_recording_saved(
+                call_control_id=call_control_id,
+                recording_id=recording_id,
+                call_data=call_data
+            )
+            
+        elif event_type == 'message_received':
+            # Handle incoming SMS message
+            message_id = call_data.get('message_id')
+            to_phone_number = call_data.get('to_number')
+            from_phone_number = call_data.get('from_number')
+            message_body = call_data.get('body')
+            
+            logger.info(
+                f"Received Telnyx SMS: from={from_phone_number}, to={to_phone_number}, "
+                f"message_id={message_id}, body_length={len(message_body) if message_body else 0}"
+            )
+            
+            # Find the assistant by the phone number that received the SMS
+            assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
+            if not assistant:
+                logger.warning(f"No assistant found for Telnyx SMS to phone number {to_phone_number}")
+            elif not assistant.sms_webhook_url:
+                logger.info(f"No SMS webhook URL configured for assistant {assistant.id}")
+            else:
+                # Create standardized SMS data from the already processed call_data
+                standardized_sms_data = {
+                    "message_id": message_id,
+                    "from": from_phone_number,
+                    "to": to_phone_number,
+                    "body": message_body or "",
+                    "media_urls": []  # Extract from call_data.get('media', []) if needed
+                }
+                
+                # Forward the SMS webhook asynchronously
+                asyncio.create_task(
+                    SMSWebhookService.process_sms_webhook_async(
+                        assistant_sms_webhook_url=assistant.sms_webhook_url,
+                        sms_data=standardized_sms_data,
+                        provider="telnyx"
+                    )
+                )
+                
+                logger.info(f"Forwarded Telnyx SMS webhook for assistant {assistant.id} to {assistant.sms_webhook_url}")
+        
+        elif event_type in ['message_sent', 'message_finalized']:
+            # Handle outgoing SMS status updates (optional - could be useful for logging)
+            message_id = call_data.get('message_id')
+            logger.info(f"Telnyx SMS {event_type}: message_id={message_id}")
+        
+        return Response(content="", status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error handling Telnyx webhook: {e}", exc_info=True)
+        return Response(content="", status_code=200)  # Return 200 to avoid retries
+
+
 @router.websocket("/streams")
 async def websocket_endpoint(websocket: WebSocket):
     """
-    WebSocket endpoint for Twilio Media Streams.
-    Handles real-time audio streaming with Twilio.
+    WebSocket endpoint for Media Streams.
+    Handles real-time audio streaming with both Twilio and Telnyx.
+    
+    Supports:
+    - Twilio Media Streams format
+    - Telnyx Media Streaming API format
     """
     logger.info("WebSocket connection attempt from %s", websocket.client.host)
     logger.info("WebSocket request headers: %s", websocket.headers)
@@ -627,36 +1052,82 @@ async def websocket_endpoint(websocket: WebSocket):
             async for message in websocket.iter_json():
                 event_type = message.get("event")
 
+                # Detect provider based on message format
+                # Telnyx uses different event names and structure
+                # Twilio has streamSid/callSid in start object, Telnyx has stream_id/call_control_id
+                is_telnyx = (
+                    "telnyx" in str(message).lower() or 
+                    event_type in ["streaming_started", "streaming_stopped"] or
+                    "stream_id" in message or
+                    "call_control_id" in message
+                )
+                
+                # Additional check: if we have a start object with streamSid/callSid, it's definitely Twilio
+                start_data = message.get("start", {})
+                if start_data and ("streamSid" in start_data or "callSid" in start_data):
+                    is_telnyx = False
+
                 if event_type == "connected":
                     logger.info(f"Media stream 'connected' event received: {message}")
 
-                elif event_type == "start":
-                    logger.info(f"Media stream 'start' event received: {message}")
-                    # Extract streamSid and callSid from the start message
-                    stream_sid = message.get("streamSid")
-                    start_data = message.get("start", {})
-                    call_sid = start_data.get("callSid")
+                elif event_type == "start" or event_type == "streaming_started":
+                    logger.info(f"Media stream 'start' event received (is_telnyx={is_telnyx}): {message}")
                     
-                    # Get phone numbers from customParameters if available
-                    custom_params = start_data.get("customParameters", {})
-                    to_number = custom_params.get("To")
-                    from_number = custom_params.get("From")
+                    if is_telnyx or event_type == "streaming_started":
+                        # Telnyx format - check if data is nested in 'start' object
+                        stream_sid = message.get("stream_id") or message.get("id")
+                        
+                        # For Telnyx, call_control_id and other data might be in the 'start' object
+                        start_data = message.get("start", {})
+                        if start_data:
+                            call_sid = start_data.get("call_control_id")
+                            to_number = start_data.get("to")
+                            from_number = start_data.get("from")
+                        else:
+                            # Fallback to direct message fields
+                            call_sid = message.get("call_control_id") or message.get("call_leg_id")
+                            to_number = message.get("to")
+                            from_number = message.get("from")
+                        
+                        # Telnyx doesn't have custom parameters in the same way
+                        is_outbound = False  # Will be determined from call metadata
+                        outbound_assistant_id = None
+                        outbound_welcome_message = None
+                        outbound_agenda = None
+                        outbound_to_phone = None
+                        
+                        tracks = ["inbound", "outbound"]  # Both tracks for Telnyx
+                        media_format = {"encoding": "rtp", "sampleRate": 8000, "channels": 1}
+                        
+                    else:
+                        # Twilio format  
+                        stream_sid = message.get("streamSid")
+                        start_data = message.get("start", {})
+                        call_sid = start_data.get("callSid")
+                        
+                        # Get phone numbers from customParameters if available
+                        custom_params = start_data.get("customParameters", {})
+                        to_number = custom_params.get("To")
+                        from_number = custom_params.get("From")
 
-                    # Extract outbound call metadata from customParameters
-                    is_outbound = custom_params.get("outbound") == "true"
-                    outbound_assistant_id = custom_params.get("assistant_id")
-                    outbound_welcome_message = custom_params.get("welcome_message")
-                    outbound_agenda = custom_params.get("agenda")
-                    outbound_to_phone = custom_params.get("to_phone_number")
+                        # Extract outbound call metadata from customParameters
+                        is_outbound = custom_params.get("outbound") == "true"
+                        outbound_assistant_id = custom_params.get("assistant_id")
+                        outbound_welcome_message = custom_params.get("welcome_message")
+                        outbound_agenda = custom_params.get("agenda")
+                        outbound_to_phone = custom_params.get("to_phone_number")
+                        
+                        tracks = start_data.get("tracks", [])
+                        media_format = start_data.get("mediaFormat", {})
                     
-
+                    # For Telnyx, store the stream mapping immediately after extracting the IDs
+                    if is_telnyx and stream_sid and call_sid:
+                        telnyx_stream_mappings[stream_sid] = call_sid
+                        logger.info(f"Stored Telnyx stream mapping from start event: {stream_sid} -> {call_sid}")
 
                     if not stream_sid or not call_sid:
                         logger.error("Missing streamSid or callSid in start message")
                         continue
-
-                    tracks = start_data.get("tracks", [])
-                    media_format = start_data.get("mediaFormat", {})
 
                     # Start call handling
                     try:
@@ -683,6 +1154,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             "stream_sid": stream_sid,
                             "media_format": media_format,
                             "tracks": tracks,
+                            "provider": "telnyx" if is_telnyx else "twilio",
                         }
                         
                         # Add outbound call specific metadata
@@ -721,13 +1193,25 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
                 elif event_type == "media":
-                    # Process incoming audio
-                    audio_data = message.get("media", {}).get("payload", "")
-                    track = message.get("media", {}).get("track", "inbound")
+                    # Process incoming audio - support both Twilio and Telnyx formats
+                    if is_telnyx:
+                        # Telnyx format: audio is directly in the message
+                        audio_data = message.get('media', {}).get("payload", "")
+                        track = message.get('media', {}).get("track", "inbound")
+                        current_stream_sid = message.get("stream_id") or stream_sid
+                        
+                        # For Telnyx, try to get call_sid from stored mapping if not already set
+                        if not call_sid and current_stream_sid in telnyx_stream_mappings:
+                            call_sid = telnyx_stream_mappings[current_stream_sid]
+                            logger.info(f"Retrieved call_control_id from stream mapping: {call_sid}")
+                    else:
+                        # Twilio format: audio is in media object
+                        audio_data = message.get("media", {}).get("payload", "")
+                        track = message.get("media", {}).get("track", "inbound")
+                        current_stream_sid = message.get("streamSid")
 
-                    current_stream_sid = message.get("streamSid")
                     if not current_stream_sid:
-                        logger.error("Missing streamSid in media message")
+                        logger.error("Missing streamSid/stream_id in media message")
                         continue
 
                     if track == "inbound" and audio_data and call_sid:
@@ -748,11 +1232,25 @@ async def websocket_endpoint(websocket: WebSocket):
                                 exc_info=True,
                             )
 
-                elif event_type == "stop":
-                    # Get the current stream_sid from the message
-                    current_stream_sid = message.get("streamSid")
+                elif event_type == "stop" or event_type == "streaming_stopped":
+                    # Get the current stream_sid from the message - support both formats
+                    if is_telnyx or event_type == "streaming_stopped":
+                        current_stream_sid = message.get("stream_id") or stream_sid
+                        # For Telnyx stop events, try multiple ways to get call_control_id
+                        if not call_sid:
+                            # Try from the stop object first
+                            if "stop" in message:
+                                call_sid = message["stop"].get("call_control_id")
+                                logger.info(f"Extracted call_control_id from stop event: {call_sid}")
+                            # If not found, try from stored mapping
+                            elif current_stream_sid in telnyx_stream_mappings:
+                                call_sid = telnyx_stream_mappings[current_stream_sid]
+                                logger.info(f"Retrieved call_control_id from stream mapping for stop event: {call_sid}")
+                    else:
+                        current_stream_sid = message.get("streamSid")
+                        
                     if not current_stream_sid:
-                        logger.error("Missing streamSid in stop message")
+                        logger.error("Missing streamSid/stream_id in stop message")
                         continue
 
                     # End call handling if we have a call_sid
@@ -760,6 +1258,12 @@ async def websocket_endpoint(websocket: WebSocket):
                         try:
                             await call_handler.end_call(call_sid)
                             logger.info(f"Ended call handling for call: {call_sid}")
+                            
+                            # Clean up Telnyx stream mapping
+                            if current_stream_sid in telnyx_stream_mappings:
+                                del telnyx_stream_mappings[current_stream_sid]
+                                logger.info(f"Cleaned up Telnyx stream mapping for {current_stream_sid}")
+                                
                         except Exception as stop_error:
                             logger.error(
                                 f"Error ending call handling: {stop_error}",
@@ -788,6 +1292,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error in WebSocket: {e}")
+        
+        except RuntimeError as e:
+            if "WebSocket is not connected" in str(e):
+                logger.info("WebSocket connection closed during message processing")
+            else:
+                logger.error(f"Runtime error in WebSocket: {e}", exc_info=True)
 
         except Exception as e:
             logger.error(f"Error processing WebSocket messages: {e}", exc_info=True)
@@ -817,14 +1327,18 @@ async def initiate_outbound_call(call_data: InitiateCallRequest):
         if not to_phone_number:
             raise HTTPException(status_code=400, detail="to_phone_number is required")
 
-        # Validate phone number format
-        if not TwilioService.validate_phone_number(to_phone_number):
-            raise HTTPException(status_code=400, detail="Invalid phone number format. Use E.164 format (e.g., +1234567890)")
-        
-        # Get the assistant
+        # Get the assistant first to determine provider
         assistant = await assistant_manager.get_assistant_by_phone(from_phone_number)
         if not assistant:
             raise HTTPException(status_code=404, detail="Assistant not found")
+
+        # Create unified telephony service for this assistant
+        # Use phone number to determine provider rather than assistant to avoid SQLAlchemy session issues
+        telephony_service = await UnifiedTelephonyService.create_from_phone_number(from_phone_number)
+        
+        # Validate phone number format using the provider's validation
+        if not telephony_service.validate_phone_number(to_phone_number):
+            raise HTTPException(status_code=400, detail="Invalid phone number format. Use E.164 format (e.g., +1234567890)")
 
         # Use the get_twiml_webhook_url function to determine the webhook URL
         webhook_url = get_twiml_webhook_url()
@@ -838,21 +1352,36 @@ async def initiate_outbound_call(call_data: InitiateCallRequest):
             "to_phone_number": to_phone_number
         }
         
-        # Get Twilio credentials from assistant or environment
-        twilio_account_sid = assistant.twilio_account_sid or os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_auth_token = assistant.twilio_auth_token or os.getenv("TWILIO_AUTH_TOKEN")
+        # Check provider type for logging
+        provider_type = telephony_service.get_provider_type()
+        logger.info(f"Initiating outbound call using {provider_type} provider for assistant {assistant.id}")
         
-        if not twilio_account_sid or not twilio_auth_token:
-            raise HTTPException(status_code=500, detail="Twilio credentials not configured")
+        # For Telnyx calls, add streaming URL to metadata
+        if provider_type == "telnyx":
+            # Construct stream URL (same as webhook URL host but WebSocket protocol)
+            try:
+                from urllib.parse import urlparse
+                parsed_webhook = urlparse(webhook_url)
+                
+                # Determine protocol
+                if parsed_webhook.scheme == "https":
+                    protocol = "wss"
+                else:
+                    protocol = "ws"
+                
+                stream_url = f"{protocol}://{parsed_webhook.netloc}/streams"
+                call_metadata["stream_url"] = stream_url
+                
+                logger.info(f"Added stream URL for Telnyx outbound call: {stream_url}")
+            except Exception as e:
+                logger.warning(f"Could not construct stream URL for Telnyx call: {e}")
         
-        # Initiate the outbound call through Twilio
-        call_sid = TwilioService.initiate_outbound_call(
+        # Initiate the outbound call through the unified service
+        call_sid = telephony_service.initiate_outbound_call(
             to_phone_number=to_phone_number,
             from_phone_number=from_phone_number,
             webhook_url=webhook_url,
-            call_metadata=call_metadata,
-            account_sid=twilio_account_sid,
-            auth_token=twilio_auth_token
+            call_metadata=call_metadata
         )
         
         if not call_sid:
@@ -878,6 +1407,99 @@ async def initiate_outbound_call(call_data: InitiateCallRequest):
     except Exception as e:
         logger.error(f"Error initiating outbound call: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+
+@router.post("/sms/send", response_model=SendSMSResponse)
+async def send_sms(sms_data: SendSMSRequest):
+    """
+    Send an SMS message through an assistant.
+    
+    This endpoint allows sending SMS messages using the telephony provider
+    associated with the assistant that owns the from_phone_number.
+    
+    The system will automatically:
+    1. Find the assistant associated with the from_phone_number
+    2. Use the assistant's configured telephony provider (Twilio or Telnyx)
+    3. Send the SMS through the appropriate provider
+    
+    Args:
+        sms_data: SMS request containing from/to numbers and message
+        
+    Returns:
+        SendSMSResponse: Success status, message ID, and provider info
+    """
+    try:
+        from_phone_number = sms_data.from_phone_number
+        to_phone_number = sms_data.to_phone_number
+        message = sms_data.message
+        media_urls = sms_data.media_urls
+        
+        # Validate required fields
+        if not from_phone_number:
+            raise HTTPException(status_code=400, detail="from_phone_number is required")
+        if not to_phone_number:
+            raise HTTPException(status_code=400, detail="to_phone_number is required")
+        if not message or len(message.strip()) == 0:
+            raise HTTPException(status_code=400, detail="message is required")
+
+        # Get the assistant first to determine provider
+        assistant = await assistant_manager.get_assistant_by_phone(from_phone_number)
+        if not assistant:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No assistant found for phone number {from_phone_number}"
+            )
+
+        # Create unified telephony service for this assistant
+        # Use phone number to determine provider rather than assistant to avoid SQLAlchemy session issues
+        telephony_service = await UnifiedTelephonyService.create_from_phone_number(from_phone_number)
+        
+        # Validate phone number format using the provider's validation
+        if not telephony_service.validate_phone_number(to_phone_number):
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid to_phone_number format. Use E.164 format (e.g., +1234567890)"
+            )
+        
+        if not telephony_service.validate_phone_number(from_phone_number):
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid from_phone_number format. Use E.164 format (e.g., +1234567890)"
+            )
+
+        # Get provider type for logging and response
+        provider_type = telephony_service.get_provider_type()
+        logger.info(f"Sending SMS using {provider_type} from {from_phone_number} to {to_phone_number}")
+        
+        # Send the SMS using the unified service
+        message_id = telephony_service.send_sms(
+            to_phone_number=to_phone_number,
+            from_phone_number=from_phone_number,
+            message=message,
+            media_urls=media_urls
+        )
+        
+        if message_id:
+            logger.info(f"Successfully sent SMS via {provider_type}, message ID: {message_id}")
+            return SendSMSResponse(
+                success=True,
+                message_id=message_id,
+                message=f"SMS sent successfully via {provider_type}",
+                provider=provider_type
+            )
+        else:
+            logger.error(f"Failed to send SMS via {provider_type}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to send SMS via {provider_type}"
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending SMS: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
 
 @router.post("/recording-status")
 async def recording_status_callback(request: Request):
@@ -915,25 +1537,44 @@ async def recording_status_callback(request: Request):
             )
             return Response(content="", status_code=200)
 
-        # Get the call/conversation from database
-        call = await CallService.get_call_by_sid(call_sid)
-        if not call:
-            logger.error(f"No call found for call_sid {call_sid}")
-            return Response(content="Call not found", status_code=404)
+        # Get the call/conversation from database with relationships loaded
+        from app.db.database import get_async_db_session
+        async with await get_async_db_session() as db:
+            from app.db.models import Call, Assistant
+            from sqlalchemy.orm import selectinload
+            
+            # Query call with assistant and organization loaded
+            result = await db.execute(
+                select(Call)
+                .options(
+                    selectinload(Call.assistant).selectinload(Assistant.organization)
+                )
+                .where(Call.call_sid == call_sid)
+            )
+            call = result.scalar_one_or_none()
+            
+            if not call:
+                logger.error(f"No call found for call_sid {call_sid}")
+                return Response(content="Call not found", status_code=404)
 
-        # Get the assistant
-        assistant = call.assistant
-        if not assistant:
-            logger.error(f"No assistant found for call {call_sid}")
-            return Response(content="Assistant not found", status_code=404)
+            # Get the assistant
+            assistant = call.assistant
+            if not assistant:
+                logger.error(f"No assistant found for call {call_sid}")
+                return Response(content="Assistant not found", status_code=404)
 
-        # Download the recording from Twilio
-        twilio_account_sid = assistant.twilio_account_sid or os.getenv(
-            "TWILIO_ACCOUNT_SID"
-        )
-        twilio_auth_token = assistant.twilio_auth_token or os.getenv(
-            "TWILIO_AUTH_TOKEN"
-        )
+            # Download the recording from Twilio
+            # Get Twilio credentials from assistant's organization
+            twilio_account_sid = assistant.organization.twilio_account_sid or os.getenv(
+                "TWILIO_ACCOUNT_SID"
+            )
+            twilio_auth_token = assistant.organization.twilio_auth_token or os.getenv(
+                "TWILIO_AUTH_TOKEN"
+            )
+            
+            # Extract values we need outside the session
+            call_id = call.id
+            to_phone_number = call.to_phone_number
 
         if not twilio_account_sid or not twilio_auth_token:
             logger.error(
@@ -943,12 +1584,15 @@ async def recording_status_callback(request: Request):
                 content="Twilio credentials not configured", status_code=500
             )
 
-        # Download recording content from Twilio
-        download_result = TwilioService.download_recording_content(
-            recording_sid=recording_sid,
-            account_sid=twilio_account_sid,
-            auth_token=twilio_auth_token,
-        )
+        # Create unified telephony service for this assistant
+        # Use phone number from call to determine provider rather than assistant to avoid SQLAlchemy session issues
+        telephony_service = await UnifiedTelephonyService.create_from_phone_number(to_phone_number)
+        provider_type = telephony_service.get_provider_type()
+        
+        logger.info(f"Downloading recording {recording_sid} using {provider_type} provider")
+        
+        # Download recording content using the unified service
+        download_result = telephony_service.download_recording_content(recording_id=recording_sid)
 
         if not download_result:
             logger.error(f"Failed to download recording {recording_sid} from Twilio")
@@ -1066,5 +1710,69 @@ async def recording_status_callback(request: Request):
 
     except Exception as e:
         logger.error(f"Error handling recording status callback: {e}", exc_info=True)
+        # Return 200 to Twilio to avoid retries on our errors
+        return Response(content="", status_code=200)
+
+
+@router.post("/twilio-sms-webhook")
+async def twilio_sms_webhook(request: Request):
+    """
+    Handle Twilio SMS webhooks.
+    This endpoint is called by Twilio when an SMS is received.
+    Forwards the SMS data to the assistant's configured sms_webhook_url.
+    """
+    try:
+        # Parse form data from Twilio
+        form_data = await request.form()
+        
+        # Extract SMS details
+        to_phone_number = form_data.get("To")
+        from_phone_number = form_data.get("From")
+        message_body = form_data.get("Body")
+        message_sid = form_data.get("MessageSid")
+        
+        logger.info(
+            f"Received Twilio SMS webhook: from={from_phone_number}, to={to_phone_number}, "
+            f"message_sid={message_sid}, body_length={len(message_body) if message_body else 0}"
+        )
+        
+        # Validate required fields
+        if not all([to_phone_number, from_phone_number, message_sid]):
+            logger.error(
+                f"Missing required SMS fields: to={to_phone_number}, from={from_phone_number}, "
+                f"message_sid={message_sid}"
+            )
+            return Response(content="Missing required fields", status_code=400)
+        
+        # Find the assistant by the phone number that received the SMS
+        assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
+        if not assistant:
+            logger.warning(f"No assistant found for Twilio SMS to phone number {to_phone_number}")
+            return Response(content="Assistant not found", status_code=404)
+        
+        # Check if assistant has an SMS webhook URL configured
+        if not assistant.sms_webhook_url:
+            logger.info(f"No SMS webhook URL configured for assistant {assistant.id}")
+            return Response(content="", status_code=200)
+        
+        # Normalize the SMS data
+        normalized_sms_data = SMSWebhookService.normalize_twilio_sms_data(dict(form_data))
+        
+        # Forward the SMS webhook asynchronously
+        asyncio.create_task(
+            SMSWebhookService.process_sms_webhook_async(
+                assistant_sms_webhook_url=assistant.sms_webhook_url,
+                sms_data=normalized_sms_data,
+                provider="twilio"
+            )
+        )
+        
+        logger.info(f"Forwarded Twilio SMS webhook for assistant {assistant.id} to {assistant.sms_webhook_url}")
+        
+        # Return success response to Twilio
+        return Response(content="", status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error handling Twilio SMS webhook: {e}", exc_info=True)
         # Return 200 to Twilio to avoid retries on our errors
         return Response(content="", status_code=200)
