@@ -272,24 +272,62 @@ class PhoneNumberService:
                             else:  # Twilio
                                 webhook_url = get_twiml_webhook_url()
 
-                            # Configure webhook for this phone number
+                            # Configure voice webhook for this phone number
                             try:
                                 webhook_success = telephony_service.update_phone_webhook(
                                     phone_number=phone_number.phone_number,
                                     webhook_url=webhook_url
                                 )
                             except Exception as webhook_error:
-                                logger.error(f"Failed to update webhook for {phone_number.phone_number}: {webhook_error}")
+                                logger.error(f"Failed to update voice webhook for {phone_number.phone_number}: {webhook_error}")
                                 webhook_success = False
 
                             if webhook_success:
                                 logger.info(
-                                    f"Configured {phone_number.provider} webhook for {phone_number.phone_number} assigned to assistant {assistant_id}"
+                                    f"Configured {phone_number.provider} voice webhook for {phone_number.phone_number} assigned to assistant {assistant_id}"
                                 )
                             else:
                                 logger.warning(
-                                    f"Failed to configure {phone_number.provider} webhook for {phone_number.phone_number}"
+                                    f"Failed to configure {phone_number.provider} voice webhook for {phone_number.phone_number}"
                                 )
+
+                            # Configure SMS webhook if assistant has sms_webhook_url configured
+                            if assistant.sms_webhook_url:
+                                try:
+                                    from app.utils.url_utils import get_server_base_url
+                                    
+                                    # Determine SMS webhook URL based on provider
+                                    if phone_number.provider == "telnyx":
+                                        sms_webhook_url = f"{get_server_base_url()}/telnyx-webhook"
+                                    else:  # Twilio
+                                        sms_webhook_url = f"{get_server_base_url()}/twilio-sms-webhook"
+                                    
+                                    # For telephony services that support SMS webhook updates
+                                    if hasattr(telephony_service.provider_service, 'update_phone_webhooks'):
+                                        # Use the full webhook update method for both voice and SMS
+                                        sms_results = telephony_service.provider_service.update_phone_webhooks(
+                                            phone_number=phone_number.phone_number,
+                                            voice_webhook_url=None,  # Already updated above
+                                            sms_webhook_url=sms_webhook_url
+                                        )
+                                        sms_success = sms_results.get("sms", False)
+                                    else:
+                                        logger.warning(f"SMS webhook configuration not supported for {phone_number.provider}")
+                                        sms_success = False
+                                    
+                                    if sms_success:
+                                        logger.info(
+                                            f"Configured {phone_number.provider} SMS webhook for {phone_number.phone_number} assigned to assistant {assistant_id}"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"Failed to configure {phone_number.provider} SMS webhook for {phone_number.phone_number}"
+                                        )
+                                        
+                                except Exception as sms_webhook_error:
+                                    logger.error(f"Failed to update SMS webhook for {phone_number.phone_number}: {sms_webhook_error}")
+                            else:
+                                logger.info(f"Assistant {assistant_id} does not have SMS webhook URL configured, skipping SMS webhook setup")
                         else:
                             logger.warning(
                                 f"Organization {organization_id} not found for webhook configuration"
