@@ -6,8 +6,6 @@ Provides TwiML-like XML responses for compatibility.
 import logging
 from typing import Dict, Any, Optional
 from fastapi import Request
-from fastapi.responses import Response
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +40,12 @@ class TelnyxWebhookHandler:
                 return TelnyxWebhookHandler._handle_call_hangup(payload)
             elif event_type == "call.recording.saved":
                 return TelnyxWebhookHandler._handle_recording_saved(payload)
+            elif event_type == "message.received":
+                return TelnyxWebhookHandler._handle_message_received(payload)
+            elif event_type == "message.sent":
+                return TelnyxWebhookHandler._handle_message_sent(payload)
+            elif event_type == "message.finalized":
+                return TelnyxWebhookHandler._handle_message_finalized(payload)
             else:
                 logger.debug(f"Unhandled Telnyx event type: {event_type}")
                 return None
@@ -329,6 +333,79 @@ class TelnyxWebhookHandler:
             logger.error(f"Error sending Call Control command {command}: {e}")
             return False
 
+    @staticmethod
+    def _handle_message_received(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle message.received event - incoming SMS/MMS message.
+        
+        Args:
+            payload: The message payload from Telnyx
+            
+        Returns:
+            Dict[str, Any]: Standardized message data
+        """
+        return {
+            "event_type": "message_received",
+            "message_id": payload.get("id"),
+            "from_number": payload.get("from", {}).get("phone_number"),
+            "to_number": payload.get("to", [{}])[0].get("phone_number") if payload.get("to") else None,
+            "body": payload.get("text"),
+            "direction": payload.get("direction"),
+            "type": payload.get("type"),
+            "received_at": payload.get("received_at"),
+            "media": payload.get("media", []),
+            "raw_payload": payload
+        }
+
+    @staticmethod
+    def _handle_message_sent(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle message.sent event - outgoing SMS/MMS message sent.
+        
+        Args:
+            payload: The message payload from Telnyx
+            
+        Returns:
+            Dict[str, Any]: Standardized message data
+        """
+        return {
+            "event_type": "message_sent",
+            "message_id": payload.get("id"),
+            "from_number": payload.get("from", {}).get("phone_number"),
+            "to_number": payload.get("to", [{}])[0].get("phone_number") if payload.get("to") else None,
+            "body": payload.get("text"),
+            "direction": payload.get("direction"),
+            "type": payload.get("type"),
+            "sent_at": payload.get("sent_at"),
+            "media": payload.get("media", []),
+            "raw_payload": payload
+        }
+
+    @staticmethod
+    def _handle_message_finalized(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle message.finalized event - message delivery status update.
+        
+        Args:
+            payload: The message payload from Telnyx
+            
+        Returns:
+            Dict[str, Any]: Standardized message data
+        """
+        return {
+            "event_type": "message_finalized",
+            "message_id": payload.get("id"),
+            "from_number": payload.get("from", {}).get("phone_number"),
+            "to_number": payload.get("to", [{}])[0].get("phone_number") if payload.get("to") else None,
+            "body": payload.get("text"),
+            "direction": payload.get("direction"),
+            "type": payload.get("type"),
+            "finalized_at": payload.get("completed_at"),
+            "delivery_status": payload.get("parts", [{}])[0].get("status") if payload.get("parts") else None,
+            "media": payload.get("media", []),
+            "raw_payload": payload
+        }
+
 
 def validate_telnyx_webhook(request: Request, body: bytes = None) -> bool:
     """
@@ -346,7 +423,6 @@ def validate_telnyx_webhook(request: Request, body: bytes = None) -> bool:
     """
     try:
         import os
-        from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
         from cryptography.exceptions import InvalidSignature
         import base64

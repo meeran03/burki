@@ -34,6 +34,11 @@ class BaseTelephonyService(ABC):
         ...
     
     @abstractmethod
+    def update_phone_webhooks(self, phone_number: str, voice_webhook_url: Optional[str] = None, sms_webhook_url: Optional[str] = None) -> Dict[str, bool]:
+        """Update both voice and SMS webhook URLs for a phone number."""
+        ...
+    
+    @abstractmethod
     def get_phone_number_info(self, phone_number: str) -> Optional[dict]:
         """Get information about a phone number."""
         ...
@@ -119,6 +124,17 @@ class TwilioTelephonyService(BaseTelephonyService):
         return TwilioService.update_phone_webhook(
             phone_number=phone_number,
             webhook_url=webhook_url,
+            account_sid=self.account_sid,
+            auth_token=self.auth_token
+        )
+    
+    def update_phone_webhooks(self, phone_number: str, voice_webhook_url: Optional[str] = None, sms_webhook_url: Optional[str] = None) -> Dict[str, bool]:
+        """Update both voice and SMS webhook URLs for a Twilio phone number."""
+        from app.twilio.twilio_service import TwilioService
+        return TwilioService.update_phone_webhooks(
+            phone_number=phone_number,
+            voice_webhook_url=voice_webhook_url,
+            sms_webhook_url=sms_webhook_url,
             account_sid=self.account_sid,
             auth_token=self.auth_token
         )
@@ -251,6 +267,17 @@ class TelnyxTelephonyService(BaseTelephonyService):
             api_key=self.api_key,
             fallback_connection_id=self.connection_id
         ).get("voice", False)
+    
+    def update_phone_webhooks(self, phone_number: str, voice_webhook_url: Optional[str] = None, sms_webhook_url: Optional[str] = None) -> Dict[str, bool]:
+        """Update both voice and SMS webhook URLs for a Telnyx phone number."""
+        from app.telnyx.telnyx_service import TelnyxService
+        return TelnyxService.update_phone_webhooks(
+            phone_number=phone_number,
+            voice_webhook_url=voice_webhook_url,
+            sms_webhook_url=sms_webhook_url,
+            api_key=self.api_key,
+            fallback_connection_id=self.connection_id
+        )
     
     def get_phone_number_info(self, phone_number: str) -> Optional[dict]:
         """Get information about a Telnyx phone number."""
@@ -481,6 +508,10 @@ class UnifiedTelephonyService:
     def update_phone_webhook(self, phone_number: str, webhook_url: str) -> bool:
         """Update the webhook URL for a phone number."""
         return self.provider_service.update_phone_webhook(phone_number, webhook_url)
+    
+    def update_phone_webhooks(self, phone_number: str, voice_webhook_url: Optional[str] = None, sms_webhook_url: Optional[str] = None) -> Dict[str, bool]:
+        """Update both voice and SMS webhook URLs for a phone number."""
+        return self.provider_service.update_phone_webhooks(phone_number, voice_webhook_url, sms_webhook_url)
     
     def get_phone_number_info(self, phone_number: str) -> Optional[dict]:
         """Get information about a phone number."""

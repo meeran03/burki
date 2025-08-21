@@ -405,6 +405,8 @@ async def create_assistant(
     idle_timeout: Optional[int] = Form(None),
     # Webhook settings
     webhook_url: Optional[str] = Form(None),
+    sms_webhook_url: Optional[str] = Form(None),
+    messaging_service_sid: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
     structured_data_prompt: Optional[str] = Form(None),
     # RAG settings
@@ -578,6 +580,8 @@ async def create_assistant(
         "idle_timeout": idle_timeout,
         # Webhook settings
         "webhook_url": empty_to_none(webhook_url),
+        "sms_webhook_url": empty_to_none(sms_webhook_url),
+        "messaging_service_sid": empty_to_none(messaging_service_sid),
         # Tools configuration
         "tools_settings": {
             "enabled_tools": [],  # Will be populated below
@@ -991,6 +995,8 @@ async def update_assistant(
     idle_timeout: Optional[int] = Form(None),
     # Webhook settings
     webhook_url: Optional[str] = Form(None),
+    sms_webhook_url: Optional[str] = Form(None),
+    messaging_service_sid: Optional[str] = Form(None),
     structured_data_schema: Optional[str] = Form(None),
     structured_data_prompt: Optional[str] = Form(None),
     # RAG settings
@@ -1168,6 +1174,8 @@ async def update_assistant(
         "idle_timeout": idle_timeout,
         # Webhook settings
         "webhook_url": empty_to_none(webhook_url),
+        "sms_webhook_url": empty_to_none(sms_webhook_url),
+        "messaging_service_sid": empty_to_none(messaging_service_sid),
         # Tools configuration
         "tools_settings": {
             "enabled_tools": [],  # Will be populated below

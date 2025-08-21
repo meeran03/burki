@@ -11,9 +11,8 @@ import asyncio
 from typing import Optional, Dict, Set, Any
 from datetime import datetime
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException, Depends
-from fastapi.responses import Response, FileResponse
+from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import Response
 from fastapi import APIRouter
 from twilio.twiml.voice_response import VoiceResponse, Connect
 
@@ -21,27 +20,20 @@ from app.core.call_handler import CallHandler
 from app.core.assistant_manager import AssistantManager
 from app.services.call_service import CallService
 from app.services.webhook_service import WebhookService
+from app.services.sms_webhook_service import SMSWebhookService
 from app.db.database import get_async_db_session
-from app.db.models import User
-from app.core.auth import get_current_user_flexible
 
 from app.core.telephony_provider import UnifiedTelephonyService
 from app.telnyx.telnyx_webhook_handler import TelnyxWebhookHandler, validate_telnyx_webhook
-from app.utils.url_utils import get_twiml_webhook_url, get_telnyx_webhook_url
+from app.utils.url_utils import get_twiml_webhook_url
 
 # Global mapping to store stream_id -> call_control_id relationships for Telnyx
 telnyx_stream_mappings = {}
 
 # Simple webhook deduplication cache (call_control_id -> last_processed_time)
 telnyx_webhook_cache = {}
-from app.db.database import get_async_db_session
-from sqlalchemy import select
 from app.api.schemas import (
     InitiateCallRequest, InitiateCallResponse, SendSMSRequest, SendSMSResponse,
-    SearchPhoneNumbersRequest, SearchPhoneNumbersResponse, PurchasePhoneNumberRequest, 
-    PurchasePhoneNumberResponse, ReleasePhoneNumberRequest, ReleasePhoneNumberResponse,
-    CountryCodesResponse, AvailablePhoneNumber, UpdateWebhookRequest, UpdateWebhookResponse,
-    GetWebhookResponse
 )
 
 
@@ -53,15 +45,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize call handler with default system prompt
-DEFAULT_SYSTEM_PROMPT = """You are a helpful AI assistant for a customer service call center. 
-Your role is to assist customers professionally and efficiently. 
-Keep responses concise, clear, and focused on resolving customer needs."""
-
-# Get custom LLM URL from environment variable if available
-CUSTOM_LLM_URL = os.getenv("CUSTOM_LLM_URL", "http://localhost:8001/ai/chat/completions")
-
-# Initialize call handler - configuration is now handled per-call through assistant objects
 call_handler = CallHandler()
 assistant_manager = AssistantManager()
 
@@ -820,7 +803,6 @@ async def telnyx_webhook(request: Request):
             return Response(content="Invalid signature", status_code=401)
         
         # Parse JSON data from Telnyx
-        import json
         webhook_data = json.loads(body.decode('utf-8'))
         
         # Process the webhook
@@ -991,6 +973,50 @@ async def telnyx_webhook(request: Request):
                 recording_id=recording_id,
                 call_data=call_data
             )
+            
+        elif event_type == 'message_received':
+            # Handle incoming SMS message
+            message_id = call_data.get('message_id')
+            to_phone_number = call_data.get('to_number')
+            from_phone_number = call_data.get('from_number')
+            message_body = call_data.get('body')
+            
+            logger.info(
+                f"Received Telnyx SMS: from={from_phone_number}, to={to_phone_number}, "
+                f"message_id={message_id}, body_length={len(message_body) if message_body else 0}"
+            )
+            
+            # Find the assistant by the phone number that received the SMS
+            assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
+            if not assistant:
+                logger.warning(f"No assistant found for Telnyx SMS to phone number {to_phone_number}")
+            elif not assistant.sms_webhook_url:
+                logger.info(f"No SMS webhook URL configured for assistant {assistant.id}")
+            else:
+                # Create standardized SMS data from the already processed call_data
+                standardized_sms_data = {
+                    "message_id": message_id,
+                    "from": from_phone_number,
+                    "to": to_phone_number,
+                    "body": message_body or "",
+                    "media_urls": []  # Extract from call_data.get('media', []) if needed
+                }
+                
+                # Forward the SMS webhook asynchronously
+                asyncio.create_task(
+                    SMSWebhookService.process_sms_webhook_async(
+                        assistant_sms_webhook_url=assistant.sms_webhook_url,
+                        sms_data=standardized_sms_data,
+                        provider="telnyx"
+                    )
+                )
+                
+                logger.info(f"Forwarded Telnyx SMS webhook for assistant {assistant.id} to {assistant.sms_webhook_url}")
+        
+        elif event_type in ['message_sent', 'message_finalized']:
+            # Handle outgoing SMS status updates (optional - could be useful for logging)
+            message_id = call_data.get('message_id')
+            logger.info(f"Telnyx SMS {event_type}: message_id={message_id}")
         
         return Response(content="", status_code=200)
         
@@ -1475,617 +1501,6 @@ async def send_sms(sms_data: SendSMSRequest):
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
-@router.post("/phone-numbers/search", response_model=SearchPhoneNumbersResponse)
-async def search_phone_numbers(search_data: SearchPhoneNumbersRequest):
-    """
-    Search for available phone numbers for purchase.
-    
-    This endpoint allows you to search for available phone numbers from Twilio or Telnyx
-    based on various criteria like area code, location, or number patterns.
-    
-    Args:
-        search_data: Search criteria including country, area code, provider, etc.
-        
-    Returns:
-        SearchPhoneNumbersResponse: List of available numbers with pricing and capabilities
-    """
-    try:
-        provider = search_data.provider.lower()
-        
-        # Validate provider
-        if provider not in ["twilio", "telnyx"]:
-            raise HTTPException(status_code=400, detail="Provider must be 'twilio' or 'telnyx'")
-        
-        # Import the appropriate service
-        if provider == "twilio":
-            from app.twilio.twilio_service import TwilioService
-            available_numbers = TwilioService.search_available_phone_numbers(
-                country_code=search_data.country_code,
-                area_code=search_data.area_code,
-                contains=search_data.contains,
-                locality=search_data.locality,
-                region=search_data.region,
-                limit=search_data.limit
-            )
-        else:  # telnyx
-            from app.telnyx.telnyx_service import TelnyxService
-            available_numbers = TelnyxService.search_available_phone_numbers(
-                country_code=search_data.country_code,
-                area_code=search_data.area_code,
-                contains=search_data.contains,
-                locality=search_data.locality,
-                region=search_data.region,
-                limit=search_data.limit
-            )
-        
-        # Convert to response format
-        phone_numbers = [AvailablePhoneNumber(**num) for num in available_numbers]
-        
-        logger.info(f"Found {len(phone_numbers)} available numbers from {provider}")
-        
-        return SearchPhoneNumbersResponse(
-            success=True,
-            numbers=phone_numbers,
-            total_found=len(phone_numbers),
-            provider=provider
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error searching phone numbers: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
-@router.post("/phone-numbers/purchase", response_model=PurchasePhoneNumberResponse)
-async def purchase_phone_number(
-    purchase_data: PurchasePhoneNumberRequest,
-    current_user: User = Depends(get_current_user_flexible)
-):
-    """
-    Purchase a phone number from Twilio or Telnyx.
-    
-    This endpoint purchases a phone number and optionally assigns it to an assistant.
-    The purchased number will be automatically configured with appropriate webhooks.
-    
-    Args:
-        purchase_data: Purchase details including phone number, provider, and assistant
-        
-    Returns:
-        PurchasePhoneNumberResponse: Purchase confirmation with details
-    """
-    try:
-        provider = purchase_data.provider.lower()
-        phone_number = purchase_data.phone_number
-        
-        # Validate provider
-        if provider not in ["twilio", "telnyx"]:
-            raise HTTPException(status_code=400, detail="Provider must be 'twilio' or 'telnyx'")
-        
-        # Validate phone number format
-        if not phone_number.startswith('+'):
-            raise HTTPException(
-                status_code=400, 
-                detail="Phone number must be in E.164 format (e.g., +1234567890)"
-            )
-        
-        # Get webhook URLs for the purchase
-        voice_webhook_url = get_twiml_webhook_url() if provider == "twilio" else None
-        
-        # Purchase the phone number
-        if provider == "twilio":
-            from app.twilio.twilio_service import TwilioService
-            
-            purchase_result = TwilioService.purchase_phone_number(
-                phone_number=phone_number,
-                voice_url=voice_webhook_url
-            )
-        else:  # telnyx
-            from app.telnyx.telnyx_service import TelnyxService
-            
-            purchase_result = TelnyxService.purchase_phone_number(
-                phone_number=phone_number
-            )
-        
-        if not purchase_result:
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Failed to purchase phone number from {provider}"
-            )
-        
-        # Add the number to our database
-        from app.services.phone_number_service import PhoneNumberService
-        from app.db.models import PhoneNumber, Organization
-        from sqlalchemy import select
-        
-        async with await get_async_db_session() as db:
-            # For now, we'll need an organization context - this could be improved
-            # with proper authentication/organization detection
-            
-            # Check if phone number already exists
-            existing_query = select(PhoneNumber).where(
-                PhoneNumber.phone_number == phone_number
-            )
-            existing_result = await db.execute(existing_query)
-            existing_phone_number = existing_result.scalar_one_or_none()
-            
-            if existing_phone_number:
-                # Phone number already exists, update it instead of creating new
-                logger.info(f"Phone number {phone_number} already exists in database, updating record")
-                
-                existing_phone_number.provider = provider
-                existing_phone_number.provider_phone_id = purchase_result.get("sid") or purchase_result.get("id")
-                existing_phone_number.phone_metadata = purchase_result
-                existing_phone_number.is_active = True
-                
-                # Update friendly name if provided
-                if purchase_data.friendly_name:
-                    existing_phone_number.friendly_name = purchase_data.friendly_name
-                
-                # Update assistant assignment if provided
-                if purchase_data.assistant_id:
-                    existing_phone_number.assistant_id = purchase_data.assistant_id
-                
-                await db.commit()
-                await db.refresh(existing_phone_number)
-                new_phone_number = existing_phone_number
-            else:
-                # Create new phone number record
-                new_phone_number = PhoneNumber(
-                    organization_id=current_user.organization_id,
-                    phone_number=phone_number,
-                    friendly_name=purchase_data.friendly_name or phone_number,
-                    provider=provider,
-                    provider_phone_id=purchase_result.get("sid") or purchase_result.get("id"),
-                    assistant_id=purchase_data.assistant_id,
-                    capabilities={
-                        "voice": True,
-                        "sms": True,
-                        "mms": True
-                    },
-                    phone_metadata=purchase_result,
-                    is_active=True
-                )
-                
-                db.add(new_phone_number)
-                await db.commit()
-                await db.refresh(new_phone_number)
-        
-        logger.info(f"Successfully purchased and registered phone number {phone_number} from {provider}")
-        
-        return PurchasePhoneNumberResponse(
-            success=True,
-            phone_number=phone_number,
-            provider=provider,
-            purchase_details=purchase_result,
-            message=f"Successfully purchased phone number {phone_number} from {provider}"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error purchasing phone number: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
-@router.get("/phone-numbers/{phone_number}/diagnose")
-async def diagnose_phone_number_connection(phone_number: str):
-    """
-    Diagnose the connection status of a phone number in Telnyx.
-    
-    This endpoint provides detailed information about how a phone number
-    is configured in Telnyx, including connection assignments and Call Control Applications.
-    
-    Args:
-        phone_number: Phone number to diagnose (E.164 format, e.g., +1234567890)
-        
-    Returns:
-        Dict: Diagnostic information about the phone number
-    """
-    try:
-        from app.telnyx.telnyx_service import TelnyxService
-        
-        # Remove URL encoding if present
-        phone_number = phone_number.replace("%2B", "+")
-        
-        # Validate phone number format
-        if not phone_number.startswith('+'):
-            raise HTTPException(
-                status_code=400, 
-                detail="Phone number must be in E.164 format (e.g., +1234567890)"
-            )
-        
-        # Get diagnostic information
-        diagnosis = TelnyxService.diagnose_phone_number_connection(phone_number)
-        
-        return {
-            "success": True,
-            "phone_number": phone_number,
-            "diagnosis": diagnosis
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error diagnosing phone number: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
-@router.post("/phone-numbers/release", response_model=ReleasePhoneNumberResponse)
-async def release_phone_number(release_data: ReleasePhoneNumberRequest):
-    """
-    Release a phone number from Twilio or Telnyx account.
-    
-    This endpoint releases a phone number, removing it from your account and 
-    making it available for others to purchase.
-    
-    Args:
-        release_data: Release details including phone number and provider
-        
-    Returns:
-        ReleasePhoneNumberResponse: Release confirmation
-    """
-    try:
-        phone_number = release_data.phone_number
-        provider = release_data.provider
-        
-        # Auto-detect provider if not specified
-        if not provider:
-            from app.services.phone_number_service import PhoneNumberService
-            from app.db.models import PhoneNumber
-            
-            async with await get_async_db_session() as db:
-                phone_record = await db.execute(
-                    select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
-                )
-                phone_obj = phone_record.scalar_one_or_none()
-                
-                if phone_obj:
-                    provider = phone_obj.provider
-                else:
-                    raise HTTPException(
-                        status_code=404, 
-                        detail=f"Phone number {phone_number} not found in database"
-                    )
-        
-        provider = provider.lower()
-        
-        # Validate provider
-        if provider not in ["twilio", "telnyx"]:
-            raise HTTPException(status_code=400, detail="Provider must be 'twilio' or 'telnyx'")
-        
-        # Release the phone number
-        if provider == "twilio":
-            from app.twilio.twilio_service import TwilioService
-            success = TwilioService.release_phone_number(phone_number)
-        else:  # telnyx
-            from app.telnyx.telnyx_service import TelnyxService
-            success = TelnyxService.release_phone_number(phone_number)
-        
-        if not success:
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Failed to release phone number from {provider}"
-            )
-        
-        # Remove from our database
-        async with await get_async_db_session() as db:
-            phone_record = await db.execute(
-                select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
-            )
-            phone_obj = phone_record.scalar_one_or_none()
-            
-            if phone_obj:
-                await db.delete(phone_obj)
-                await db.commit()
-        
-        logger.info(f"Successfully released phone number {phone_number} from {provider}")
-        
-        return ReleasePhoneNumberResponse(
-            success=True,
-            phone_number=phone_number,
-            provider=provider,
-            message=f"Successfully released phone number {phone_number} from {provider}"
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error releasing phone number: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
-@router.get("/phone-numbers/countries", response_model=CountryCodesResponse)
-async def list_country_codes(provider: str = "telnyx"):
-    """
-    List available country codes for phone number search.
-    
-    This endpoint returns a list of country codes where phone numbers 
-    are available for purchase from the specified provider.
-    
-    Args:
-        provider: Provider to get country codes from ('twilio' or 'telnyx')
-        
-    Returns:
-        CountryCodesResponse: List of available country codes
-    """
-    try:
-        provider = provider.lower()
-        
-        # Validate provider
-        if provider not in ["twilio", "telnyx"]:
-            raise HTTPException(status_code=400, detail="Provider must be 'twilio' or 'telnyx'")
-        
-        # Get country codes
-        if provider == "twilio":
-            from app.twilio.twilio_service import TwilioService
-            country_codes = TwilioService.list_country_codes()
-        else:  # telnyx
-            from app.telnyx.telnyx_service import TelnyxService
-            country_codes = TelnyxService.list_country_codes()
-        
-        logger.info(f"Retrieved {len(country_codes)} country codes from {provider}")
-        
-        return CountryCodesResponse(
-            success=True,
-            country_codes=country_codes,
-            provider=provider
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error listing country codes: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
-@router.put("/phone-numbers/webhooks", response_model=UpdateWebhookResponse)
-async def update_phone_webhooks(webhook_data: UpdateWebhookRequest):
-    """
-    Update voice and/or SMS webhook URLs for a phone number.
-    
-    This endpoint allows you to update the webhook URLs that receive voice call
-    and SMS events for a specific phone number. You can update both URLs or just one.
-    
-    Args:
-        webhook_data: Webhook update details including phone number and URLs
-        
-    Returns:
-        UpdateWebhookResponse: Update confirmation with details
-    """
-    try:
-        phone_number = webhook_data.phone_number
-        voice_webhook_url = webhook_data.voice_webhook_url
-        sms_webhook_url = webhook_data.sms_webhook_url
-        provider = webhook_data.provider
-        
-        # Validate that at least one webhook URL is provided
-        if not voice_webhook_url and not sms_webhook_url:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one webhook URL (voice_webhook_url or sms_webhook_url) must be provided"
-            )
-        
-        # Validate phone number format
-        if not phone_number.startswith('+'):
-            raise HTTPException(
-                status_code=400,
-                detail="Phone number must be in E.164 format (e.g., +1234567890)"
-            )
-        
-        # Auto-detect provider if not specified
-        if not provider:
-            from app.db.models import PhoneNumber
-            
-            async with await get_async_db_session() as db:
-                phone_record = await db.execute(
-                    select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
-                )
-                phone_obj = phone_record.scalar_one_or_none()
-                
-                if phone_obj:
-                    provider = phone_obj.provider
-                else:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Phone number {phone_number} not found in database"
-                    )
-        
-        provider = provider.lower()
-        
-        # Validate provider
-        if provider not in ["twilio", "telnyx"]:
-            raise HTTPException(status_code=400, detail="Provider must be 'twilio' or 'telnyx'")
-        
-        # Update webhooks using the appropriate service
-        if provider == "twilio":
-            from app.twilio.twilio_service import TwilioService
-            import os
-            
-            # Only override voice webhook if it wasn't provided in the request
-            final_voice_webhook_url = voice_webhook_url if voice_webhook_url else get_twiml_webhook_url()
-            if "twiml" in final_voice_webhook_url:
-                final_voice_webhook_url = get_twiml_webhook_url()
-            
-            # Handle messaging feature enable/disable when SMS webhook changes
-            if sms_webhook_url:
-                messaging_service_sid = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
-                
-                # Check if we're enabling or disabling messaging
-                if sms_webhook_url == "https://demo.twilio.com/welcome/sms/reply":
-                    # Disabling messaging
-                    logger.info(f"Disabling messaging feature for {phone_number}")
-                    disable_result = await TwilioService.disable_messaging_feature(phone_number)
-                    if disable_result.get("status_code") and disable_result.get("status_code") != 200:
-                        logger.warning(f"Failed to disable messaging feature: {disable_result}")
-                elif messaging_service_sid:
-                    # Enabling messaging with messaging service
-                    logger.info(f"Enabling messaging feature for {phone_number}")
-                    enable_result = await TwilioService.enable_messaging_feature(
-                        phone_number=phone_number,
-                        messaging_service_sid=messaging_service_sid,
-                        sms_webhook_url=sms_webhook_url
-                    )
-                    if enable_result.get("status") == "error":
-                        logger.warning(f"Failed to enable messaging feature: {enable_result}")
-                else:
-                    # Just update SMS webhook without messaging service
-                    logger.info(f"Updating SMS webhook for {phone_number} without messaging service")
-            
-            # Update webhooks
-            results = TwilioService.update_phone_webhooks(
-                phone_number=phone_number,
-                voice_webhook_url=final_voice_webhook_url if voice_webhook_url else None,
-                sms_webhook_url=sms_webhook_url
-            )
-        else:  # telnyx
-            from app.telnyx.telnyx_service import TelnyxService
-            
-            # Only override voice webhook if it wasn't provided in the request
-            final_voice_webhook_url = voice_webhook_url if voice_webhook_url else get_telnyx_webhook_url()
-            
-            # Get organization's Telnyx credentials for webhook configuration
-            api_key = None
-            fallback_connection_id = None
-            
-            # Always fetch organization credentials for Telnyx numbers
-            async with await get_async_db_session() as db:
-                from app.db.models import PhoneNumber
-                
-                phone_record = await db.execute(
-                    select(PhoneNumber).options(selectinload(PhoneNumber.organization))
-                    .where(PhoneNumber.phone_number == phone_number)
-                )
-                phone_obj = phone_record.scalar_one_or_none()
-                
-                if phone_obj and phone_obj.organization:
-                    api_key = phone_obj.organization.telnyx_api_key
-                    fallback_connection_id = phone_obj.organization.telnyx_connection_id
-            
-            results = TelnyxService.update_phone_webhooks(
-                phone_number=phone_number,
-                voice_webhook_url=final_voice_webhook_url if voice_webhook_url else None,
-                sms_webhook_url=sms_webhook_url,
-                api_key=api_key,
-                fallback_connection_id=fallback_connection_id
-            )
-        
-        # Check if any updates were successful
-        if not any(results.values()):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to update webhooks for {phone_number} via {provider}"
-            )
-        
-        # Build response showing what was updated
-        updated_webhooks = {}
-        if results.get("voice"):
-            if provider == "twilio":
-                updated_webhooks["voice"] = final_voice_webhook_url
-            else:  # telnyx
-                updated_webhooks["voice"] = final_voice_webhook_url
-        if results.get("sms") and sms_webhook_url:
-            updated_webhooks["sms"] = sms_webhook_url
-        
-        success_count = sum(results.values())
-        message = f"Successfully updated {success_count} webhook(s) for {phone_number} via {provider}"
-        
-        logger.info(f"Updated webhooks for {phone_number}: {updated_webhooks}")
-        
-        return UpdateWebhookResponse(
-            success=True,
-            phone_number=phone_number,
-            provider=provider,
-            updated_webhooks=updated_webhooks,
-            message=message
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating phone webhooks: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
-@router.get("/phone-numbers/{phone_number}/webhooks", response_model=GetWebhookResponse)
-async def get_phone_webhooks(phone_number: str, provider: Optional[str] = None):
-    """
-    Get current webhook configuration for a phone number.
-    
-    This endpoint returns the current voice and SMS webhook URLs configured
-    for a specific phone number.
-    
-    Args:
-        phone_number: Phone number to get webhooks for (E.164 format)
-        provider: Provider ('twilio' or 'telnyx'). Auto-detected if not provided
-        
-    Returns:
-        GetWebhookResponse: Current webhook configuration
-    """
-    try:
-        # Validate phone number format
-        if not phone_number.startswith('+'):
-            raise HTTPException(
-                status_code=400,
-                detail="Phone number must be in E.164 format (e.g., +1234567890)"
-            )
-        
-        # Auto-detect provider if not specified
-        if not provider:
-            from app.db.models import PhoneNumber
-            
-            async with await get_async_db_session() as db:
-                phone_record = await db.execute(
-                    select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
-                )
-                phone_obj = phone_record.scalar_one_or_none()
-                
-                if phone_obj:
-                    provider = phone_obj.provider
-                else:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Phone number {phone_number} not found in database"
-                    )
-        
-        provider = provider.lower()
-        
-        # Validate provider
-        if provider not in ["twilio", "telnyx"]:
-            raise HTTPException(status_code=400, detail="Provider must be 'twilio' or 'telnyx'")
-        
-        # Get webhook configuration using the appropriate service
-        if provider == "twilio":
-            from app.twilio.twilio_service import TwilioService
-            config = TwilioService.get_phone_webhooks(phone_number)
-        else:  # telnyx
-            from app.telnyx.telnyx_service import TelnyxService
-            config = TelnyxService.get_phone_webhooks(phone_number)
-        
-        if not config:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Could not retrieve webhook configuration for {phone_number}"
-            )
-        
-        logger.info(f"Retrieved webhook configuration for {phone_number}")
-        
-        return GetWebhookResponse(
-            success=True,
-            phone_number=phone_number,
-            provider=provider,
-            voice_webhook_url=config.get("voice_webhook_url"),
-            sms_webhook_url=config.get("sms_webhook_url"),
-            configuration=config
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting phone webhooks: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
-
-
 @router.post("/recording-status")
 async def recording_status_callback(request: Request):
     """
@@ -2295,5 +1710,69 @@ async def recording_status_callback(request: Request):
 
     except Exception as e:
         logger.error(f"Error handling recording status callback: {e}", exc_info=True)
+        # Return 200 to Twilio to avoid retries on our errors
+        return Response(content="", status_code=200)
+
+
+@router.post("/twilio-sms-webhook")
+async def twilio_sms_webhook(request: Request):
+    """
+    Handle Twilio SMS webhooks.
+    This endpoint is called by Twilio when an SMS is received.
+    Forwards the SMS data to the assistant's configured sms_webhook_url.
+    """
+    try:
+        # Parse form data from Twilio
+        form_data = await request.form()
+        
+        # Extract SMS details
+        to_phone_number = form_data.get("To")
+        from_phone_number = form_data.get("From")
+        message_body = form_data.get("Body")
+        message_sid = form_data.get("MessageSid")
+        
+        logger.info(
+            f"Received Twilio SMS webhook: from={from_phone_number}, to={to_phone_number}, "
+            f"message_sid={message_sid}, body_length={len(message_body) if message_body else 0}"
+        )
+        
+        # Validate required fields
+        if not all([to_phone_number, from_phone_number, message_sid]):
+            logger.error(
+                f"Missing required SMS fields: to={to_phone_number}, from={from_phone_number}, "
+                f"message_sid={message_sid}"
+            )
+            return Response(content="Missing required fields", status_code=400)
+        
+        # Find the assistant by the phone number that received the SMS
+        assistant = await assistant_manager.get_assistant_by_phone(to_phone_number)
+        if not assistant:
+            logger.warning(f"No assistant found for Twilio SMS to phone number {to_phone_number}")
+            return Response(content="Assistant not found", status_code=404)
+        
+        # Check if assistant has an SMS webhook URL configured
+        if not assistant.sms_webhook_url:
+            logger.info(f"No SMS webhook URL configured for assistant {assistant.id}")
+            return Response(content="", status_code=200)
+        
+        # Normalize the SMS data
+        normalized_sms_data = SMSWebhookService.normalize_twilio_sms_data(dict(form_data))
+        
+        # Forward the SMS webhook asynchronously
+        asyncio.create_task(
+            SMSWebhookService.process_sms_webhook_async(
+                assistant_sms_webhook_url=assistant.sms_webhook_url,
+                sms_data=normalized_sms_data,
+                provider="twilio"
+            )
+        )
+        
+        logger.info(f"Forwarded Twilio SMS webhook for assistant {assistant.id} to {assistant.sms_webhook_url}")
+        
+        # Return success response to Twilio
+        return Response(content="", status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error handling Twilio SMS webhook: {e}", exc_info=True)
         # Return 200 to Twilio to avoid retries on our errors
         return Response(content="", status_code=200)

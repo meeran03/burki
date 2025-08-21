@@ -99,15 +99,39 @@
             <!-- Webhook Configuration -->
             <div>
                 <h4 class="text-base font-semibold text-white mb-4">Webhook Configuration</h4>
-                <div>
-                    <label for="webhook_url" class="block text-sm font-medium text-gray-300 mb-2">Webhook URL</label>
-                    <input type="url" name="webhook_url" id="webhook_url"
-                        value="{{ assistant.webhook_url if assistant else '' }}"
-                        class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        placeholder="https://your-app.com/webhook">
-                    <p class="mt-2 text-xs text-gray-400">
-                        If provided, webhooks will be sent for call status updates and end-of-call reports
-                    </p>
+                <div class="space-y-6">
+                    <div>
+                        <label for="webhook_url" class="block text-sm font-medium text-gray-300 mb-2">Call Webhook URL</label>
+                        <input type="url" name="webhook_url" id="webhook_url"
+                            value="{{ assistant.webhook_url if assistant else '' }}"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="https://your-app.com/webhook">
+                        <p class="mt-2 text-xs text-gray-400">
+                            If provided, webhooks will be sent for call status updates and end-of-call reports
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label for="sms_webhook_url" class="block text-sm font-medium text-gray-300 mb-2">SMS Webhook URL</label>
+                        <input type="url" name="sms_webhook_url" id="sms_webhook_url"
+                            value="{{ assistant.sms_webhook_url if assistant else '' }}"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="https://your-app.com/sms-webhook">
+                        <p class="mt-2 text-xs text-gray-400">
+                            If provided, webhooks will be sent when SMS messages are received by this assistant
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label for="messaging_service_sid" class="block text-sm font-medium text-gray-300 mb-2">Messaging Service SID</label>
+                        <input type="text" name="messaging_service_sid" id="messaging_service_sid"
+                            value="{{ assistant.messaging_service_sid if assistant else '' }}"
+                            class="block w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            placeholder="MG1234567890abcdef1234567890abcdef">
+                        <p class="mt-2 text-xs text-gray-400">
+                            Twilio Messaging Service SID for SMS handling. Leave empty to use the default from environment variables.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>

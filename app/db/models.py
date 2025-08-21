@@ -361,6 +361,8 @@ class Assistant(Base):
 
     # Webhook settings
     webhook_url = Column(String(255), nullable=True)
+    sms_webhook_url = Column(String(255), nullable=True)
+    messaging_service_sid = Column(String(255), nullable=True)
 
     # Interruption settings as JSON
     interruption_settings = Column(
@@ -498,7 +500,7 @@ class Assistant(Base):
     documents = relationship("Document", back_populates="assistant", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Assistant(id={self.id}, name='{self.name}', phone_number='{self.phone_number}')>"
+        return f"<Assistant(id={self.id}, name='{self.name}')>"
 
 
 class Call(Base):

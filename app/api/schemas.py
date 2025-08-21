@@ -146,6 +146,8 @@ class AssistantBase(BaseModel):
     
     # Webhook settings
     webhook_url: Optional[str] = None
+    sms_webhook_url: Optional[str] = Field(None, description="URL to receive SMS webhook events")
+    messaging_service_sid: Optional[str] = Field(None, description="Twilio Messaging Service SID for SMS handling")
     
     # Interruption Settings
     interruption_settings: InterruptionSettings = Field(default_factory=InterruptionSettings)
@@ -763,7 +765,8 @@ class UpdateWebhookRequest(BaseModel):
     """Request model for updating phone number webhooks."""
     phone_number: str = Field(..., description="Phone number to update webhooks for")
     voice_webhook_url: Optional[str] = Field(None, description="URL for voice call webhooks")
-    sms_webhook_url: Optional[str] = Field(None, description="URL for SMS message webhooks")
+    disable_sms: Optional[bool] = Field(False, description="Set to true to disable SMS webhooks (sets to demo URL)")
+    enable_sms: Optional[bool] = Field(False, description="Set to true to enable SMS webhooks based on assigned assistant")
     provider: Optional[str] = Field(None, description="Provider ('twilio' or 'telnyx'). Auto-detected if not provided")
 
 
