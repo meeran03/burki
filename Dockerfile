@@ -49,18 +49,12 @@ RUN apt-get update && apt-get install -y \
     make \
     && rm -rf /var/lib/apt/lists/*
 
-# Install RNNoise for audio denoising
-RUN mkdir -p /tmp/rnnoise && cd /tmp/rnnoise \
-    && git clone https://github.com/xiph/rnnoise.git \
-    && cd rnnoise \
-    && ./autogen.sh \
-    && ./configure --prefix=/usr/local \
-    && make \
-    && make install \
-    && cp examples/.libs/rnnoise_demo /usr/local/bin/ \
-    && ldconfig \
-    && cd / \
-    && rm -rf /tmp/rnnoise
+# Copy RNNoise installation script
+COPY scripts/install_rnnoise_railway.sh /tmp/install_rnnoise_railway.sh
+RUN chmod +x /tmp/install_rnnoise_railway.sh
+
+# Install RNNoise for audio denoising (optional - graceful fallback if fails)
+RUN /tmp/install_rnnoise_railway.sh || echo "RNNoise installation script completed with fallback"
 
 # Set work directory
 WORKDIR /app
