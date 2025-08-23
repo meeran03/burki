@@ -11,21 +11,27 @@ import asyncio
 from typing import Optional, Dict, Set, Any
 from datetime import datetime
 from sqlalchemy import select
-from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.responses import Response
 from fastapi import APIRouter
 from twilio.twiml.voice_response import VoiceResponse, Connect
 
 from app.core.call_handler import CallHandler
 from app.core.assistant_manager import AssistantManager
+from app.core.auth import get_current_user_flexible
 from app.services.call_service import CallService
 from app.services.webhook_service import WebhookService
 from app.services.sms_webhook_service import SMSWebhookService
 from app.db.database import get_async_db_session
+from app.db.models import User
 
 from app.core.telephony_provider import UnifiedTelephonyService
 from app.telnyx.telnyx_webhook_handler import TelnyxWebhookHandler, validate_telnyx_webhook
 from app.utils.url_utils import get_twiml_webhook_url
+from app.utils.webhook_security import (
+    require_twilio_webhook_auth, 
+    get_webhook_security_headers
+)
 
 # Global mapping to store stream_id -> call_control_id relationships for Telnyx
 telnyx_stream_mappings = {}
@@ -444,7 +450,23 @@ async def get_twiml(request: Request):
     Generate TwiML for incoming Twilio calls.
     This endpoint is called by Twilio when a call comes in.
     """
-    form_data = await request.form()
+    # Validate Twilio webhook signature for security
+    body = await request.body()
+    require_twilio_webhook_auth(request, body)
+    
+    # Parse form data (recreate request since body was consumed)
+    if body:
+        form_data = {}
+        body_str = body.decode('utf-8')
+        for param in body_str.split('&'):
+            if '=' in param:
+                key, value = param.split('=', 1)
+                import urllib.parse
+                key = urllib.parse.unquote_plus(key)
+                value = urllib.parse.unquote_plus(value)
+                form_data[key] = value
+    else:
+        form_data = {}
     call_sid = form_data.get("CallSid")
     to_phone_number = form_data.get("To")
     customer_phone_number = form_data.get("From")
@@ -604,7 +626,13 @@ async def get_twiml(request: Request):
     twiml_response = str(response)
     logger.info(f"Returning TwiML response: {twiml_response}")
 
-    return Response(content=twiml_response, media_type="application/xml")
+    # Add security headers to response
+    security_headers = get_webhook_security_headers()
+    return Response(
+        content=twiml_response, 
+        media_type="application/xml",
+        headers=security_headers
+    )
 
 
 async def process_telnyx_recording_saved(
@@ -810,7 +838,11 @@ async def telnyx_webhook(request: Request):
         
         if not call_data:
             logger.debug("Webhook processed but no action required")
-            return Response(content="", status_code=200)
+            return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
         
         event_type = call_data.get('event_type')
         call_control_id = call_data.get('call_control_id')
@@ -830,7 +862,11 @@ async def telnyx_webhook(request: Request):
             
             if last_processed and (current_time - last_processed) < 30:  # 30 seconds dedup window
                 logger.info(f"Ignoring duplicate call_initiated webhook for {call_control_id} (processed {current_time - last_processed:.1f}s ago)")
-                return Response(content="", status_code=200)
+                return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
             
             telnyx_webhook_cache[call_control_id] = current_time
             
@@ -854,7 +890,11 @@ async def telnyx_webhook(request: Request):
                     command="hangup",
                     api_key=None  # Will use environment variable
                 )
-                return Response(content="", status_code=200)
+                return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
             
             # Answer the call with streaming parameters
             # Construct stream URL 
@@ -1018,11 +1058,19 @@ async def telnyx_webhook(request: Request):
             message_id = call_data.get('message_id')
             logger.info(f"Telnyx SMS {event_type}: message_id={message_id}")
         
-        return Response(content="", status_code=200)
+        return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
         
     except Exception as e:
         logger.error(f"Error handling Telnyx webhook: {e}", exc_info=True)
-        return Response(content="", status_code=200)  # Return 200 to avoid retries
+        return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )  # Return 200 to avoid retries
 
 
 @router.websocket("/streams")
@@ -1310,7 +1358,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @router.post("/calls/initiate", response_model=InitiateCallResponse)
-async def initiate_outbound_call(call_data: InitiateCallRequest):
+async def initiate_outbound_call(
+    call_data: InitiateCallRequest,
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     Initiates an outbound call from an assistant to a specified phone number.
     This endpoint is protected and requires authentication.
@@ -1331,6 +1382,10 @@ async def initiate_outbound_call(call_data: InitiateCallRequest):
         assistant = await assistant_manager.get_assistant_by_phone(from_phone_number)
         if not assistant:
             raise HTTPException(status_code=404, detail="Assistant not found")
+        
+        # Verify user owns this assistant/phone number
+        if assistant.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="Unauthorized: phone number belongs to different organization")
 
         # Create unified telephony service for this assistant
         # Use phone number to determine provider rather than assistant to avoid SQLAlchemy session issues
@@ -1410,7 +1465,10 @@ async def initiate_outbound_call(call_data: InitiateCallRequest):
 
 
 @router.post("/sms/send", response_model=SendSMSResponse)
-async def send_sms(sms_data: SendSMSRequest):
+async def send_sms(
+    sms_data: SendSMSRequest,
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     Send an SMS message through an assistant.
     
@@ -1449,6 +1507,10 @@ async def send_sms(sms_data: SendSMSRequest):
                 status_code=404, 
                 detail=f"No assistant found for phone number {from_phone_number}"
             )
+        
+        # Verify user owns this assistant/phone number
+        if assistant.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="Unauthorized: phone number belongs to different organization")
 
         # Create unified telephony service for this assistant
         # Use phone number to determine provider rather than assistant to avoid SQLAlchemy session issues
@@ -1508,8 +1570,21 @@ async def recording_status_callback(request: Request):
     This endpoint is called by Twilio when a recording is completed or failed.
     """
     try:
-        # Parse form data from Twilio
-        form_data = await request.form()
+        # Validate Twilio webhook signature for security
+        body = await request.body()
+        require_twilio_webhook_auth(request, body)
+        
+        # Parse form data manually since body was consumed
+        form_data = {}
+        if body:
+            body_str = body.decode('utf-8')
+            for param in body_str.split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    import urllib.parse
+                    key = urllib.parse.unquote_plus(key)
+                    value = urllib.parse.unquote_plus(value)
+                    form_data[key] = value
 
         # Extract recording details
         recording_sid = form_data.get("RecordingSid")
@@ -1535,7 +1610,11 @@ async def recording_status_callback(request: Request):
             logger.info(
                 f"Recording {recording_sid} status is '{recording_status}', not processing"
             )
-            return Response(content="", status_code=200)
+            return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
 
         # Get the call/conversation from database with relationships loaded
         from app.db.database import get_async_db_session
@@ -1706,12 +1785,20 @@ async def recording_status_callback(request: Request):
             logger.error(f"Error uploading Twilio recording to S3: {s3_error}")
 
         # Return success response to Twilio
-        return Response(content="", status_code=200)
+        return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
 
     except Exception as e:
         logger.error(f"Error handling recording status callback: {e}", exc_info=True)
         # Return 200 to Twilio to avoid retries on our errors
-        return Response(content="", status_code=200)
+        return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
 
 
 @router.post("/twilio-sms-webhook")
@@ -1722,8 +1809,21 @@ async def twilio_sms_webhook(request: Request):
     Forwards the SMS data to the assistant's configured sms_webhook_url.
     """
     try:
-        # Parse form data from Twilio
-        form_data = await request.form()
+        # Validate Twilio webhook signature for security
+        body = await request.body()
+        require_twilio_webhook_auth(request, body)
+        
+        # Parse form data manually since body was consumed
+        form_data = {}
+        if body:
+            body_str = body.decode('utf-8')
+            for param in body_str.split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    import urllib.parse
+                    key = urllib.parse.unquote_plus(key)
+                    value = urllib.parse.unquote_plus(value)
+                    form_data[key] = value
         
         # Extract SMS details
         to_phone_number = form_data.get("To")
@@ -1753,7 +1853,11 @@ async def twilio_sms_webhook(request: Request):
         # Check if assistant has an SMS webhook URL configured
         if not assistant.sms_webhook_url:
             logger.info(f"No SMS webhook URL configured for assistant {assistant.id}")
-            return Response(content="", status_code=200)
+            return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
         
         # Normalize the SMS data
         normalized_sms_data = SMSWebhookService.normalize_twilio_sms_data(dict(form_data))
@@ -1770,9 +1874,17 @@ async def twilio_sms_webhook(request: Request):
         logger.info(f"Forwarded Twilio SMS webhook for assistant {assistant.id} to {assistant.sms_webhook_url}")
         
         # Return success response to Twilio
-        return Response(content="", status_code=200)
+        return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
         
     except Exception as e:
         logger.error(f"Error handling Twilio SMS webhook: {e}", exc_info=True)
         # Return 200 to Twilio to avoid retries on our errors
-        return Response(content="", status_code=200)
+        return Response(
+            content="", 
+            status_code=200,
+            headers=get_webhook_security_headers()
+        )
