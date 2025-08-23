@@ -1412,13 +1412,14 @@ async def export_assistants(
     search: str = None,
     status: str = None,
     performance: str = None,
+    current_user: User = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
     """Export assistants data in CSV or JSON format."""
     import csv
 
-    # Get assistants with same filtering as list view
-    query = db.query(Assistant)
+    # Get assistants with same filtering as list view - only from user's organization
+    query = db.query(Assistant).filter(Assistant.organization_id == current_user.organization_id)
 
     # Apply search filter
     if search:
@@ -1529,6 +1530,7 @@ async def bulk_action_assistants(
     request: Request,
     action: str = Form(...),
     assistant_ids: str = Form(...),
+    current_user: User = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
     """Perform bulk actions on assistants."""
@@ -1539,8 +1541,11 @@ async def bulk_action_assistants(
         if not ids:
             return {"success": False, "message": "No assistants selected"}
 
-        # Get assistants
-        assistants = db.query(Assistant).filter(Assistant.id.in_(ids)).all()
+        # Get assistants - only from user's organization
+        assistants = db.query(Assistant).filter(
+            Assistant.id.in_(ids),
+            Assistant.organization_id == current_user.organization_id
+        ).all()
 
         if action == "activate":
             for assistant in assistants:
