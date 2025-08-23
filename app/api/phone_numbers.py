@@ -34,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/search", response_model=SearchPhoneNumbersResponse)
-async def search_phone_numbers(search_data: SearchPhoneNumbersRequest):
+async def search_phone_numbers(
+    search_data: SearchPhoneNumbersRequest,
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     Search for available phone numbers for purchase.
     
@@ -227,7 +230,10 @@ async def purchase_phone_number(
 
 
 @router.get("/{phone_number}/diagnose")
-async def diagnose_phone_number_connection(phone_number: str):
+async def diagnose_phone_number_connection(
+    phone_number: str,
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     Diagnose the connection status of a phone number in Telnyx.
     
@@ -245,6 +251,20 @@ async def diagnose_phone_number_connection(phone_number: str):
         
         # Remove URL encoding if present
         phone_number = phone_number.replace("%2B", "+")
+        
+        # Verify user owns this phone number
+        async with await get_async_db_session() as db:
+            from app.db.models import PhoneNumber
+            
+            phone_query = select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
+            phone_result = await db.execute(phone_query)
+            phone_obj = phone_result.scalar_one_or_none()
+            
+            if not phone_obj:
+                raise HTTPException(status_code=404, detail="Phone number not found in your account")
+            
+            if phone_obj.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=403, detail="Unauthorized: phone number belongs to different organization")
         
         # Validate phone number format
         if not phone_number.startswith('+'):
@@ -270,7 +290,10 @@ async def diagnose_phone_number_connection(phone_number: str):
 
 
 @router.post("/release", response_model=ReleasePhoneNumberResponse)
-async def release_phone_number(release_data: ReleasePhoneNumberRequest):
+async def release_phone_number(
+    release_data: ReleasePhoneNumberRequest,
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     Release a phone number from Twilio or Telnyx account.
     
@@ -286,6 +309,20 @@ async def release_phone_number(release_data: ReleasePhoneNumberRequest):
     try:
         phone_number = release_data.phone_number
         provider = release_data.provider
+        
+        # Verify user owns this phone number
+        async with await get_async_db_session() as db:
+            from app.db.models import PhoneNumber
+            
+            phone_query = select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
+            phone_result = await db.execute(phone_query)
+            phone_obj = phone_result.scalar_one_or_none()
+            
+            if not phone_obj:
+                raise HTTPException(status_code=404, detail="Phone number not found in your account")
+            
+            if phone_obj.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=403, detail="Unauthorized: phone number belongs to different organization")
         
         # Auto-detect provider if not specified
         if not provider:
@@ -354,7 +391,10 @@ async def release_phone_number(release_data: ReleasePhoneNumberRequest):
 
 
 @router.get("/countries", response_model=CountryCodesResponse)
-async def list_country_codes(provider: str = "telnyx"):
+async def list_country_codes(
+    provider: str = "telnyx",
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     List available country codes for phone number search.
     
@@ -398,7 +438,10 @@ async def list_country_codes(provider: str = "telnyx"):
 
 
 @router.put("/webhooks", response_model=UpdateWebhookResponse)
-async def update_phone_webhooks(webhook_data: UpdateWebhookRequest):
+async def update_phone_webhooks(
+    webhook_data: UpdateWebhookRequest,
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     Update voice webhook URL and/or disable SMS webhooks for a phone number.
     
@@ -417,6 +460,20 @@ async def update_phone_webhooks(webhook_data: UpdateWebhookRequest):
         disable_sms = webhook_data.disable_sms
         enable_sms = webhook_data.enable_sms
         provider = webhook_data.provider
+        
+        # Verify user owns this phone number
+        async with await get_async_db_session() as db:
+            from app.db.models import PhoneNumber
+            
+            phone_query = select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
+            phone_result = await db.execute(phone_query)
+            phone_obj = phone_result.scalar_one_or_none()
+            
+            if not phone_obj:
+                raise HTTPException(status_code=404, detail="Phone number not found in your account")
+            
+            if phone_obj.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=403, detail="Unauthorized: phone number belongs to different organization")
         
         # Validate that at least one action is requested
         if not voice_webhook_url and not disable_sms and not enable_sms:
@@ -659,7 +716,11 @@ async def update_phone_webhooks(webhook_data: UpdateWebhookRequest):
 
 
 @router.get("/{phone_number}/webhooks", response_model=GetWebhookResponse)
-async def get_phone_webhooks(phone_number: str, provider: Optional[str] = None):
+async def get_phone_webhooks(
+    phone_number: str, 
+    provider: Optional[str] = None,
+    current_user: User = Depends(get_current_user_flexible)
+):
     """
     Get current webhook configuration for a phone number.
     
@@ -680,6 +741,20 @@ async def get_phone_webhooks(phone_number: str, provider: Optional[str] = None):
                 status_code=400,
                 detail="Phone number must be in E.164 format (e.g., +1234567890)"
             )
+        
+        # Verify user owns this phone number
+        async with await get_async_db_session() as db:
+            from app.db.models import PhoneNumber
+            
+            phone_query = select(PhoneNumber).where(PhoneNumber.phone_number == phone_number)
+            phone_result = await db.execute(phone_query)
+            phone_obj = phone_result.scalar_one_or_none()
+            
+            if not phone_obj:
+                raise HTTPException(status_code=404, detail="Phone number not found in your account")
+            
+            if phone_obj.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=403, detail="Unauthorized: phone number belongs to different organization")
         
         # Auto-detect provider if not specified
         if not provider:
