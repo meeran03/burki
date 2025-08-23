@@ -8,6 +8,7 @@ import json
 import os
 import datetime
 from io import StringIO
+from typing import Optional
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response
 from fastapi.responses import (
     HTMLResponse,
@@ -27,6 +28,7 @@ from app.db.models import (
     Assistant,
     ChatMessage,
     WebhookLog,
+    User,
 )
 from app.services.assistant_service import AssistantService
 from app.services.auth_service import AuthService
@@ -44,6 +46,33 @@ logger = logging.getLogger(__name__)
 # Security
 security = HTTPBearer(auto_error=False)
 auth_service = AuthService()
+
+
+async def get_current_user(
+    request: Request, db: Session = Depends(get_db)
+) -> Optional[User]:
+    """Get current user from session."""
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.is_active == True
+    ).first()
+
+    return user
+
+
+async def require_auth(request: Request, db: Session = Depends(get_db)) -> User:
+    """Require authentication and return the current user."""
+    user = await get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Ensure first_name and last_name are populated
+    user.split_full_name_if_needed()
+    return user
 
 
 def get_template_context(request: Request, **extra_context) -> dict:
@@ -67,9 +96,25 @@ def get_template_context(request: Request, **extra_context) -> dict:
 
 @router.get("/calls/{call_id}/recording/{recording_id}")
 async def download_recording(
-    request: Request, call_id: int, recording_id: int, db: Session = Depends(get_db)
+    request: Request, call_id: int, recording_id: int, 
+    current_user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
 ):
     """Download or serve recording from S3."""
+    # Verify the call belongs to user's organization first
+    call = (
+        db.query(Call)
+        .join(Assistant)
+        .filter(
+            Call.id == call_id,
+            Assistant.organization_id == current_user.organization_id
+        )
+        .first()
+    )
+    
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
     recording = (
         db.query(Recording)
         .filter(Recording.id == recording_id, Recording.call_id == call_id)
@@ -143,15 +188,30 @@ async def download_recording(
 
 @router.get("/calls/{call_id}/recording/{recording_id}/play")
 async def play_recording(
-    request: Request, call_id: int, recording_id: int, db: Session = Depends(get_db)
+    request: Request, call_id: int, recording_id: int, 
+    current_user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
 ):
     """Serve recording for in-browser audio player from S3."""
+    # Verify the call belongs to user's organization first
+    call = (
+        db.query(Call)
+        .join(Assistant)
+        .filter(
+            Call.id == call_id,
+            Assistant.organization_id == current_user.organization_id
+        )
+        .first()
+    )
+    
+    if not call:
+        raise HTTPException(status_code=404, detail="Call not found")
+    
     recording = (
         db.query(Recording)
         .filter(Recording.id == recording_id, Recording.call_id == call_id)
         .first()
     )
-    logger = logging.getLogger(__name__)
 
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
@@ -193,10 +253,21 @@ async def play_recording(
 
 @router.get("/calls/{call_id}/transcripts/export")
 async def export_transcripts(
-    request: Request, call_id: int, format: str = "txt", db: Session = Depends(get_db)
+    request: Request, call_id: int, format: str = "txt", 
+    current_user: User = Depends(require_auth),
+    db: Session = Depends(get_db)
 ):
     """Export call transcripts in various formats."""
-    call = db.query(Call).filter(Call.id == call_id).first()
+    # Verify the call belongs to user's organization first
+    call = (
+        db.query(Call)
+        .join(Assistant)
+        .filter(
+            Call.id == call_id,
+            Assistant.organization_id == current_user.organization_id
+        )
+        .first()
+    )
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
 
@@ -276,11 +347,16 @@ async def list_calls(
     date_range: str = None,
     sort_by: str = "started_at",
     sort_order: str = "desc",
+    current_user: User = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
     """List calls with pagination, filtering, and sorting."""
-    # Base query
-    query = db.query(Call)
+    # Base query - only calls from user's organization
+    query = (
+        db.query(Call)
+        .join(Assistant)
+        .filter(Assistant.organization_id == current_user.organization_id)
+    )
 
     # Apply search filter
     if search:
@@ -458,9 +534,20 @@ async def list_calls(
 
 
 @router.get("/calls/{call_id}", response_class=HTMLResponse)
-async def view_call(request: Request, call_id: int, db: Session = Depends(get_db)):
+async def view_call(request: Request, call_id: int, 
+                   current_user: User = Depends(require_auth),
+                   db: Session = Depends(get_db)):
     """View a call with recordings, transcripts, chat messages, and webhook logs."""
-    call = db.query(Call).filter(Call.id == call_id).first()
+    # Verify the call belongs to user's organization
+    call = (
+        db.query(Call)
+        .join(Assistant)
+        .filter(
+            Call.id == call_id,
+            Assistant.organization_id == current_user.organization_id
+        )
+        .first()
+    )
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
 
@@ -696,13 +783,18 @@ async def export_calls(
     status: str = None,
     assistant_id: int = None,
     date_range: str = None,
+    current_user: User = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
     """Export calls data in CSV or JSON format."""
     import csv
 
-    # Get calls with same filtering as list view
-    query = db.query(Call)
+    # Get calls with same filtering as list view - only from user's organization
+    query = (
+        db.query(Call)
+        .join(Assistant)
+        .filter(Assistant.organization_id == current_user.organization_id)
+    )
 
     # Apply search filter
     if search:
@@ -830,6 +922,7 @@ async def bulk_action_calls(
     request: Request,
     action: str = Form(...),
     call_ids: str = Form(...),
+    current_user: User = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
     """Perform bulk actions on calls."""
@@ -840,8 +933,16 @@ async def bulk_action_calls(
         if not ids:
             return {"success": False, "message": "No calls selected"}
 
-        # Get calls
-        calls = db.query(Call).filter(Call.id.in_(ids)).all()
+        # Get calls - only from user's organization
+        calls = (
+            db.query(Call)
+            .join(Assistant)
+            .filter(
+                Call.id.in_(ids),
+                Assistant.organization_id == current_user.organization_id
+            )
+            .all()
+        )
 
         if action == "delete":
             # Delete related records first
