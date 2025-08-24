@@ -22,12 +22,14 @@ from app.core.call_manager import CallManager
 from app.core.assistant_manager import assistant_manager
 from app.api.assistants import router as assistants_router
 from app.api.calls import router as calls_router
+from app.api.tools import router as tools_router
 from app.api.web.index import router as web_router
 from app.api.web.auth import router as web_auth_router
 from app.api.web.assistant import router as web_assistant_router
 from app.api.web.call import router as web_call_router
 from app.api.web.docs import router as web_docs_router
 from app.api.web.phone_numbers import router as web_phone_numbers_router
+from app.api.web.tools import router as web_tools_router
 from app.api.phone_numbers import router as phone_numbers_router
 from app.api.web.seo import router as web_seo_router
 from app.api.root import router as root_router
@@ -105,12 +107,14 @@ app.include_router(web_assistant_router)
 app.include_router(web_call_router)
 app.include_router(web_docs_router)
 app.include_router(web_phone_numbers_router)
+app.include_router(web_tools_router)
 app.include_router(web_seo_router)
 
 # API routers - no additional prefix needed since they include full path
 app.include_router(assistants_router)
 app.include_router(calls_router)
 app.include_router(phone_numbers_router)
+app.include_router(tools_router)
 
 # Initialize state and handlers
 call_manager = CallManager()

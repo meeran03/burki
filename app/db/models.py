@@ -877,6 +877,188 @@ class WebhookLog(Base):
         }
 
 
+class Tool(Base):
+    """
+    Tool model represents custom tools that can be used by assistants.
+    Tools are organization-scoped and can be shared across multiple assistants.
+    """
+
+    __tablename__ = "tools"
+
+    id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)  # Creator
+    
+    # Tool identification
+    name = Column(String(100), nullable=False)  # Function name (snake_case)
+    display_name = Column(String(200), nullable=False)  # Human-readable name
+    description = Column(Text, nullable=False)  # Tool description for LLM
+    tool_type = Column(String(50), nullable=False, index=True)  # 'endpoint', 'python_function', 'lambda'
+    
+    # Tool configuration (JSON) - specific to tool type
+    configuration = Column(JSON, nullable=False, default=lambda: {})
+    
+    # Function definition for LLM (JSON)
+    function_definition = Column(JSON, nullable=False, default=lambda: {})
+    
+    # Tool settings
+    timeout_seconds = Column(Integer, nullable=False, default=30)
+    retry_attempts = Column(Integer, nullable=False, default=3)
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_public = Column(Boolean, nullable=False, default=False)  # Whether available to all orgs
+    
+    # Usage statistics
+    execution_count = Column(Integer, nullable=False, default=0)
+    last_executed_at = Column(DateTime, nullable=True)
+    success_count = Column(Integer, nullable=False, default=0)
+    failure_count = Column(Integer, nullable=False, default=0)
+    
+    # Version control
+    version = Column(String(20), nullable=False, default="1.0.0")
+    parent_tool_id = Column(Integer, ForeignKey("tools.id"), nullable=True)  # For duplicated tools
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    # Relationships
+    organization = relationship("Organization", back_populates="tools")
+    user = relationship("User", back_populates="created_tools")
+    assistant_tools = relationship("AssistantTool", back_populates="tool", cascade="all, delete-orphan")
+    execution_logs = relationship("ToolExecutionLog", back_populates="tool", cascade="all, delete-orphan")
+    
+    # Self-referencing relationship for duplicated tools
+    duplicated_tools = relationship("Tool", remote_side=[id])
+
+    # Unique constraint for tool name within organization
+    __table_args__ = (
+        Index('idx_tool_org_name', 'organization_id', 'name', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<Tool(id={self.id}, name='{self.name}', type='{self.tool_type}', organization_id={self.organization_id})>"
+
+    def get_success_rate(self) -> float:
+        """Calculate success rate percentage."""
+        total_executions = self.success_count + self.failure_count
+        if total_executions == 0:
+            return 0.0
+        return (self.success_count / total_executions) * 100
+
+
+class AssistantTool(Base):
+    """
+    AssistantTool model represents the many-to-many relationship between assistants and tools.
+    Allows for assistant-specific configuration overrides.
+    """
+
+    __tablename__ = "assistant_tools"
+
+    id = Column(Integer, primary_key=True)
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False, index=True)
+    tool_id = Column(Integer, ForeignKey("tools.id"), nullable=False, index=True)
+    
+    # Assignment settings
+    enabled = Column(Boolean, nullable=False, default=True)
+    custom_configuration = Column(JSON, nullable=True)  # Assistant-specific overrides
+    
+    # Assignment metadata
+    assigned_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assigned_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    
+    # Usage statistics for this assignment
+    execution_count = Column(Integer, nullable=False, default=0)
+    last_executed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    assistant = relationship("Assistant", back_populates="assistant_tools")
+    tool = relationship("Tool", back_populates="assistant_tools")
+    assigned_by = relationship("User")
+
+    # Unique constraint for assistant-tool assignment
+    __table_args__ = (
+        Index('idx_assistant_tool', 'assistant_id', 'tool_id', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<AssistantTool(id={self.id}, assistant_id={self.assistant_id}, tool_id={self.tool_id}, enabled={self.enabled})>"
+
+
+class ToolExecutionLog(Base):
+    """
+    ToolExecutionLog model represents execution history and logs for tool calls.
+    """
+
+    __tablename__ = "tool_execution_logs"
+
+    id = Column(Integer, primary_key=True)
+    tool_id = Column(Integer, ForeignKey("tools.id"), nullable=False, index=True)
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=True, index=True)
+    call_id = Column(Integer, ForeignKey("calls.id"), nullable=True, index=True)
+    
+    # Execution details
+    parameters = Column(JSON, nullable=True)  # Input parameters
+    result = Column(JSON, nullable=True)  # Execution result
+    status = Column(String(20), nullable=False, index=True)  # 'success', 'error', 'timeout'
+    error_message = Column(Text, nullable=True)  # Error details if failed
+    
+    # Timing information
+    started_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    duration_ms = Column(Integer, nullable=True)  # Execution duration in milliseconds
+    
+    # Context information
+    execution_context = Column(JSON, nullable=True)  # Call context, user info, etc.
+    
+    # Provider-specific information
+    provider_response = Column(JSON, nullable=True)  # Raw response from provider
+    retry_count = Column(Integer, nullable=False, default=0)
+
+    # Relationships
+    tool = relationship("Tool", back_populates="execution_logs")
+    assistant = relationship("Assistant")
+    call = relationship("Call")
+
+    def __repr__(self):
+        return f"<ToolExecutionLog(id={self.id}, tool_id={self.tool_id}, status='{self.status}', duration_ms={self.duration_ms})>"
+
+    def get_summary(self) -> Dict[str, Any]:
+        """Get a summary of the execution."""
+        return {
+            "id": self.id,
+            "tool_id": self.tool_id,
+            "assistant_id": self.assistant_id,
+            "call_id": self.call_id,
+            "status": self.status,
+            "duration_ms": self.duration_ms,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+        }
+
+
+# Update existing models to include tool relationships
+def add_tool_relationships():
+    """Add tool relationships to existing models."""
+    
+    # Add tools relationship to Organization
+    if not hasattr(Organization, 'tools'):
+        Organization.tools = relationship("Tool", back_populates="organization", cascade="all, delete-orphan")
+    
+    # Add created_tools relationship to User
+    if not hasattr(User, 'created_tools'):
+        User.created_tools = relationship("Tool", back_populates="user", cascade="all, delete-orphan")
+    
+    # Add assistant_tools relationship to Assistant
+    if not hasattr(Assistant, 'assistant_tools'):
+        Assistant.assistant_tools = relationship("AssistantTool", back_populates="assistant", cascade="all, delete-orphan")
+
 # Update existing models to include document relationships
 # Add to Organization class
 def add_documents_relationship_to_organization():
@@ -891,5 +1073,6 @@ def add_documents_relationship_to_assistant():
         Assistant.documents = relationship("Document", back_populates="assistant", cascade="all, delete-orphan")
 
 # Call the functions to add relationships
+add_tool_relationships()
 add_documents_relationship_to_organization()
 add_documents_relationship_to_assistant()

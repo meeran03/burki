@@ -1,9 +1,21 @@
-<!-- Tools Configuration Section -->
+<!-- Enhanced Tools Configuration Section -->
 <div class="space-y-6">
+    <div class="flex items-center justify-between mb-6">
     <div>
-        <h4 class="text-base font-semibold text-white mb-4">Tools Configuration</h4>
-        <p class="text-sm text-gray-400 mb-6">Enable tools to allow the assistant to perform actions during calls.</p>
+            <h4 class="text-base font-semibold text-white mb-2">Tools & Actions</h4>
+            <p class="text-sm text-gray-400">Configure tools that this assistant can use during calls</p>
+        </div>
+        <button type="button" onclick="openToolLibrary()" class="px-4 py-2 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors">
+            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Tool
+        </button>
     </div>
+    
+    <!-- Built-in Tools Section -->
+    <div class="space-y-4 mb-8">
+        <h5 class="text-sm font-semibold text-white">Built-in Tools</h5>
     
     <!-- End Call Tool -->
     <div class="bg-gray-700/20 border border-gray-600/50 rounded-lg p-4">
@@ -75,10 +87,451 @@
             </div>
         </div>
     </div>
+    
+    <!-- Custom Tools Section -->
+    <div class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h5 class="text-sm font-semibold text-white">Custom Tools</h5>
+            <span class="text-xs text-gray-400" id="custom-tools-count">{{ assigned_tools|length if assigned_tools else 0 }} tools assigned</span>
+        </div>
+        
+        <div id="assigned-tools" class="space-y-3">
+            {% if assigned_tools %}
+                {% for tool_assignment in assigned_tools %}
+                <div class="tool-assignment-card bg-gray-700/20 border border-gray-600/50 rounded-lg p-4" data-tool-id="{{ tool_assignment.tool.id }}">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                                {% if tool_assignment.tool.tool_type == 'endpoint' %}
+                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                {% elif tool_assignment.tool.tool_type == 'python_function' %}
+                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                    </svg>
+                                {% elif tool_assignment.tool.tool_type == 'lambda' %}
+                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                    </svg>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <h6 class="text-sm font-medium text-white">{{ tool_assignment.tool.display_name }}</h6>
+                                <p class="text-xs text-gray-400">{{ tool_assignment.tool.tool_type.replace('_', ' ')|title }} • {{ tool_assignment.tool.execution_count or 0 }} executions</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="tool_{{ tool_assignment.tool.id }}_enabled" 
+                                    {% if tool_assignment.enabled %}checked{% endif %}
+                                    class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-[#10B981] focus:ring-[#10B981] focus:ring-offset-gray-800">
+                                <span class="ml-2 text-xs text-gray-400">Enabled</span>
+                            </label>
+                            <button type="button" onclick="configureToolForAssistant({{ tool_assignment.tool.id }})" 
+                                class="p-1 text-gray-400 hover:text-white rounded" title="Configure">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                </svg>
+                            </button>
+                            <button type="button" onclick="removeToolFromAssistant({{ tool_assignment.tool.id }})" 
+                                class="p-1 text-red-400 hover:text-red-300 rounded" title="Remove">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tool Configuration Override -->
+                    <div class="tool-config-override mt-3 hidden" id="tool-config-{{ tool_assignment.tool.id }}">
+                        <div class="border-t border-gray-600 pt-3">
+                            <h6 class="text-xs font-medium text-white mb-2">Assistant-Specific Configuration</h6>
+                            <textarea name="tool_{{ tool_assignment.tool.id }}_config" 
+                                class="w-full px-3 py-2 text-xs bg-gray-700/50 border border-gray-600 rounded text-white" 
+                                rows="3" 
+                                placeholder='{"timeout": 30, "custom_param": "value"}'>{{ tool_assignment.custom_configuration | tojson if tool_assignment.custom_configuration else '' }}</textarea>
+                            <p class="text-xs text-gray-400 mt-1">Override default tool configuration for this assistant (JSON format)</p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <!-- Empty State -->
+                <div class="text-center py-8 border-2 border-dashed border-gray-600 rounded-lg" id="empty-tools-state">
+                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center mx-auto mb-3">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        </svg>
+                    </div>
+                    <h6 class="text-sm font-medium text-white mb-2">No Custom Tools Assigned</h6>
+                    <p class="text-xs text-gray-400 mb-4">Add tools from your organization library to extend this assistant's capabilities</p>
+                    <button type="button" onclick="openToolLibrary()" class="px-4 py-2 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors">
+                        Browse Tools
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Tool Library Modal -->
+<div id="tool-library-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="auth-card rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-white">Add Tools to Assistant</h3>
+            <button type="button" onclick="closeToolLibrary()" class="p-2 text-gray-400 hover:text-white rounded">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Search and Filter -->
+        <div class="flex items-center space-x-4 mb-6">
+            <div class="flex-1">
+                <input type="text" id="tool-search" placeholder="Search tools..." 
+                    class="w-full px-4 py-2 rounded-lg bg-gray-700/50 border border-gray-600 text-white focus:ring-2 focus:ring-[#10B981]">
+            </div>
+            <select id="tool-type-filter" class="px-4 py-2 rounded-lg bg-gray-700/50 border border-gray-600 text-white">
+                <option value="">All Types</option>
+                <option value="endpoint">API Endpoint</option>
+                <option value="python_function">Python Function</option>
+                <option value="lambda">AWS Lambda</option>
+            </select>
+        </div>
+        
+        <!-- Available Tools Grid -->
+        <div id="available-tools-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto mb-6">
+            <!-- Tool cards will be loaded here via JavaScript -->
+            <div class="col-span-2 text-center py-8 text-gray-400">
+                <svg class="w-8 h-8 mx-auto mb-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Loading tools...
+            </div>
+        </div>
+        
+        <div class="flex items-center justify-end space-x-3">
+            <button type="button" onclick="closeToolLibrary()" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+                Cancel
+            </button>
+            <button type="button" onclick="addSelectedTools()" class="px-4 py-2 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors">
+                Add Selected Tools
+            </button>
+        </div>
+    </div>
 </div>
 
 <script>
-// Tools configuration toggle functions (if not already defined)
+// Enhanced tool management JavaScript
+
+// Tool Library Management
+let selectedTools = new Set();
+
+function openToolLibrary() {
+    const modal = document.getElementById('tool-library-modal');
+    modal.classList.remove('hidden');
+    loadAvailableTools();
+}
+
+function closeToolLibrary() {
+    const modal = document.getElementById('tool-library-modal');
+    modal.classList.add('hidden');
+    selectedTools.clear();
+}
+
+async function loadAvailableTools() {
+    try {
+        const response = await fetch('/api/organization/tools');
+        const tools = await response.json();
+        
+        if (tools.success) {
+            renderToolsGrid(tools.tools);
+        } else {
+            throw new Error(tools.error || 'Failed to load tools');
+        }
+    } catch (error) {
+        document.getElementById('available-tools-grid').innerHTML = `
+            <div class="col-span-2 text-center py-8 text-red-400">
+                <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Error loading tools: ${error.message}
+            </div>
+        `;
+    }
+}
+
+function renderToolsGrid(tools) {
+    const grid = document.getElementById('available-tools-grid');
+    
+    if (!tools || tools.length === 0) {
+        grid.innerHTML = `
+            <div class="col-span-2 text-center py-8 text-gray-400">
+                <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                </svg>
+                <p>No tools available</p>
+                <a href="/tools/new" class="inline-block mt-2 px-4 py-2 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors">
+                    Create First Tool
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    const currentlyAssigned = new Set();
+    document.querySelectorAll('.tool-assignment-card').forEach(card => {
+        currentlyAssigned.add(parseInt(card.dataset.toolId));
+    });
+    
+    grid.innerHTML = tools.map(tool => {
+        const isAssigned = currentlyAssigned.has(tool.id);
+        const toolTypeIcon = getToolTypeIcon(tool.tool_type);
+        
+        return `
+            <div class="tool-card bg-gray-700/20 border border-gray-600/50 rounded-lg p-4 ${isAssigned ? 'opacity-50' : 'hover:bg-gray-700/40'} transition-colors">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                            ${toolTypeIcon}
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-white">${tool.display_name}</h4>
+                            <p class="text-xs text-gray-400">${tool.tool_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        ${isAssigned ? 
+                            '<span class="text-xs text-green-400">✓ Added</span>' :
+                            `<input type="checkbox" class="tool-select w-4 h-4 rounded border-gray-600 bg-gray-700 text-[#10B981]" data-tool-id="${tool.id}">`
+                        }
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 mb-3 line-clamp-2">${tool.description}</p>
+                <div class="text-xs text-gray-500">
+                    ${tool.execution_count || 0} executions • ${tool.is_active ? 'Active' : 'Inactive'}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // Add event listeners for tool selection
+    grid.querySelectorAll('.tool-select').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const toolId = parseInt(this.dataset.toolId);
+            if (this.checked) {
+                selectedTools.add(toolId);
+            } else {
+                selectedTools.delete(toolId);
+            }
+        });
+    });
+}
+
+function getToolTypeIcon(toolType) {
+    const icons = {
+        'endpoint': '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>',
+        'python_function': '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>',
+        'lambda': '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>'
+    };
+    return icons[toolType] || icons['endpoint'];
+}
+
+async function addSelectedTools() {
+    if (selectedTools.size === 0) {
+        showNotification('Please select at least one tool', 'error');
+        return;
+    }
+    
+    try {
+        // Get assistant ID (you'll need to pass this from the template)
+        const assistantId = {{ assistant.id if assistant else 'null' }};
+        
+        if (!assistantId) {
+            // For new assistants, we'll store the selection and apply it after creation
+            storeSelectedToolsForNewAssistant();
+            return;
+        }
+        
+        const response = await fetch(`/api/assistants/${assistantId}/tools/assign`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                tool_ids: Array.from(selectedTools)
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`${selectedTools.size} tools added successfully`, 'success');
+            closeToolLibrary();
+            
+            // Refresh the assigned tools section
+            location.reload(); // Or implement dynamic refresh
+        } else {
+            throw new Error(result.error || 'Failed to assign tools');
+        }
+        
+    } catch (error) {
+        showNotification(`Error adding tools: ${error.message}`, 'error');
+    }
+}
+
+function storeSelectedToolsForNewAssistant() {
+    // Store selected tools in hidden inputs to be submitted with the form
+    const toolsContainer = document.getElementById('assigned-tools');
+    
+    selectedTools.forEach(toolId => {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'selected_tools[]';
+        hiddenInput.value = toolId;
+        toolsContainer.appendChild(hiddenInput);
+    });
+    
+    showNotification(`${selectedTools.size} tools selected for assignment`, 'success');
+    closeToolLibrary();
+}
+
+function configureToolForAssistant(toolId) {
+    const configDiv = document.getElementById(`tool-config-${toolId}`);
+    if (configDiv) {
+        configDiv.classList.toggle('hidden');
+    }
+}
+
+async function removeToolFromAssistant(toolId) {
+    if (!confirm('Are you sure you want to remove this tool from the assistant?')) {
+        return;
+    }
+    
+    try {
+        const assistantId = {{ assistant.id if assistant else 'null' }};
+        
+        if (!assistantId) {
+            // For new assistants, just remove from UI
+            const toolCard = document.querySelector(`[data-tool-id="${toolId}"]`);
+            if (toolCard) {
+                toolCard.remove();
+                updateToolsCount();
+            }
+            return;
+        }
+        
+        const response = await fetch(`/api/assistants/${assistantId}/tools/${toolId}/unassign`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Tool removed successfully', 'success');
+            
+            // Remove from UI
+            const toolCard = document.querySelector(`[data-tool-id="${toolId}"]`);
+            if (toolCard) {
+                toolCard.remove();
+                updateToolsCount();
+            }
+        } else {
+            throw new Error(result.error || 'Failed to remove tool');
+        }
+        
+    } catch (error) {
+        showNotification(`Error removing tool: ${error.message}`, 'error');
+    }
+}
+
+function updateToolsCount() {
+    const count = document.querySelectorAll('.tool-assignment-card').length;
+    const countSpan = document.getElementById('custom-tools-count');
+    if (countSpan) {
+        countSpan.textContent = `${count} tools assigned`;
+    }
+    
+    // Show/hide empty state
+    const emptyState = document.getElementById('empty-tools-state');
+    const assignedTools = document.getElementById('assigned-tools');
+    
+    if (count === 0 && emptyState) {
+        emptyState.classList.remove('hidden');
+    } else if (emptyState) {
+        emptyState.classList.add('hidden');
+    }
+}
+
+// Search and filter functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('tool-search');
+    const typeFilter = document.getElementById('tool-type-filter');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', filterTools);
+    }
+    
+    if (typeFilter) {
+        typeFilter.addEventListener('change', filterTools);
+    }
+});
+
+function filterTools() {
+    const searchTerm = document.getElementById('tool-search')?.value.toLowerCase() || '';
+    const typeFilter = document.getElementById('tool-type-filter')?.value || '';
+    const toolCards = document.querySelectorAll('#available-tools-grid .tool-card');
+    
+    toolCards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        const matchesSearch = text.includes(searchTerm);
+        const cardType = card.querySelector('.text-xs')?.textContent.toLowerCase() || '';
+        const matchesType = !typeFilter || cardType.includes(typeFilter.replace('_', ' '));
+        
+        if (matchesSearch && matchesType) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+// Utility function for notifications
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all transform translate-x-full`;
+    
+    if (type === 'success') {
+        notification.classList.add('bg-green-600', 'text-white');
+        notification.innerHTML = `✅ ${message}`;
+    } else if (type === 'error') {
+        notification.classList.add('bg-red-600', 'text-white');
+        notification.innerHTML = `❌ ${message}`;
+    } else {
+        notification.classList.add('bg-blue-600', 'text-white');
+        notification.innerHTML = `ℹ️ ${message}`;
+    }
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
+}
+
+// Existing tools configuration functions
 if (typeof toggleEndCallConfig === 'undefined') {
     function toggleEndCallConfig() {
         const checkbox = document.getElementById('end_call_enabled');

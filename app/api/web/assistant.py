@@ -9,7 +9,7 @@ import json
 import logging
 from io import StringIO
 import os
-from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response, UploadFile, File
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, Response
 from fastapi.responses import (
     HTMLResponse,
     RedirectResponse,
@@ -17,7 +17,7 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBearer
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, asc
 
 from app.db.database import get_db, get_async_db_session
@@ -422,6 +422,8 @@ async def create_assistant(
     transfer_call_scenarios: Optional[str] = Form(None),
     transfer_call_numbers: Optional[str] = Form(None),
     transfer_call_custom_message: Optional[str] = Form(None),
+    # Custom tools assignment
+    selected_tools: Optional[str] = Form(None),
     # Fallback providers configuration
     fallback_enabled: bool = Form(False),
     fallback_0_enabled: bool = Form(False),
@@ -793,6 +795,23 @@ async def create_assistant(
             current_user.id, 
             current_user.organization_id
         )
+        
+        # Assign selected custom tools to the assistant
+        if selected_tools:
+            try:
+                tool_ids = [int(tid.strip()) for tid in selected_tools.split(',') if tid.strip()]
+                if tool_ids:
+                    from app.services.tool_service import ToolService
+                    tool_service = ToolService()
+                    for tool_id in tool_ids:
+                        await tool_service.assign_tool_to_assistant(
+                            tool_id=tool_id,
+                            assistant_id=new_assistant.id,
+                            enabled=True
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to assign tools to assistant {new_assistant.id}: {e}")
+        
         await assistant_manager.load_assistants()
         return RedirectResponse(url=f"/assistants/{new_assistant.id}", status_code=302)
     except Exception as e:
@@ -902,6 +921,17 @@ async def edit_assistant_form(request: Request, assistant_id: int, current_user:
         logger.warning(f"Could not load documents: {e}")
         documents = []
 
+    # Load current tool assignments
+    assigned_tools = []
+    try:
+        from app.services.tool_service import ToolService
+        tool_service = ToolService()
+        assignments = await tool_service.get_assistant_tools(assistant_id)
+        assigned_tools = [assignment.tool for assignment in assignments if assignment.enabled]
+    except Exception as e:
+        logger.warning(f"Could not load tool assignments: {e}")
+        assigned_tools = []
+
     # Default schema for structured data
     default_schema = json.dumps(
         {
@@ -927,6 +957,7 @@ async def edit_assistant_form(request: Request, assistant_id: int, current_user:
             request,
             assistant=assistant,
             documents=documents,  # Pass documents separately
+            assigned_tools=assigned_tools,  # Pass current tool assignments
             default_schema=default_schema,
         ),
     )
@@ -1012,6 +1043,8 @@ async def update_assistant(
     transfer_call_scenarios: Optional[str] = Form(None),
     transfer_call_numbers: Optional[str] = Form(None),
     transfer_call_custom_message: Optional[str] = Form(None),
+    # Custom tools assignment
+    selected_tools: Optional[str] = Form(None),
     # Fallback providers configuration
     fallback_enabled: bool = Form(False),
     fallback_0_enabled: bool = Form(False),
@@ -1354,6 +1387,33 @@ async def update_assistant(
         updated_assistant = await AssistantService.update_assistant(
             assistant_id, update_data, current_user.organization_id
         )
+        
+        # Update selected custom tools for the assistant
+        if selected_tools is not None:  # Check for None specifically to allow empty string (unassign all)
+            try:
+                from app.services.tool_service import ToolService
+                tool_service = ToolService()
+                
+                # First, unassign all current tools
+                current_assignments = await tool_service.get_assistant_tools(assistant_id)
+                for assignment in current_assignments:
+                    await tool_service.unassign_tool_from_assistant(
+                        tool_id=assignment.tool.id,
+                        assistant_id=assistant_id
+                    )
+                
+                # Then assign the new selection
+                if selected_tools.strip():
+                    tool_ids = [int(tid.strip()) for tid in selected_tools.split(',') if tid.strip()]
+                    for tool_id in tool_ids:
+                        await tool_service.assign_tool_to_assistant(
+                            tool_id=tool_id,
+                            assistant_id=assistant_id,
+                            enabled=True
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to update tool assignments for assistant {assistant_id}: {e}")
+        
         await assistant_manager.load_assistants()
         return RedirectResponse(
             url=f"/assistants/{updated_assistant.id}", status_code=302

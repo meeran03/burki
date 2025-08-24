@@ -72,7 +72,7 @@ def get_transfer_call_tool(assistant: Assistant) -> dict:
 
 
 def get_all_tools(assistant: Assistant) -> list:
-    """Get all enabled tools for the assistant."""
+    """Get all enabled tools for the assistant (built-in + custom)."""
     tools = []
     
     # Add end call tool if enabled
@@ -85,7 +85,31 @@ def get_all_tools(assistant: Assistant) -> list:
     if transfer_call_tool:
         tools.append(transfer_call_tool)
     
-    # Add custom tools if any
+    # Add custom tools from database
+    if assistant and assistant.id:
+        try:
+            import asyncio
+            from app.services.tool_service import ToolService
+            
+            # Use asyncio.run only if not already in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # If we're already in an async context, skip custom tools
+                print(f"Skipping custom tools for assistant {assistant.id}: already in async context")
+            except RuntimeError:
+                # Not in async context, safe to use asyncio.run
+                custom_tool_assignments = asyncio.run(
+                    ToolService.get_assistant_tools_static(assistant.id)
+                )
+                
+                for assignment in custom_tool_assignments:
+                    if assignment.enabled and assignment.tool.is_active:
+                        tools.append(assignment.tool.function_definition)
+                        
+        except Exception as e:
+            print(f"Error loading custom tools for assistant {assistant.id}: {e}")
+    
+    # Fallback: Add custom tools from legacy tools_settings
     tools_settings = getattr(assistant, 'tools_settings', {}) or {}
     custom_tools = tools_settings.get('custom_tools', [])
     for tool in custom_tools:

@@ -1,0 +1,1099 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if tool %}Edit Tool{% else %}Create Tool{% endif %} - Burki Voice AI
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-6">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <!-- Header Section with Electric Slate Theme -->
+        <div class="relative overflow-hidden rounded-2xl p-8" style="background: linear-gradient(135deg, #10B981, #A3FFAE);">
+            <div class="absolute inset-0 bg-black/20"></div>
+            <div class="relative z-10">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <h1 class="font-satoshi text-3xl font-black text-white mb-2">
+                            {% if tool %}Edit Tool: {{ tool.display_name }}{% else %}Create New Tool{% endif %}
+                        </h1>
+                        <p class="text-white/80 text-base font-inter">
+                            {% if tool %}Update tool configuration and settings.{% else %}Build a custom tool to extend your assistant's capabilities.{% endif %}
+                        </p>
+                    </div>
+                    <div class="mt-4 lg:mt-0">
+                        <a href="/tools" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-white/20 hover:bg-white/30 rounded-lg border border-white/20 transition-colors">
+                            <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            Back to Tools
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <!-- Decorative background elements -->
+            <div class="absolute -bottom-16 -right-16 w-64 h-64 rounded-full bg-white/5 backdrop-blur-sm"></div>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="auth-card p-6 rounded-xl">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-satoshi text-lg font-semibold" style="color: #E6EDF3">Tool Creation Progress</h2>
+                <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-[#10B981] animate-pulse"></div>
+                    <span class="text-[#10B981] text-sm font-inter">Ready to Configure</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="step active" data-step="1">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                        <span class="text-white text-sm font-bold">1</span>
+                    </div>
+                    <span class="text-white/90 text-sm font-inter ml-2">Basic Info</span>
+                </div>
+                <div class="step" data-step="2">
+                    <div class="w-8 h-8 rounded-lg bg-[#30363D] flex items-center justify-center">
+                        <span class="text-white/60 text-sm font-bold">2</span>
+                    </div>
+                    <span class="text-white/60 text-sm font-inter ml-2">Configuration</span>
+                </div>
+                <div class="step" data-step="3">
+                    <div class="w-8 h-8 rounded-lg bg-[#30363D] flex items-center justify-center">
+                        <span class="text-white/60 text-sm font-bold">3</span>
+                    </div>
+                    <span class="text-white/60 text-sm font-inter ml-2">Testing & Save</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Form -->
+        <form method="POST" class="space-y-8" id="tool-form">
+            <!-- Step 1: Basic Information -->
+            <div id="step-1" class="form-step auth-card p-6 rounded-xl">
+                <h3 class="text-lg font-semibold text-[#E6EDF3] mb-6">Basic Information</h3>
+                
+                <!-- Tool Type Selection -->
+                <div class="mb-8">
+                    <label class="block text-sm font-medium text-[#E6EDF3] mb-4">Tool Type</label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="tool-type-card" data-type="endpoint">
+                            <input type="radio" name="tool_type" value="endpoint" id="type-endpoint" 
+                                {% if not tool or tool.tool_type == 'endpoint' %}checked{% endif %} class="hidden">
+                            <label for="type-endpoint" class="block p-6 border-2 border-[#30363D] rounded-lg hover:border-[#10B981] transition-colors cursor-pointer">
+                                <div class="flex items-center space-x-3 mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                        </svg>
+                                    </div>
+                                    <h4 class="text-sm font-semibold text-[#E6EDF3]">API Endpoint</h4>
+                                </div>
+                                <p class="text-xs text-[#7D8590]">Call external APIs and webhooks when triggered</p>
+                                <div class="mt-3">
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                                        HTTP Requests
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div class="tool-type-card" data-type="python_function">
+                            <input type="radio" name="tool_type" value="python_function" id="type-python" 
+                                {% if tool and tool.tool_type == 'python_function' %}checked{% endif %} class="hidden">
+                            <label for="type-python" class="block p-6 border-2 border-[#30363D] rounded-lg hover:border-[#10B981] transition-colors cursor-pointer">
+                                <div class="flex items-center space-x-3 mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                        </svg>
+                                    </div>
+                                    <h4 class="text-sm font-semibold text-[#E6EDF3]">Python Function</h4>
+                                </div>
+                                <p class="text-xs text-[#7D8590]">Execute custom Python code in a secure sandbox</p>
+                                <div class="mt-3">
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400">
+                                        Custom Logic
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div class="tool-type-card" data-type="lambda">
+                            <input type="radio" name="tool_type" value="lambda" id="type-lambda" 
+                                {% if tool and tool.tool_type == 'lambda' %}checked{% endif %} class="hidden">
+                            <label for="type-lambda" class="block p-6 border-2 border-[#30363D] rounded-lg hover:border-[#10B981] transition-colors cursor-pointer">
+                                <div class="flex items-center space-x-3 mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                        </svg>
+                                    </div>
+                                    <h4 class="text-sm font-semibold text-[#E6EDF3]">AWS Lambda</h4>
+                                </div>
+                                <p class="text-xs text-[#7D8590]">Invoke serverless functions on AWS</p>
+                                <div class="mt-3">
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-500/20 text-purple-400">
+                                        Serverless
+                                    </span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Basic Fields -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-[#E6EDF3] mb-2">Tool Name *</label>
+                        <input type="text" name="name" id="name" required
+                            value="{{ tool.name if tool else '' }}"
+                            class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] transition-colors" 
+                            placeholder="search_knowledge_base">
+                        <p class="mt-1 text-xs text-[#7D8590]">Used for function calls - snake_case recommended</p>
+                    </div>
+                    <div>
+                        <label for="display_name" class="block text-sm font-medium text-[#E6EDF3] mb-2">Display Name *</label>
+                        <input type="text" name="display_name" id="display_name" required
+                            value="{{ tool.display_name if tool else '' }}"
+                            class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] transition-colors" 
+                            placeholder="Search Knowledge Base">
+                        <p class="mt-1 text-xs text-[#7D8590]">Human-readable name shown in the UI</p>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="description" class="block text-sm font-medium text-[#E6EDF3] mb-2">Description *</label>
+                    <textarea name="description" id="description" rows="3" required
+                        class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] transition-colors" 
+                        placeholder="Search the company knowledge base for relevant information to help answer customer questions">{{ tool.description if tool else '' }}</textarea>
+                    <p class="mt-1 text-xs text-[#7D8590]">Clear description of what this tool does - used by the LLM to understand when to call it</p>
+                </div>
+
+                <!-- Settings -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label for="timeout_seconds" class="block text-sm font-medium text-[#E6EDF3] mb-2">Timeout (seconds)</label>
+                        <input type="number" name="timeout_seconds" id="timeout_seconds" min="1" max="300"
+                            value="{{ tool.timeout_seconds if tool else 30 }}"
+                            class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] transition-colors">
+                    </div>
+                    <div>
+                        <label for="retry_attempts" class="block text-sm font-medium text-[#E6EDF3] mb-2">Retry Attempts</label>
+                        <input type="number" name="retry_attempts" id="retry_attempts" min="0" max="10"
+                            value="{{ tool.retry_attempts if tool else 3 }}"
+                            class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-[#E6EDF3] mb-2">Settings</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="is_active" {% if not tool or tool.is_active %}checked{% endif %}
+                                    class="w-4 h-4 rounded border-[#30363D] bg-[#0D1117] text-[#10B981] focus:ring-2 focus:ring-[#10B981]">
+                                <span class="ml-2 text-sm text-[#E6EDF3]">Active</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="is_public" {% if tool and tool.is_public %}checked{% endif %}
+                                    class="w-4 h-4 rounded border-[#30363D] bg-[#0D1117] text-[#10B981] focus:ring-2 focus:ring-[#10B981]">
+                                <span class="ml-2 text-sm text-[#E6EDF3]">Public</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Configuration -->
+            <div id="step-2" class="form-step auth-card p-6 rounded-xl hidden">
+                <h3 class="text-lg font-semibold text-[#E6EDF3] mb-6">Tool Configuration</h3>
+
+                <!-- Endpoint Configuration -->
+                <div id="endpoint-config" class="tool-config hidden">
+                    <div class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="endpoint_method" class="block text-sm font-medium text-[#E6EDF3] mb-2">HTTP Method</label>
+                                <select name="endpoint_method" id="endpoint_method" 
+                                    class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981]">
+                                    <option value="POST">POST</option>
+                                    <option value="GET">GET</option>
+                                    <option value="PUT">PUT</option>
+                                    <option value="PATCH">PATCH</option>
+                                    <option value="DELETE">DELETE</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="endpoint_url" class="block text-sm font-medium text-[#E6EDF3] mb-2">Endpoint URL</label>
+                                <input type="url" name="endpoint_url" id="endpoint_url" 
+                                    class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981]"
+                                    placeholder="https://api.example.com/search">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="endpoint_headers" class="block text-sm font-medium text-[#E6EDF3] mb-2">Headers (JSON)</label>
+                            <textarea name="endpoint_headers" id="endpoint_headers" rows="4"
+                                class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] font-mono text-sm"
+                                placeholder='{"Authorization": "Bearer ${API_KEY}", "Content-Type": "application/json"}'></textarea>
+                            <p class="mt-1 text-xs text-[#7D8590]">Use ${VARIABLE} for dynamic values from environment</p>
+                        </div>
+                        
+                        <div>
+                            <label for="endpoint_body" class="block text-sm font-medium text-[#E6EDF3] mb-2">Request Body Template (JSON)</label>
+                            <textarea name="endpoint_body" id="endpoint_body" rows="6"
+                                class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] font-mono text-sm"
+                                placeholder='{"query": "${parameters.query}", "context": "${context.call_sid}"}'></textarea>
+                            <p class="mt-1 text-xs text-[#7D8590]">Use ${parameters.name} for tool parameters and ${context.field} for call context</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Python Function Configuration -->
+                <div id="python-config" class="tool-config hidden">
+                    <div class="space-y-6">
+                        <div>
+                            <label for="python_code" class="block text-sm font-medium text-[#E6EDF3] mb-2">Python Code</label>
+                            <div class="border border-[#30363D] rounded-lg overflow-hidden">
+                                <div id="python-editor" class="h-96"></div>
+                            </div>
+                            <p class="mt-1 text-xs text-[#7D8590]">Write your function code. Must return a dict with 'success', 'message', and optional 'data' fields</p>
+                        </div>
+                        
+                        <div>
+                            <label for="python_imports" class="block text-sm font-medium text-[#E6EDF3] mb-2">Allowed Imports</label>
+                            <input type="text" name="python_imports" id="python_imports"
+                                value="datetime,json,requests,math,random"
+                                class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981]"
+                                placeholder="datetime,json,requests,math">
+                            <p class="mt-1 text-xs text-[#7D8590]">Comma-separated list of Python modules allowed for import</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lambda Configuration -->
+                <div id="lambda-config" class="tool-config hidden">
+                    <div class="space-y-6">
+                        <!-- AWS Credentials for Function Discovery -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <label for="lambda_access_key" class="block text-sm font-medium text-[#E6EDF3] mb-2">AWS Access Key ID</label>
+                                <input type="text" name="lambda_access_key" id="lambda_access_key"
+                                    class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981]"
+                                    placeholder="AKIA...">
+                            </div>
+                            <div>
+                                <label for="lambda_secret_key" class="block text-sm font-medium text-[#E6EDF3] mb-2">AWS Secret Access Key</label>
+                                <input type="password" name="lambda_secret_key" id="lambda_secret_key"
+                                    class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981]"
+                                    placeholder="••••••••••••••••••••">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="lambda_region" class="block text-sm font-medium text-[#E6EDF3] mb-2">AWS Region</label>
+                                <select name="lambda_region" id="lambda_region"
+                                    class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981]">
+                                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button type="button" onclick="discoverLambdaFunctions()" class="w-full px-4 py-3 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
+                                    🔍 Discover Functions
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mt-6">
+                            <label for="lambda_function_name" class="block text-sm font-medium text-[#E6EDF3] mb-2">Function Name</label>
+                            <div class="relative">
+                                <input type="text" name="lambda_function_name" id="lambda_function_name"
+                                    class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981]"
+                                    placeholder="my-lambda-function">
+                                <div id="lambda_function_dropdown" class="hidden absolute z-10 w-full mt-1 bg-[#161B22] border border-[#30363D] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                    <!-- Function options will be populated here -->
+                                </div>
+                            </div>
+                            <p class="mt-1 text-xs text-[#7D8590]">Enter manually or use "Discover Functions" to browse your AWS Lambda functions</p>
+                        </div>
+                        
+                        <div>
+                            <label for="lambda_payload" class="block text-sm font-medium text-[#E6EDF3] mb-2">Payload Template (JSON)</label>
+                            <textarea name="lambda_payload" id="lambda_payload" rows="6"
+                                class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] font-mono text-sm"
+                                placeholder='{"parameters": "${parameters}", "context": {"call_sid": "${context.call_sid}"}}'></textarea>
+                            <p class="mt-1 text-xs text-[#7D8590]">JSON payload to send to Lambda function</p>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Function Definition -->
+                <div class="mt-8">
+                    <h4 class="text-md font-semibold text-[#E6EDF3] mb-4">Function Definition for LLM</h4>
+                    <p class="text-sm text-[#7D8590] mb-4">Define the parameters this tool accepts. This tells the LLM what information to provide when calling your tool.</p>
+                    
+                    <div class="space-y-4">
+                        <div id="parameters-list" class="space-y-3">
+                            <!-- Dynamic parameters will be added here -->
+                        </div>
+                        
+                        <button type="button" onclick="addParameter()" class="inline-flex items-center px-3 py-2 text-sm font-medium text-[#10B981] bg-[#10B981]/10 hover:bg-[#10B981]/20 rounded-lg transition-colors border border-[#10B981]/30">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Add Parameter
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Testing & Save -->
+            <div id="step-3" class="form-step auth-card p-6 rounded-xl hidden">
+                <h3 class="text-lg font-semibold text-[#E6EDF3] mb-6">Test & Save</h3>
+                
+                <div class="space-y-6">
+                    <!-- Test Section -->
+                    <div class="bg-[#161B22] border border-[#30363D] rounded-lg p-6">
+                        <h4 class="text-md font-semibold text-[#E6EDF3] mb-4">🧪 Test Your Tool</h4>
+                        <p class="text-sm text-[#7D8590] mb-4">Test your tool with sample parameters to ensure it works correctly.</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="test_parameters" class="block text-sm font-medium text-[#E6EDF3] mb-2">Test Parameters (JSON)</label>
+                                <textarea id="test_parameters" rows="4"
+                                    class="block w-full px-4 py-3 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-2 focus:ring-[#10B981] focus:border-[#10B981] font-mono text-sm"
+                                    placeholder='{"query": "test search"}'></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-[#E6EDF3] mb-2">Test Result</label>
+                                <div id="test-result" class="h-24 p-4 rounded-lg bg-[#0D1117] border border-[#30363D] text-[#7D8590] text-sm overflow-y-auto">
+                                    Click "Run Test" to see results
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex items-center space-x-3">
+                            <button type="button" onclick="runTest()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                                🧪 Run Test
+                            </button>
+                            <div id="test-loading" class="hidden flex items-center text-sm text-[#7D8590]">
+                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Testing...
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Generated Function Definition Preview -->
+                    <div class="bg-[#161B22] border border-[#30363D] rounded-lg p-6">
+                        <h4 class="text-md font-semibold text-[#E6EDF3] mb-4">📋 Generated Function Definition</h4>
+                        <p class="text-sm text-[#7D8590] mb-4">This is how your tool will appear to the LLM:</p>
+                        
+                        <div id="function-preview" class="p-4 rounded-lg bg-[#0D1117] border border-[#30363D] font-mono text-sm text-[#E6EDF3] overflow-x-auto">
+                            <!-- Generated function definition will appear here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="flex items-center justify-between auth-card p-6 rounded-xl">
+                <div class="flex items-center space-x-3">
+                    <button type="button" id="prev-btn" onclick="previousStep()" class="hidden px-6 py-3 text-sm font-medium text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-colors font-inter">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Previous
+                    </button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button type="button" onclick="window.history.back()" class="px-6 py-3 text-sm font-medium text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-colors font-inter">
+                        Cancel
+                    </button>
+                    <button type="button" id="next-btn" onclick="nextStep()" class="px-6 py-3 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors font-inter">
+                        Next Step
+                        <svg class="w-4 h-4 ml-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                    <button type="submit" id="save-btn" class="hidden px-6 py-3 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors font-inter">
+                        {% if tool %}Update Tool{% else %}Create Tool{% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Include Monaco Editor -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs/loader.js"></script>
+
+<script>
+// Global variables
+let currentStep = 1;
+let editor = null;
+let parameterCount = 0;
+
+// Initialize the form
+document.addEventListener('DOMContentLoaded', function() {
+    updateStepVisibility();
+    setupToolTypeHandlers();
+    initializeMonacoEditor();
+    setupFormValidation();
+    
+    // Pre-populate form for editing or add default parameter
+    {% if tool %}
+    populateExistingTool();
+    {% else %}
+    addParameter();
+    {% endif %}
+});
+
+function setupToolTypeHandlers() {
+    const toolTypeInputs = document.querySelectorAll('input[name="tool_type"]');
+    toolTypeInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            updateToolTypeSelection();
+            updateConfigurationSection();
+            updateFunctionPreview();
+        });
+    });
+    
+    // Initial setup
+    updateToolTypeSelection();
+    updateConfigurationSection();
+}
+
+function updateToolTypeSelection() {
+    const selected = document.querySelector('input[name="tool_type"]:checked');
+    const cards = document.querySelectorAll('.tool-type-card label');
+    
+    cards.forEach(card => {
+        card.classList.remove('border-[#10B981]', 'bg-[#10B981]/10');
+        card.classList.add('border-[#30363D]');
+    });
+    
+    if (selected) {
+        const selectedCard = selected.parentElement.querySelector('label');
+        selectedCard.classList.remove('border-[#30363D]');
+        selectedCard.classList.add('border-[#10B981]', 'bg-[#10B981]/10');
+    }
+}
+
+function updateConfigurationSection() {
+    const toolType = document.querySelector('input[name="tool_type"]:checked')?.value;
+    const configs = document.querySelectorAll('.tool-config');
+    
+    configs.forEach(config => config.classList.add('hidden'));
+    
+    if (toolType) {
+        const targetConfig = document.getElementById(`${toolType.replace('_', '-')}-config`);
+        if (targetConfig) {
+            targetConfig.classList.remove('hidden');
+        }
+    }
+}
+
+function initializeMonacoEditor() {
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs' } });
+    require(['vs/editor/editor.main'], function () {
+        editor = monaco.editor.create(document.getElementById('python-editor'), {
+            value: `def execute_tool(parameters, context):
+    """
+    Execute the tool with given parameters.
+    
+    Args:
+        parameters: Dict containing the parameters passed by the LLM
+        context: Dict containing call context (call_sid, phone_numbers, etc.)
+    
+    Returns:
+        Dict with 'success', 'message', and optional 'data' fields
+    """
+    query = parameters.get('query', '')
+    
+    # Your custom logic here
+    result = f"Processed query: {query}"
+    
+    return {
+        'success': True,
+        'message': result,
+        'data': {'processed_query': query}
+    }`,
+            language: 'python',
+            theme: 'vs-dark',
+            minimap: { enabled: false },
+            fontSize: 14,
+            wordWrap: 'on',
+            automaticLayout: true
+        });
+        
+        editor.onDidChangeModelContent(() => {
+            updateFunctionPreview();
+        });
+    });
+}
+
+function setupFormValidation() {
+    const form = document.getElementById('tool-form');
+    const inputs = form.querySelectorAll('input[required], textarea[required]');
+    
+    inputs.forEach(input => {
+        input.addEventListener('blur', validateField);
+        input.addEventListener('input', clearFieldError);
+    });
+}
+
+function validateField(event) {
+    const field = event.target;
+    const value = field.value.trim();
+    
+    if (field.hasAttribute('required') && !value) {
+        showFieldError(field, 'This field is required');
+        return false;
+    }
+    
+    // Additional validation
+    if (field.type === 'url' && value && !isValidUrl(value)) {
+        showFieldError(field, 'Please enter a valid URL');
+        return false;
+    }
+    
+    clearFieldError(field);
+    return true;
+}
+
+function showFieldError(field, message) {
+    clearFieldError(field);
+    
+    field.classList.add('border-red-500');
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'field-error text-xs text-red-400 mt-1';
+    errorDiv.textContent = message;
+    field.parentNode.appendChild(errorDiv);
+}
+
+function clearFieldError(field) {
+    if (typeof field === 'object' && field.target) {
+        field = field.target;
+    }
+    
+    field.classList.remove('border-red-500');
+    const existingError = field.parentNode.querySelector('.field-error');
+    if (existingError) {
+        existingError.remove();
+    }
+}
+
+function isValidUrl(string) {
+    try {
+        new URL(string);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+// Step navigation
+function nextStep() {
+    if (validateCurrentStep()) {
+        if (currentStep < 3) {
+            currentStep++;
+            updateStepVisibility();
+            updateFunctionPreview();
+        }
+    }
+}
+
+function previousStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        updateStepVisibility();
+    }
+}
+
+function updateStepVisibility() {
+    // Hide all steps
+    document.querySelectorAll('.form-step').forEach(step => step.classList.add('hidden'));
+    
+    // Show current step
+    document.getElementById(`step-${currentStep}`).classList.remove('hidden');
+    
+    // Update progress indicators
+    for (let i = 1; i <= 3; i++) {
+        const step = document.querySelector(`[data-step="${i}"]`);
+        const circle = step.querySelector('div');
+        const text = step.querySelector('span');
+        
+        if (i <= currentStep) {
+            circle.className = 'w-8 h-8 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center';
+            text.className = 'text-white/90 text-sm font-inter ml-2';
+        } else {
+            circle.className = 'w-8 h-8 rounded-lg bg-[#30363D] flex items-center justify-center';
+            text.className = 'text-white/60 text-sm font-inter ml-2';
+        }
+    }
+    
+    // Update navigation buttons
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const saveBtn = document.getElementById('save-btn');
+    
+    if (currentStep === 1) {
+        prevBtn.classList.add('hidden');
+    } else {
+        prevBtn.classList.remove('hidden');
+    }
+    
+    if (currentStep === 3) {
+        nextBtn.classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+    } else {
+        nextBtn.classList.remove('hidden');
+        saveBtn.classList.add('hidden');
+    }
+}
+
+function validateCurrentStep() {
+    const currentStepElement = document.getElementById(`step-${currentStep}`);
+    const requiredFields = currentStepElement.querySelectorAll('input[required], textarea[required]');
+    let isValid = true;
+    
+    requiredFields.forEach(field => {
+        if (!validateField({ target: field })) {
+            isValid = false;
+        }
+    });
+    
+    // Additional step-specific validation
+    if (currentStep === 1) {
+        const toolType = document.querySelector('input[name="tool_type"]:checked');
+        if (!toolType) {
+            showNotification('Please select a tool type', 'error');
+            isValid = false;
+        }
+    }
+    
+    return isValid;
+}
+
+// Parameter management
+function addParameter() {
+    parameterCount++;
+    const parametersList = document.getElementById('parameters-list');
+    
+    const parameterHtml = `
+        <div class="parameter-item bg-[#161B22] border border-[#30363D] rounded-lg p-4" data-param-id="${parameterCount}">
+            <div class="flex items-center justify-between mb-4">
+                <h5 class="text-sm font-medium text-[#E6EDF3]">Parameter ${parameterCount}</h5>
+                <button type="button" onclick="removeParameter(${parameterCount})" class="p-1 text-red-400 hover:text-red-300 rounded">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-medium text-[#E6EDF3] mb-1">Name</label>
+                    <input type="text" name="param_${parameterCount}_name" placeholder="query" onchange="updateFunctionPreview()"
+                        class="block w-full px-3 py-2 text-sm rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-1 focus:ring-[#10B981] focus:border-[#10B981]">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-[#E6EDF3] mb-1">Type</label>
+                    <select name="param_${parameterCount}_type" onchange="updateFunctionPreview()"
+                        class="block w-full px-3 py-2 text-sm rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-1 focus:ring-[#10B981] focus:border-[#10B981]">
+                        <option value="string">String</option>
+                        <option value="number">Number</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="array">Array</option>
+                        <option value="object">Object</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="flex items-center mt-5">
+                        <input type="checkbox" name="param_${parameterCount}_required" checked onchange="updateFunctionPreview()"
+                            class="w-4 h-4 rounded border-[#30363D] bg-[#0D1117] text-[#10B981]">
+                        <span class="ml-2 text-xs text-[#E6EDF3]">Required</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-[#E6EDF3] mb-1">Description</label>
+                <input type="text" name="param_${parameterCount}_description" placeholder="The search query to process" onchange="updateFunctionPreview()"
+                    class="block w-full px-3 py-2 text-sm rounded-lg bg-[#0D1117] border border-[#30363D] text-[#E6EDF3] focus:ring-1 focus:ring-[#10B981] focus:border-[#10B981]">
+            </div>
+        </div>
+    `;
+    
+    parametersList.insertAdjacentHTML('beforeend', parameterHtml);
+    updateFunctionPreview();
+}
+
+function removeParameter(paramId) {
+    const parameter = document.querySelector(`[data-param-id="${paramId}"]`);
+    if (parameter) {
+        parameter.remove();
+        updateFunctionPreview();
+    }
+}
+
+// Function preview generation
+function updateFunctionPreview() {
+    const toolName = document.getElementById('name').value || 'tool_name';
+    const description = document.getElementById('description').value || 'Tool description';
+    
+    // Collect parameters
+    const parameters = {};
+    const required = [];
+    
+    document.querySelectorAll('.parameter-item').forEach(item => {
+        const nameInput = item.querySelector('input[name*="_name"]');
+        const typeSelect = item.querySelector('select[name*="_type"]');
+        const descInput = item.querySelector('input[name*="_description"]');
+        const requiredCheck = item.querySelector('input[name*="_required"]');
+        
+        if (nameInput && nameInput.value) {
+            parameters[nameInput.value] = {
+                type: typeSelect.value,
+                description: descInput.value || 'Parameter description'
+            };
+            
+            if (requiredCheck && requiredCheck.checked) {
+                required.push(nameInput.value);
+            }
+        }
+    });
+    
+    const functionDef = {
+        type: 'function',
+        function: {
+            name: toolName,
+            description: description,
+            parameters: {
+                type: 'object',
+                properties: parameters,
+                required: required
+            }
+        }
+    };
+    
+    document.getElementById('function-preview').textContent = JSON.stringify(functionDef, null, 2);
+}
+
+// Testing functionality
+async function runTest() {
+    const testButton = document.querySelector('button[onclick="runTest()"]');
+    const testLoading = document.getElementById('test-loading');
+    const testResult = document.getElementById('test-result');
+    const testParams = document.getElementById('test_parameters').value;
+    
+    let parameters = {};
+    try {
+        if (testParams.trim()) {
+            parameters = JSON.parse(testParams);
+        }
+    } catch (e) {
+        testResult.innerHTML = '<span class="text-red-400">❌ Invalid JSON parameters</span>';
+        return;
+    }
+    
+    testButton.disabled = true;
+    testLoading.classList.remove('hidden');
+    testResult.innerHTML = '<span class="text-yellow-400">⏳ Running test...</span>';
+    
+    try {
+        // Collect form data for testing
+        const formData = collectFormData();
+        formData.test_parameters = parameters;
+        
+        const response = await fetch('/api/tools/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            testResult.innerHTML = `
+                <div class="text-green-400">✅ Test successful</div>
+                <div class="text-[#E6EDF3] mt-2">Message: ${result.message}</div>
+                ${result.data ? `<div class="text-[#7D8590] mt-1">Data: ${JSON.stringify(result.data, null, 2)}</div>` : ''}
+            `;
+        } else {
+            testResult.innerHTML = `<div class="text-red-400">❌ Test failed: ${result.error}</div>`;
+        }
+        
+    } catch (error) {
+        testResult.innerHTML = `<div class="text-red-400">❌ Test error: ${error.message}</div>`;
+    } finally {
+        testButton.disabled = false;
+        testLoading.classList.add('hidden');
+    }
+}
+
+// Lambda function discovery
+async function discoverLambdaFunctions() {
+    const accessKey = document.getElementById('lambda_access_key').value;
+    const secretKey = document.getElementById('lambda_secret_key').value;
+    const region = document.getElementById('lambda_region').value;
+    const dropdown = document.getElementById('lambda_function_dropdown');
+    
+    if (!accessKey || !secretKey) {
+        alert('Please enter AWS Access Key ID and Secret Access Key first');
+        return;
+    }
+    
+    try {
+        // Show loading state
+        dropdown.innerHTML = '<div class="p-4 text-[#7D8590]">🔍 Discovering Lambda functions...</div>';
+        dropdown.classList.remove('hidden');
+        
+        const response = await fetch('/api/lambda/list-functions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                access_key: accessKey,
+                secret_key: secretKey,
+                region: region
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.functions) {
+            populateLambdaFunctionDropdown(data.functions);
+        } else {
+            dropdown.innerHTML = '<div class="p-4 text-red-400">❌ ' + (data.detail || 'Failed to discover functions') + '</div>';
+        }
+        
+    } catch (error) {
+        dropdown.innerHTML = '<div class="p-4 text-red-400">❌ Error: ' + error.message + '</div>';
+    }
+}
+
+function populateLambdaFunctionDropdown(functions) {
+    const dropdown = document.getElementById('lambda_function_dropdown');
+    
+    if (functions.length === 0) {
+        dropdown.innerHTML = '<div class="p-4 text-[#7D8590]">No Lambda functions found in this region</div>';
+        return;
+    }
+    
+    let html = '';
+    functions.forEach(func => {
+        html += `
+            <div class="p-3 hover:bg-[#30363D] cursor-pointer border-b border-[#30363D] last:border-b-0" 
+                 onclick="selectLambdaFunction('${func.function_name}', '${func.description}', '${func.runtime}')">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-medium text-[#E6EDF3]">${func.function_name}</div>
+                        <div class="text-xs text-[#7D8590]">${func.description || 'No description'}</div>
+                    </div>
+                    <div class="text-xs text-[#7D8590]">
+                        <div>${func.runtime}</div>
+                        <div>${func.memory_size}MB</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    dropdown.innerHTML = html;
+}
+
+function selectLambdaFunction(functionName, description, runtime) {
+    const functionNameInput = document.getElementById('lambda_function_name');
+    const dropdown = document.getElementById('lambda_function_dropdown');
+    
+    functionNameInput.value = functionName;
+    dropdown.classList.add('hidden');
+    
+    // Update tool description if empty
+    const descriptionField = document.getElementById('description');
+    if (!descriptionField.value && description) {
+        descriptionField.value = `Invoke ${functionName} Lambda function. ${description}`;
+    }
+    
+    // Update function preview
+    updateFunctionPreview();
+}
+
+// Hide dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const dropdown = document.getElementById('lambda_function_dropdown');
+    const functionNameInput = document.getElementById('lambda_function_name');
+    
+    if (dropdown && !dropdown.contains(event.target) && event.target !== functionNameInput) {
+        dropdown.classList.add('hidden');
+    }
+});
+
+function collectFormData() {
+    const formData = {
+        name: document.getElementById('name').value,
+        display_name: document.getElementById('display_name').value,
+        description: document.getElementById('description').value,
+        tool_type: document.querySelector('input[name="tool_type"]:checked')?.value,
+        timeout_seconds: parseInt(document.getElementById('timeout_seconds').value),
+        retry_attempts: parseInt(document.getElementById('retry_attempts').value),
+        is_active: document.querySelector('input[name="is_active"]').checked,
+        is_public: document.querySelector('input[name="is_public"]').checked,
+    };
+    
+    // Tool-specific configuration
+    const toolType = formData.tool_type;
+    
+    if (toolType === 'endpoint') {
+        formData.configuration = {
+            method: document.getElementById('endpoint_method').value,
+            url: document.getElementById('endpoint_url').value,
+            headers: document.getElementById('endpoint_headers').value,
+            body_template: document.getElementById('endpoint_body').value
+        };
+    } else if (toolType === 'python_function') {
+        formData.configuration = {
+            code: editor ? editor.getValue() : '',
+            allowed_imports: document.getElementById('python_imports').value.split(',').map(s => s.trim())
+        };
+    } else if (toolType === 'lambda') {
+        formData.configuration = {
+            function_name: document.getElementById('lambda_function_name').value,
+            region: document.getElementById('lambda_region').value,
+            payload_template: document.getElementById('lambda_payload').value,
+            access_key: document.getElementById('lambda_access_key').value,
+            secret_key: document.getElementById('lambda_secret_key').value
+        };
+    }
+    
+    // Function definition
+    const parameters = {};
+    const required = [];
+    
+    document.querySelectorAll('.parameter-item').forEach(item => {
+        const nameInput = item.querySelector('input[name*="_name"]');
+        const typeSelect = item.querySelector('select[name*="_type"]');
+        const descInput = item.querySelector('input[name*="_description"]');
+        const requiredCheck = item.querySelector('input[name*="_required"]');
+        
+        if (nameInput && nameInput.value) {
+            parameters[nameInput.value] = {
+                type: typeSelect.value,
+                description: descInput.value || 'Parameter description'
+            };
+            
+            if (requiredCheck && requiredCheck.checked) {
+                required.push(nameInput.value);
+            }
+        }
+    });
+    
+    formData.function_definition = {
+        type: 'function',
+        function: {
+            name: formData.name,
+            description: formData.description,
+            parameters: {
+                type: 'object',
+                properties: parameters,
+                required: required
+            }
+        }
+    };
+    
+    return formData;
+}
+
+// Existing tool population (for editing)
+function populateExistingTool() {
+    {% if tool %}
+    // Tool type
+    const toolType = '{{ tool.tool_type }}';
+    document.querySelector('input[value="' + toolType + '"]').checked = true;
+    updateToolTypeSelection();
+    updateConfigurationSection();
+    
+    // Configuration
+    const config = {{ tool.configuration | tojson | safe }};
+    
+    if (toolType === 'endpoint') {
+        if (config.method) document.getElementById('endpoint_method').value = config.method;
+        if (config.url) document.getElementById('endpoint_url').value = config.url;
+        if (config.headers) document.getElementById('endpoint_headers').value = config.headers;
+        if (config.body_template) document.getElementById('endpoint_body').value = config.body_template;
+    } else if (toolType === 'python_function') {
+        if (config.code && editor) {
+            editor.setValue(config.code);
+        }
+        if (config.allowed_imports) {
+            document.getElementById('python_imports').value = config.allowed_imports.join(',');
+        }
+    } else if (toolType === 'lambda') {
+        if (config.function_name) document.getElementById('lambda_function_name').value = config.function_name;
+        if (config.region) document.getElementById('lambda_region').value = config.region;
+        if (config.payload_template) document.getElementById('lambda_payload').value = config.payload_template;
+        if (config.access_key) document.getElementById('lambda_access_key').value = config.access_key;
+    }
+    
+    // Function definition parameters
+    const functionDef = {{ tool.function_definition | tojson | safe }};
+    if (functionDef && functionDef.function && functionDef.function.parameters) {
+        const properties = functionDef.function.parameters.properties || {};
+        const required = functionDef.function.parameters.required || [];
+        
+        // Clear existing parameters
+        document.getElementById('parameters-list').innerHTML = '';
+        parameterCount = 0;
+        
+        // Add existing parameters
+        Object.entries(properties).forEach(([name, param]) => {
+            addParameter();
+            const lastParam = document.querySelector('.parameter-item:last-child');
+            lastParam.querySelector('input[name*="_name"]').value = name;
+            lastParam.querySelector('select[name*="_type"]').value = param.type || 'string';
+            lastParam.querySelector('input[name*="_description"]').value = param.description || '';
+            lastParam.querySelector('input[name*="_required"]').checked = required.includes(name);
+        });
+    }
+    {% endif %}
+}
+
+// Utility function for notifications
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all transform translate-x-full`;
+    
+    if (type === 'success') {
+        notification.classList.add('bg-green-600', 'text-white');
+        notification.innerHTML = `✅ ${message}`;
+    } else if (type === 'error') {
+        notification.classList.add('bg-red-600', 'text-white');
+        notification.innerHTML = `❌ ${message}`;
+    } else {
+        notification.classList.add('bg-blue-600', 'text-white');
+        notification.innerHTML = `ℹ️ ${message}`;
+    }
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
+}
+</script>
+{% endblock %}

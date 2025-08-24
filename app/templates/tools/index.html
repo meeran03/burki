@@ -1,0 +1,590 @@
+{% extends "base.html" %}
+
+{% block title %}Tools Library - Burki Voice AI{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Header Section with Electric Slate Theme -->
+    <div class="relative overflow-hidden rounded-2xl p-6" style="background: linear-gradient(135deg, #10B981, #A3FFAE);">
+        <div class="absolute inset-0 bg-black/20"></div>
+        <div class="relative z-10">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <h1 class="font-satoshi text-3xl font-black text-white mb-2">
+                        🛠️ Tools Library
+                    </h1>
+                    <p class="text-white/80 text-base max-w-2xl font-inter">
+                        Create, manage, and share tools across your organization. Build once, use everywhere.
+                    </p>
+                </div>
+                <div class="mt-4 lg:mt-0 flex items-center space-x-3">
+                    <div class="relative">
+                        <button id="import-tools-btn" class="px-4 py-2 text-sm font-medium text-white bg-white/20 hover:bg-white/30 rounded-lg transition-colors border border-white/20">
+                            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                            </svg>
+                            Import Tools
+                        </button>
+                        <div id="import-dropdown" class="hidden absolute right-0 mt-2 w-48 auth-card rounded-lg shadow-lg border border-white/10 z-50">
+                            <div class="py-1">
+                                <button class="import-option flex items-center w-full px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white" data-source="json">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                    Import from JSON
+                                </button>
+                                <button class="import-option flex items-center w-full px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white" data-source="template">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 011-1h1a1 1 0 011 1v1m-4 0h4m0 0v4M9 5v4" />
+                                    </svg>
+                                    Browse Templates
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="/tools/new" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-white/20 hover:bg-white/30 rounded-lg transition-colors border border-white/20">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        New Tool
+                    </a>
+                </div>
+            </div>
+        </div>
+        <!-- Decorative background elements -->
+        <div class="absolute -bottom-16 -right-16 w-64 h-64 rounded-full bg-white/5 backdrop-blur-sm"></div>
+    </div>
+    
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="auth-card p-6 rounded-xl">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <div class="text-2xl font-bold" style="color: #E6EDF3">{{ tools_count or 0 }}</div>
+                    <div class="text-sm" style="color: #7D8590">Total Tools</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="auth-card p-6 rounded-xl">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <div class="text-2xl font-bold" style="color: #E6EDF3">{{ active_tools_count or 0 }}</div>
+                    <div class="text-sm" style="color: #7D8590">Active Tools</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="auth-card p-6 rounded-xl">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <div class="text-2xl font-bold" style="color: #E6EDF3">{{ total_executions or 0 }}</div>
+                    <div class="text-sm" style="color: #7D8590">Total Executions</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="auth-card p-6 rounded-xl">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <div class="text-2xl font-bold" style="color: #E6EDF3">{{ success_rate or 0 }}%</div>
+                    <div class="text-sm" style="color: #7D8590">Success Rate</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and Search -->
+    <div class="auth-card p-6 rounded-xl">
+        <form id="filter-form" method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            <div>
+                <label for="search" class="block text-sm font-medium mb-2" style="color: #E6EDF3">Search Tools</label>
+                <input type="text" id="search" name="search" value="{{ request.query_params.get('search', '') }}"
+                    class="block w-full px-4 py-3 rounded-lg transition-colors font-inter" 
+                    style="background-color: #0D1117; border: 1px solid #30363D; color: #E6EDF3;"
+                    placeholder="Search by name or description...">
+            </div>
+            <div>
+                <label for="tool_type" class="block text-sm font-medium mb-2" style="color: #E6EDF3">Tool Type</label>
+                <select id="tool_type" name="tool_type" class="block w-full px-4 py-3 rounded-lg transition-colors font-inter" 
+                    style="background-color: #0D1117; border: 1px solid #30363D; color: #E6EDF3;">
+                    <option value="">All Types</option>
+                    <option value="endpoint" {% if request.query_params.get('tool_type') == 'endpoint' %}selected{% endif %}>API Endpoint</option>
+                    <option value="python_function" {% if request.query_params.get('tool_type') == 'python_function' %}selected{% endif %}>Python Function</option>
+                    <option value="lambda" {% if request.query_params.get('tool_type') == 'lambda' %}selected{% endif %}>AWS Lambda</option>
+                </select>
+            </div>
+            <div>
+                <label for="status" class="block text-sm font-medium mb-2" style="color: #E6EDF3">Status</label>
+                <select id="status" name="status" class="block w-full px-4 py-3 rounded-lg transition-colors font-inter" 
+                    style="background-color: #0D1117; border: 1px solid #30363D; color: #E6EDF3;">
+                    <option value="">All Status</option>
+                    <option value="active" {% if request.query_params.get('status') == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if request.query_params.get('status') == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div>
+                <label for="per_page" class="block text-sm font-medium mb-2" style="color: #E6EDF3">Per Page</label>
+                <select id="per_page" name="per_page" class="block w-full px-4 py-3 rounded-lg transition-colors font-inter" 
+                    style="background-color: #0D1117; border: 1px solid #30363D; color: #E6EDF3;">
+                    <option value="12" {% if request.query_params.get('per_page') == '12' %}selected{% endif %}>12</option>
+                    <option value="24" {% if request.query_params.get('per_page') == '24' %}selected{% endif %}>24</option>
+                    <option value="48" {% if request.query_params.get('per_page') == '48' %}selected{% endif %}>48</option>
+                </select>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button type="button" id="card-view" class="p-3 bg-[#10B981] text-white rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                </button>
+            </div>
+            
+            <input type="hidden" name="sort_by" value="{{ request.query_params.get('sort_by', 'name') }}">
+            <input type="hidden" name="sort_order" value="{{ request.query_params.get('sort_order', 'asc') }}">
+            <input type="hidden" name="page" value="1">
+        </form>
+    </div>
+
+    <!-- Tools Grid -->
+    <div id="tools-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% if tools %}
+            {% for tool in tools %}
+            <div class="tool-card auth-card rounded-xl p-6 hover:bg-[#161B22] transition-colors" data-tool-id="{{ tool.id }}" data-tool-type="{{ tool.tool_type }}">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center">
+                            <!-- Tool type icon -->
+                            {% if tool.tool_type == 'endpoint' %}
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                            {% elif tool.tool_type == 'python_function' %}
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                </svg>
+                            {% elif tool.tool_type == 'lambda' %}
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                </svg>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-semibold text-[#E6EDF3]">{{ tool.display_name }}</h3>
+                            <p class="text-xs text-[#7D8590]">{{ tool.tool_type.replace('_', ' ')|title }} Tool</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        {% if tool.is_public %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[#10B981]/20 text-[#10B981]">
+                            🌍 Public
+                        </span>
+                        {% endif %}
+                        {% if not tool.is_active %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
+                            Inactive
+                        </span>
+                        {% endif %}
+                        <div class="relative">
+                            <button class="tool-menu-btn p-1 text-[#7D8590] hover:text-white rounded" data-tool-id="{{ tool.id }}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                </svg>
+                            </button>
+                            <!-- Dropdown menu (hidden by default) -->
+                            <div class="tool-menu hidden absolute right-0 mt-2 w-48 auth-card rounded-lg shadow-lg border border-white/10 z-50">
+                                <div class="py-1">
+                                    <a href="/tools/{{ tool.id }}" class="flex items-center px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                        View Details
+                                    </a>
+                                    <a href="/tools/{{ tool.id }}/edit" class="flex items-center px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                        </svg>
+                                        Edit Tool
+                                    </a>
+                                    <button onclick="duplicateTool({{ tool.id }})" class="flex items-center w-full px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        Duplicate
+                                    </button>
+                                    <button onclick="exportTool({{ tool.id }})" class="flex items-center w-full px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Export
+                                    </button>
+                                    <div class="border-t border-white/10 my-1"></div>
+                                    <button onclick="deleteTool({{ tool.id }}, '{{ tool.display_name }}')" class="flex items-center w-full px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <p class="text-sm text-[#7D8590] mb-4 line-clamp-2">{{ tool.description }}</p>
+                
+                <div class="flex items-center justify-between text-xs text-[#7D8590] mb-4">
+                    <span>{{ tool.execution_count or 0 }} executions</span>
+                    <span>Updated {{ tool.updated_at.strftime('%m/%d/%y') if tool.updated_at else 'N/A' }}</span>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <button onclick="testTool({{ tool.id }})" class="px-3 py-1 text-xs font-medium text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 rounded transition-colors">
+                            🧪 Test
+                        </button>
+                        <a href="/tools/{{ tool.id }}" class="px-3 py-1 text-xs font-medium text-[#7D8590] hover:text-white bg-white/10 hover:bg-white/20 rounded transition-colors">
+                            View
+                        </a>
+                    </div>
+                    <div class="text-xs text-[#7D8590]">
+                        Used by {{ tool.assistant_count or 0 }} assistants
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <!-- Empty State -->
+        <div class="col-span-full">
+            <div class="text-center py-16 auth-card rounded-xl">
+                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-[#10B981] to-[#A3FFAE] flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-2" style="color: #E6EDF3">No Tools Found</h3>
+                <p class="text-sm mb-6" style="color: #7D8590">Get started by creating your first custom tool</p>
+                <div class="flex items-center justify-center space-x-3">
+                    <a href="/tools/new" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#10B981] hover:bg-[#059669] rounded-lg transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Create First Tool
+                    </a>
+                    <button onclick="browseTemplates()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-white/20 hover:bg-white/30 rounded-lg transition-colors border border-white/20">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 011-1h1a1 1 0 011 1v1m-4 0h4m0 0v4M9 5v4" />
+                        </svg>
+                        Browse Templates
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if pagination and pagination.total_pages > 1 %}
+    <div class="auth-card px-6 py-4 rounded-xl flex items-center justify-between">
+        <div class="text-sm" style="color: #7D8590">
+            Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to {{ ((pagination.page - 1) * pagination.per_page) + tools|length }} of {{ pagination.total_count }} tools
+        </div>
+        <div class="flex items-center space-x-2">
+            {% if pagination.has_prev %}
+                <a href="?{% for key, value in request.query_params.items() %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ pagination.prev_page }}" class="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+            {% else %}
+                <button class="p-2 rounded-lg text-white/30 cursor-not-allowed">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+            {% endif %}
+
+            {% set start_page = pagination.page - 2 if pagination.page > 2 else 1 %}
+            {% set end_page = pagination.page + 2 if pagination.page + 2 < pagination.total_pages else pagination.total_pages %}
+            
+            {% for page_num in range(start_page, end_page + 1) %}
+                {% if page_num == pagination.page %}
+                    <button class="px-3 py-1 rounded-lg bg-[#10B981] text-white text-sm">{{ page_num }}</button>
+                {% else %}
+                    <a href="?{% for key, value in request.query_params.items() %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_num }}" class="px-3 py-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm">{{ page_num }}</a>
+                {% endif %}
+            {% endfor %}
+
+            {% if pagination.has_next %}
+                <a href="?{% for key, value in request.query_params.items() %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ pagination.next_page }}" class="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+            {% else %}
+                <button class="p-2 rounded-lg text-white/30 cursor-not-allowed">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Tool management JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    // Import dropdown toggle
+    const importBtn = document.getElementById('import-tools-btn');
+    const importDropdown = document.getElementById('import-dropdown');
+    
+    if (importBtn && importDropdown) {
+        importBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            importDropdown.classList.toggle('hidden');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!importBtn.contains(e.target) && !importDropdown.contains(e.target)) {
+                importDropdown.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Tool menu dropdowns
+    const toolMenuBtns = document.querySelectorAll('.tool-menu-btn');
+    toolMenuBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const menu = this.parentElement.querySelector('.tool-menu');
+            const allMenus = document.querySelectorAll('.tool-menu');
+            
+            // Close all other menus
+            allMenus.forEach(m => {
+                if (m !== menu) {
+                    m.classList.add('hidden');
+                }
+            });
+            
+            // Toggle current menu
+            menu.classList.toggle('hidden');
+        });
+    });
+    
+    // Close menus when clicking outside
+    document.addEventListener('click', function(e) {
+        const allMenus = document.querySelectorAll('.tool-menu');
+        allMenus.forEach(menu => {
+            if (!menu.contains(e.target) && !menu.previousElementSibling.contains(e.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+    });
+    
+    // Auto-submit form on filter changes
+    const filterForm = document.getElementById('filter-form');
+    const filterInputs = filterForm.querySelectorAll('select, input');
+    
+    filterInputs.forEach(input => {
+        if (input.id !== 'search') {
+            input.addEventListener('change', function() {
+                // Reset page to 1 when filtering
+                filterForm.querySelector('input[name="page"]').value = '1';
+                filterForm.submit();
+            });
+        }
+    });
+    
+    // Search with debounce
+    const searchInput = document.getElementById('search');
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            filterForm.querySelector('input[name="page"]').value = '1';
+            filterForm.submit();
+        }, 500);
+    });
+});
+
+// Tool action functions
+async function testTool(toolId) {
+    try {
+        // Show test modal or prompt for parameters
+        const testParams = prompt('Enter test parameters (JSON format):');
+        let params = {};
+        
+        if (testParams) {
+            try {
+                params = JSON.parse(testParams);
+            } catch (e) {
+                showNotification('Invalid JSON format', 'error');
+                return;
+            }
+        }
+        
+        const response = await fetch(`/api/organization/tools/${toolId}/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ parameters: params })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Test successful: ${result.message}`, 'success');
+        } else {
+            showNotification(`Test failed: ${result.error}`, 'error');
+        }
+        
+    } catch (error) {
+        showNotification(`Test error: ${error.message}`, 'error');
+    }
+}
+
+async function duplicateTool(toolId) {
+    try {
+        const response = await fetch(`/api/organization/tools/${toolId}/duplicate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Tool duplicated successfully', 'success');
+            // Redirect to edit the new tool
+            window.location.href = `/tools/${result.tool_id}/edit`;
+        } else {
+            showNotification(`Duplicate failed: ${result.error}`, 'error');
+        }
+        
+    } catch (error) {
+        showNotification(`Duplicate error: ${error.message}`, 'error');
+    }
+}
+
+async function exportTool(toolId) {
+    try {
+        const response = await fetch(`/api/organization/tools/${toolId}/export`);
+        const blob = await response.blob();
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tool-${toolId}-export.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showNotification('Tool exported successfully', 'success');
+        
+    } catch (error) {
+        showNotification(`Export error: ${error.message}`, 'error');
+    }
+}
+
+function deleteTool(toolId, toolName) {
+    if (confirm(`Are you sure you want to delete "${toolName}"? This action cannot be undone.`)) {
+        fetch(`/api/organization/tools/${toolId}`, {
+            method: 'DELETE',
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showNotification('Tool deleted successfully', 'success');
+                // Remove the tool card from the UI
+                const toolCard = document.querySelector(`[data-tool-id="${toolId}"]`);
+                if (toolCard) {
+                    toolCard.remove();
+                }
+            } else {
+                showNotification(`Delete failed: ${result.error}`, 'error');
+            }
+        })
+        .catch(error => {
+            showNotification(`Delete error: ${error.message}`, 'error');
+        });
+    }
+}
+
+function browseTemplates() {
+    // TODO: Implement template browser
+    showNotification('Template browser coming soon!', 'info');
+}
+
+// Utility function for notifications
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all transform translate-x-full`;
+    
+    if (type === 'success') {
+        notification.classList.add('bg-green-600', 'text-white');
+        notification.innerHTML = `✅ ${message}`;
+    } else if (type === 'error') {
+        notification.classList.add('bg-red-600', 'text-white');
+        notification.innerHTML = `❌ ${message}`;
+    } else {
+        notification.classList.add('bg-blue-600', 'text-white');
+        notification.innerHTML = `ℹ️ ${message}`;
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
+}
+</script>
+{% endblock %}
