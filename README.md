@@ -28,6 +28,9 @@
 ### 📚 **[Full Documentation - docs.burki.dev](https://docs.burki.dev)**
 *Complete guides, API references, and tutorials*
 
+### 🛠️ **[Tool Calling Guide - docs.burki.dev/tools](https://docs.burki.dev/tools)**
+*Learn about HTTP APIs, Python functions, and Lambda integration*
+
 </div>
 
 **Experience the difference yourself:** See Burki's sub-second latency and beautiful interface in action, then compare it to vapi.ai's sluggish performance. The difference is immediately obvious.
@@ -66,6 +69,7 @@ Tired of vapi.ai's complex pricing, poor latency, and developer-only complexity?
 | **Setup Complexity** | 5-minute Docker deploy | Weeks of API integration |
 | **Web Interface** | Beautiful, functional UI | Notorious UI/UX issues |
 | **Audio Quality** | Built-in RNNoise denoising | Basic audio processing |
+| **Tool Calling** | Advanced tools + Lambda discovery | Basic function calling |
 | **All-in-One** | Complete platform | Requires multiple services |
 | **Control** | Full data ownership | Vendor lock-in |
 | **Transparency** | Open-source code | Black box system |
@@ -94,6 +98,7 @@ Tired of vapi.ai's complex pricing, poor latency, and developer-only complexity?
 - **TTS Providers:** ElevenLabs, Deepgram, Inworld, Resemble, OpenAI
 - **STT Providers:** Deepgram Nova with confidence scoring
 - **Knowledge Base (RAG):** Upload documents to make assistants smarter
+- **Custom Tools & Actions:** HTTP APIs, Python functions, and AWS Lambda integration
 
 ### **🎙️ Professional Audio Features**
 - **Real-time Noise Reduction:** RNNoise integration for broadcast-quality calls
@@ -107,6 +112,107 @@ Tired of vapi.ai's complex pricing, poor latency, and developer-only complexity?
 - **No-Code Assistant Creation:** Build sophisticated voice agents without programming
 - **Custom Tool Integration:** Connect to external APIs and databases
 - **Secure Authentication:** OAuth, API keys, and role-based access control
+
+### **🛠️ Advanced Tool Calling System**
+- **🔗 HTTP API Tools:** Connect to any REST API with custom headers and authentication
+- **🐍 Python Function Tools:** Execute custom Python code with sandboxed security
+- **☁️ AWS Lambda Integration:** Trigger serverless functions with automatic discovery
+- **🔍 Function Discovery:** Browse and select from existing Lambda functions automatically
+- **🎯 Tool Library:** Create reusable tools and assign them to multiple assistants
+- **📊 Usage Analytics:** Monitor tool performance and success rates
+
+---
+
+## 🚀 **NEW: Advanced Tool Calling System**
+
+Burki now includes the most sophisticated tool calling system available in any open-source voice AI platform:
+
+### **🔗 Three Types of Tools**
+
+<table>
+<tr>
+<th>🌐 HTTP API Tools</th>
+<th>🐍 Python Function Tools</th>
+<th>☁️ AWS Lambda Tools</th>
+</tr>
+<tr>
+<td>
+
+**Perfect for:**
+- CRM integrations
+- Database lookups
+- Order status checks
+- Payment processing
+
+**Features:**
+- Custom headers & auth
+- Request templating
+- Error handling
+- Timeout controls
+
+</td>
+<td>
+
+**Perfect for:**
+- Business logic
+- Data calculations
+- Text processing
+- Custom algorithms
+
+**Features:**
+- Sandboxed execution
+- Popular libraries included
+- Input validation
+- Resource limits
+
+</td>
+<td>
+
+**Perfect for:**
+- Serverless workflows
+- AWS service integration
+- Heavy computations
+- ML inference
+
+**Features:**
+- **🔍 Auto-discovery**
+- Function browsing
+- Metadata display
+- One-click setup
+
+</td>
+</tr>
+</table>
+
+### **⚡ Lambda Function Discovery (Game Changer!)**
+
+Unlike vapi.ai's basic function calling, Burki includes **automatic AWS Lambda function discovery**:
+
+1. **🔑 Enter AWS credentials** → 2. **📍 Select region** → 3. **🔍 Click "Discover"** → 4. **📋 Browse all functions** → 5. **✨ Auto-configure**
+
+```json
+# Instead of manually typing function names, see rich metadata:
+{
+  "function_name": "customer-lookup-service",
+  "description": "Look up customer data by phone number",
+  "runtime": "python3.9",
+  "memory_size": 512,
+  "timeout": 30
+}
+```
+
+**Benefits:**
+- 🚫 **No Guesswork:** See all available functions
+- ✅ **Validation:** Ensures functions exist before saving  
+- ⚡ **Speed:** Auto-fills descriptions and configurations
+- 🛡️ **Error Prevention:** Eliminates typos and invalid names
+
+### **🎯 Real-World Use Cases**
+
+- **Customer Service:** *"Look up this customer's order history and recent interactions"*
+- **E-commerce:** *"Check if this product is in stock at the nearest location"*
+- **Banking:** *"Calculate the monthly payment for a $50,000 loan at 5.2% APR"*
+- **Healthcare:** *"Check this patient's appointment availability next week"*
 
 ---
 
